@@ -1,0 +1,45 @@
+//@version=5
+indicator("Journal Live Feed", overlay=true)
+
+// Fires a webhook alert with this bar's OHLCV once it closes — feeds
+// live bars into Jay's Journal. See docs/tradingview-webhook.md for the
+// server-side setup (secret, tunnel).
+//
+// Attach this to the chart/timeframe you want live-fed (e.g. a 1-minute
+// MNQ chart), fill in the inputs below, then create an alert on it:
+//   Condition: "Journal Live Feed"
+//   Trigger:   "Once Per Bar Close"   <- important, not "Once Per Bar"
+//   Webhook URL: your tunnel URL (see docs/tradingview-webhook.md)
+// Leave the alert's own "Message" box as the default — this script
+// builds the actual JSON body itself via alert(), so nothing needs to be
+// typed there.
+//
+// journalSymbol must exactly match how the symbol is spelled in the
+// journal's Settings -> Symbols (e.g. "MNQ") — NOT TradingView's own
+// ticker (e.g. "MNQ1!"), which the journal wouldn't recognize.
+//
+// Note: the secret is stored in plain text in this indicator's settings —
+// visible to you in the dialog, and to anyone you share this chart/script
+// or a settings screenshot with. Don't publish this script publicly with
+// your real secret filled in.
+
+journalSymbol    = input.string("MNQ", title="Journal Symbol")
+journalType      = input.string("FUT", title="Type", options=["FUT", "STK"])
+journalTimeframe = input.string("1M", title="Journal Timeframe Code", options=["1M", "5M", "15M", "1H", "4H", "1D", "1W"])
+webhookSecret    = input.string("", title="Webhook Secret (from config.json)")
+
+if barstate.isconfirmed
+    // Bar OPEN time, in UTC, matching the convention IBKR/Yahoo bars already
+    // use in the journal's database — not time_close, which would be offset
+    // by one bar's duration from every other source.
+    isoTime = str.format_time(time, "yyyy-MM-dd'T'HH:mm:ss", "UTC") + ".000Z"
+    msg = '{"secret":"' + webhookSecret + '","symbol":"' + journalSymbol + '","type":"' + journalType +
+          '","timeframe":"' + journalTimeframe + '","time":"' + isoTime +
+          '","open":' + str.tostring(open) + ',"high":' + str.tostring(high) +
+          ',"low":' + str.tostring(low) + ',"close":' + str.tostring(close) +
+          ',"volume":' + str.tostring(volume) + '}'
+    alert(msg, alert.freq_once_per_bar_close)
+
+// Purely cosmetic — a small dot under each bar that actually fired, so you
+// can visually confirm the script is alive without checking the server log.
+plotchar(barstate.isconfirmed, title="Bar sent", char="•", location=location.belowbar, color=color.new(color.blue, 0), size=size.tiny)

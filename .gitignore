@@ -1,0 +1,12 @@
+node_modules
+build
+*.log
+*.zip
+Uploads
+.vscode
+package-lock.json
+server
+src/context/TradeContext
+folder_structure.txt
+config.json
+.env*
