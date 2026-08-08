@@ -1,0 +1,790 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+.navigation {
+  width: 180px;
+  background-color: #20232a;
+  padding: 14px 6px 16px 6px;
+  display: flex;
+  flex-direction: column;
+  border-right: 1px solid #232837;
+  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+  font-size: 13px;
+  color: #A5ADBA;
+  max-height: 100vh;
+  position: fixed;
+  top: 0;
+  left: 0;
+  bottom: 0;
+  z-index: 1000;
+  overflow: visible; /* For popups */
+}
+
+.logo {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  margin-bottom: 32px;
+  cursor: pointer;
+  position: relative;
+  z-index: 1001; /* Above other nav items, below popups triggered from it */
+}
+
+.logoImg {
+  width: 36px;
+  height: 36px;
+  border-radius: 8px;
+}
+
+.logoText {
+  font-size: 1.25rem;
+  color: #fff;
+  font-weight: 600;
+  letter-spacing: 0.5px;
+}
+
+.accountInfo {
+  margin-bottom: 12px;
+  padding: 10px;
+  background: linear-gradient(145deg, #232837, #2a2f3e);
+  border-radius: 12px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  text-align: center;
+  /* Add these lines for the blue border in wide mode */
+  border: 2px solid #60A5FA; /* Blue border */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 8px rgba(96, 165, 250, 0.5); /* Enhanced shadow */
+}
+
+.accountLabel {
+  font-size: 12px;
+  font-weight: 500;
+  color: #A5ADBA;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+}
+
+.accountName {
+  width: 100%;
+  margin-bottom: 8px; /* Kept from original */
+  color: #A5ADBA;
+  font-size: 13px;
+}
+
+.accountBalance {
+  font-size: 1.0rem;
+  font-weight: 600;
+  /* color: #8FB6FF; */ /* Colors handled by positive/negative */
+  transition: color 0.2s ease;
+}
+
+.accountBalance.positive {
+  color: #22C55E;
+}
+
+.accountBalance.negative {
+  color: #EF4444;
+}
+
+.navStat {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  font-size: 13px;
+  color: #A5ADBA;
+  width: 100%;
+}
+
+/* Integrated Status Section inside AccountInfo */
+.integratedStatusSection {
+  width: 100%;
+  background-color: #232837; /* Darker, distinct section */
+  border-radius: 8px;
+  padding: 10px;
+  font-size: 12px;
+  color: #A5ADBA;
+  box-shadow: inset 0 1px 2px rgba(0,0,0,0.1);
+  cursor: pointer;
+  transition: background-color 0.2s ease;
+  margin-top: 8px; /* Space above this section within accountInfo */
+}
+
+.integratedStatusSection:hover {
+  background-color: #2a2f3e; /* Lighten on hover */
+}
+
+/* Reused styles for status elements, now within .integratedStatusSection */
+.statusHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 8px;
+}
+
+.statusLabel {
+  /* No specific style needed beyond typography from parent */
+}
+
+.statusIndicator {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+}
+
+.logList { /* For the mini log list inside integratedStatusSection */
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-height: 70px; /* Suitable for a small preview */
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #4f566b #2a2f3e;
+}
+
+.logItem {
+  display: flex;
+  gap: 8px;
+  font-size: 11px; /* Smaller for the preview */
+}
+
+.logTimestamp {
+  color: #6B7280;
+  flex-shrink: 0;
+}
+
+.logMessage {
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+
+.navItems {
+  flex: 1; /* Takes up available space */
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-bottom: 24px;
+}
+
+.navItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  transition: background-color 0.18s;
+  cursor: pointer;
+}
+
+.navItem:hover {
+  background-color: #232837;
+}
+
+.navIcon {
+  width: 20px;
+  height: 20px;
+  fill: currentColor;
+}
+
+.navLabel {
+  font-size: 13px;
+}
+
+.actionButtons {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: auto; /* Pushes this and subsequent items (like wideFooterAccountInfo) down */
+  margin-bottom: 16px;
+}
+
+.newTradeBtn, .noteBtn {
+  width: 100%;
+  padding: 10px 0;
+  border: none;
+  border-radius: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  font-weight: 500;
+  font-size: 13px;
+  transition: background-color 0.18s, opacity 0.18s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.newTradeBtn {
+  background-color: rgba(60, 154, 238, .2);
+  color: #fff;
+}
+
+.newTradeBtn:hover {
+  background-color: rgba(60, 154, 238, .4);
+  opacity: 0.95;
+}
+
+.noteBtn {
+  background-color: rgba(246,189,96,.2);
+  color: #fff;
+}
+
+.noteBtn:hover {
+  background-color: rgba(246,189,96,.4);
+  opacity: 0.95;
+}
+
+.btnIcon {
+  width: 20px;
+  height: 20px;
+  fill: white;
+}
+
+.btnText {
+  font-size: 13px;
+}
+
+.accountSelector {
+  background: #353943;
+  border: none;
+  border-radius: 10px;
+  color: #e0e2e6;
+  padding: 8px 16px;
+  font-size: 1em; /* Typically 13px-14px based on context */
+  cursor: pointer;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+  width: 100%;
+  box-sizing: border-box;
+  transition: background-color 0.2s ease;
+  text-align: center;
+}
+
+.accountSelector:focus {
+  outline: none;
+  background: #414552;
+}
+
+.accountSelector:hover {
+  background: #414552;
+}
+
+/* Wrapper for account info when in wide mode at the bottom */
+.wideFooterAccountInfo {
+  margin-top: auto; /* Pushes this block to the bottom, after actionButtons if present */
+  /* If actionButtons are not present, this margin-top on its own won't guarantee bottom unless navItems has flex:1 */
+  /* padding-top: 16px; Remove this if accountInfo has its own appropriate margins */
+  /* accountInfo already has margin-bottom: 12px, which serves as bottom spacing for the nav */
+}
+
+
+.logoPopup {
+  display: none;
+  visibility: hidden;
+  opacity: 0;
+  /* Populated by renderAccountInfo() which now includes status section */
+}
+
+.navigation .logoPopup.show {
+  display: block;
+  visibility: visible;
+  opacity: 1;
+  background: linear-gradient(145deg, #232837, #2a2f3e); /* Match accountInfo bg */
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  border: 2px solid #60A5FA; /* Bright edge */
+  /* Positioning and sizing are handled in media queries */
+  animation: fadeIn 0.3s ease-out; /* Use existing animation */
+}
+
+.plusButtonContainer {
+  display: none; /* Default hidden, shown by JS logic or media queries */
+  position: relative;
+}
+
+.actionPopup {
+  display: none;
+  visibility: hidden;
+  opacity: 0;
+}
+
+.navigation .actionPopup.show {
+  display: flex;
+  visibility: visible;
+  opacity: 1;
+  background-color: #232837;
+  animation: fadeIn 0.3s ease-out;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes popIn {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+  60% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+/* Styles for the full WebSocket status popup */
+.fullStatusPopup {
+  position: fixed;
+  left: 10px; /* (navbar width = 180px) + 5px gap */
+  bottom: 20px;
+  width: 950px;
+  max-width: calc(100vw - 10px); /* Ensure it doesn't go off-screen */
+  height: auto;
+  max-height: 400px;
+  background-color: #2a2f3e;
+  border: 1px solid #353943;
+  border-radius: 12px;
+  box-shadow: 0 8px 25px rgba(0, 0, 0, 0.3);
+  z-index: 1010; /* Higher than nav bar content and other popups */
+  display: flex;
+  flex-direction: column;
+  color: #A5ADBA;
+  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+  overflow: hidden;
+  animation: fadeIn 0.3s ease-out;
+}
+
+.fullStatusHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  background-color: #353943;
+  border-bottom: 1px solid #232837;
+}
+
+.fullStatusTitle {
+  font-size: 14px;
+  font-weight: 600;
+  color: #e0e2e6;
+  margin: 0;
+}
+
+.closePopupBtn {
+  background: none;
+  border: none;
+  color: #A5ADBA;
+  font-size: 24px;
+  font-weight: bold;
+  cursor: pointer;
+  padding: 0 8px;
+  line-height: 1;
+}
+
+.closePopupBtn:hover {
+  color: #fff;
+}
+
+.fullLogList {
+  padding: 8px 16px 16px 16px;
+  overflow-y: auto;
+  flex-grow: 1;
+  scrollbar-width: thin;
+  scrollbar-color: #4f566b #2a2f3e;
+}
+
+.fullLogItem {
+  display: flex;
+  gap: 12px;
+  padding: 6px 0;
+  font-size: 12px;
+  border-bottom: 1px solid #30343f;
+  word-break: break-word;
+}
+.fullLogItem:last-child {
+  border-bottom: none;
+}
+
+.fullLogTimestamp {
+  color: #78808c;
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.fullLogMessage {
+  flex: 1;
+  color: #c0c8d4;
+}
+
+.fullLogItem.logError .fullLogMessage {
+  color: #EF4444;
+}
+.fullLogItem.logError .fullLogTimestamp {
+  color: #b32424;
+}
+
+.fullLogItem.logWarning .fullLogMessage {
+  color: #F59E0B;
+}
+.fullLogItem.logWarning .fullLogTimestamp {
+  color: #d48a07;
+}
+
+.noLogsMessage {
+  color: #78808c;
+  text-align: center;
+  padding: 20px;
+  font-style: italic;
+}
+
+/* Responsive Adjustments */
+
+.navigation.mediumLowHeight .actionButtons { /* Existing rule */
+  display: none;
+}
+
+.plusButtonContainer.plusButtonContainerMedium { /* Existing rules */
+  display: flex !important;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  margin-top: auto;
+  margin-bottom: 8px;
+}
+
+.plusButtonContainer.plusButtonContainerMedium .plusButton { /* Existing rules */
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background-color: #3B82F6;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  cursor: pointer;
+  transition: background-color 0.18s;
+  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+}
+
+.plusButtonContainer.plusButtonContainerMedium .plusButton:hover { /* Existing rules */
+  background-color: #2C3142;
+}
+
+.plusButtonContainer.plusButtonContainerMedium .plusButton .btnIcon { /* Existing rules */
+  width: 20px;
+  height: 20px;
+}
+
+.actionPopup.actionPopupMedium { /* Existing rules */
+  position: absolute;
+  left: 60px; /* From nav edge */
+  bottom: 0px;
+  width: auto; /* Fit content */
+  padding: 8px; /* Add padding for the row of buttons */
+  border-radius: 18px;
+  box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+  z-index: 1000;
+  flex-direction: row; /* Buttons in a row */
+  align-items: center;
+  gap: 8px;
+  pointer-events: auto;
+}
+
+.actionPopup.actionPopupMedium .newTradeBtn,
+.actionPopup.actionPopupMedium .noteBtn { /* Existing rules modified */
+  width: 40px; /* Icon only */
+  height: 40px;
+  padding: 0;
+  border-radius: 50%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 0; /* No gap inside button */
+  animation: popIn 0.4s ease-out forwards;
+  transform-origin: center bottom;
+}
+
+.actionPopup.actionPopupMedium .newTradeBtn { animation-delay: 0.0s; } /* Existing rules */
+.actionPopup.actionPopupMedium .noteBtn { animation-delay: 0.05s; } /* Stagger slightly */
+
+.actionPopup.actionPopupMedium .btnText { /* Existing rules */
+  display: none !important;
+}
+
+.actionPopup.actionPopupMedium .btnIcon { /* Existing rules */
+  width: 20px;
+  height: 20px;
+}
+
+
+@media (max-width: 1200px) { /* Medium size nav */
+  .navigation {
+    width: 60px;
+    padding: 16px 8px;
+    align-items: center;
+  }
+
+  .logoText,
+  /* .navigation:not(.mediumLowHeight) .accountInfo, -- accountInfo is now in logoPopup or handled by wideFooterAccountInfo */
+  .wideFooterAccountInfo, /* Hide the wide mode account info footer */
+  .navLabel,
+  .actionButtons .btnText {
+    display: none;
+  }
+  
+  /* AccountInfo for wide mode is hidden by wideFooterAccountInfo display:none.
+     AccountInfo for medium/small is inside logoPopup */
+  .navigation > .accountInfo { /* Hide direct .accountInfo if not in wideFooter */
+     display: none;
+  }
+
+
+  .logo {
+    margin-bottom: 16px;
+    justify-content: center;
+  }
+
+  .logoImg {
+    width: 32px;
+    height: 32px;
+  }
+
+  .navItems {
+    gap: 4px;
+    margin-bottom: 16px;
+    align-items: center;
+  }
+
+  .navItem {
+    padding: 8px;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+  }
+
+  .navIcon {
+    width: 24px; /* Slightly larger icons for touch */
+    height: 24px;
+  }
+
+  .actionButtons { /* For medium non-low-height mode */
+    gap: 8px;
+    margin-bottom: 8px;
+  }
+
+  .actionButtons .newTradeBtn,
+  .actionButtons .noteBtn {
+    width: 40px; /* Icon only */
+    height: 40px;
+    padding: 0;
+    border-radius: 50%;
+  }
+
+  .actionButtons .btnIcon {
+    width: 24px; /* Larger icons */
+    height: 24px;
+  }
+
+  .logoPopup { /* Styling for the popup containing accountInfo */
+    position: absolute;
+    top: 60px; /* Below logo */
+    left: 8px; /* From edge of nav */
+    border-radius: 12px;
+    padding: 0; /* accountInfo inside will have padding */
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4), 0 0 8px rgba(96, 165, 250, 0.5);
+    border: 2px solid #60A5FA;
+    z-index: 1005; /* Above logo, below other potential popups */
+    width: 220px; /* Wider to accommodate accountInfo well */
+    max-width: calc(100vw - 16px);
+    box-sizing: border-box;
+    pointer-events: auto;
+  }
+
+  .logoPopup .accountInfo { /* accountInfo when inside logoPopup */
+    display: flex !important; /* Ensure it's visible */
+    margin-bottom: 0; /* No bottom margin inside the popup itself */
+    padding: 16px; /* Good padding inside the popup */
+    background: transparent; /* Popup provides background */
+    box-shadow: none; /* Popup provides shadow */
+    border-radius: 0; /* Popup has radius */
+  }
+  
+  .logoPopup .integratedStatusSection {
+    padding: 8px;
+    font-size: 11px;
+  }
+  .logoPopup .logList {
+    max-height: 60px;
+  }
+
+  .logoPopup .accountLabel { /* Ensure these are visible if hidden by default */
+    display: block;
+  }
+  .logoPopup .accountName {
+     margin-bottom: 8px;
+  }
+  .logoPopup .accountSelector {
+    width: 100%;
+    padding: 8px 12px;
+    font-size: 13px;
+  }
+  .logoPopup .accountBalance {
+    font-size: 1.2rem;
+  }
+  .logoPopup .navStat {
+    width: 100%;
+  }
+
+}
+
+@media (max-width: 600px) { /* Small size nav (bottom bar) */
+  .navigation {
+    width: 100%;
+    height: 60px;
+    padding: 8px 16px;
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    border-right: none;
+    border-top: 1px solid #232837;
+    top: auto;
+    bottom: 0;
+    left: 0;
+    right: 0;
+    box-shadow: 0 -2px 4px rgba(0,0,0,0.1);
+  }
+
+  .logo { /* Logo becomes a button */
+    margin-bottom: 0;
+    padding: 4px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background-color: #232837;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .logoImg {
+    width: 32px;
+    height: 32px;
+    border-radius: 6px;
+  }
+
+  .logoText, .wideFooterAccountInfo { display: none; } /* Hide again */
+
+  .logoPopup { /* Reposition for bottom bar */
+    bottom: 70px; /* Above the 60px bar + 10px margin */
+    top: auto;
+    left: 8px;
+    width: 240px; /* Can be a bit wider */
+    /* Other styles inherited from medium query or base .logoPopup */
+  }
+  /* Styles for .logoPopup .accountInfo and its children are inherited from medium query */
+
+
+  .navItems {
+    flex-direction: row;
+    gap: 20px; /* Adjust gap for horizontal layout */
+    margin-bottom: 0;
+    flex: 1;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .navItem {
+    width: 40px;
+    height: 40px;
+    padding: 8px;
+    border-radius: 50%;
+  }
+
+  .navLabel { display: none; }
+
+  .actionButtons { display: none; } /* Regular actions hidden, use plus button */
+
+  .plusButtonContainer { /* Show plus button */
+    display: flex !important;
+    align-items: center;
+    justify-content: center;
+    width: 40px;
+    height: 40px;
+    /* position: relative; -- already set */
+  }
+
+  .plusButton { /* Styles for the plus button itself */
+    width: 40px;
+    height: 40px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background-color: #3B82F6;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    cursor: pointer;
+    transition: background-color 0.18s;
+    box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+    z-index: 1001; /* Above nav, below its popup */
+  }
+
+  .plusButton .btnIcon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .actionPopup.actionPopupSmall { /* Popup for the plus button */
+    position: absolute;
+    bottom: 55px; /* Above plus button */
+    right: 0; /* Align to the right of plus button container */
+    left: auto;
+    width: auto; /* Fit content */
+    padding: 8px;
+    border-radius: 18px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.3);
+    z-index: 1000;
+    flex-direction: column; /* Buttons in a column */
+    align-items: center;
+    gap: 8px;
+    background-color: #232837;
+    animation: fadeIn 0.3s ease-out; /* Reuse animation */
+  }
+
+  .actionPopup.actionPopupSmall .newTradeBtn,
+  .actionPopup.actionPopupSmall .noteBtn {
+    width: 40px; /* Icon only */
+    height: 40px;
+    padding: 0;
+    border-radius: 50%;
+    animation: popIn 0.4s ease-out forwards;
+    transform-origin: center bottom;
+     /* Stagger animations */
+  }
+  .actionPopup.actionPopupSmall .newTradeBtn { animation-delay: 0.0s; }
+  .actionPopup.actionPopupSmall .noteBtn { animation-delay: 0.05s; }
+
+
+  .actionPopup.actionPopupSmall .btnText {
+    display: none !important;
+  }
+
+  .actionPopup.actionPopupSmall .btnIcon {
+    width: 20px;
+    height: 20px;
+  }
+}

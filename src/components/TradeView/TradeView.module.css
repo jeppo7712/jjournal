@@ -1,0 +1,998 @@
+/* ==========================================================================
+   BASE STYLES
+   ========================================================================== */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.72);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.modal {
+  background: #2a2d34;
+  border-radius: 18px;
+  min-width: 700px;
+  max-width: 98vw;
+  width: 700px;
+  box-shadow: 0 4px 32px 0 rgba(0, 0, 0, 0.18);
+  position: relative;
+  display: flex;
+  flex-direction: column;
+}
+
+/* ==========================================================================
+   LAYOUT COMPONENTS
+   ========================================================================== */
+
+.headerRow {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px 6px 12px;
+  background: #353943;
+  border-bottom: 1px solid #444851;
+  border-radius: 18px 18px 0 0;
+  margin-bottom: 0;
+  flex-shrink: 0;
+}
+
+.tabContent {
+  padding: 0 10px;
+  overflow-y: auto;
+  flex: 1;
+  scrollbar-width: thin;
+  scrollbar-color: #3B82F6 #353943;
+}
+
+.footerRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 16px;
+  padding: 10px 32px;
+  background: #232733;
+  border-top: 1px solid #343842;
+  border-radius: 0 0 18px 18px;
+  flex-shrink: 0;
+}
+
+/* ==========================================================================
+   CHART COMPONENTS
+   ========================================================================== */
+
+.chartContainer {
+  position: relative;
+  flex: 1;
+  width: 100%;
+  height: 100%;
+  background-color: #232733;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.chartMessageOverlay {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  padding: 15px 25px;
+  background-color: rgba(53, 57, 67, 0.9);
+  color: #e0e2e6;
+  border-radius: 8px;
+  text-align: center;
+  z-index: 10;
+  font-size: 0.9em;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+
+.errorMessage {
+  background-color: rgba(197, 18, 68, 0.9);
+  color: white;
+  border: 1px solid rgba(239, 68, 68, 0.7);
+}
+
+/* ==========================================================================
+   TIMELINE COMPONENTS
+   ========================================================================== */
+
+.timelineScroll {
+  width: 100%;
+  margin-bottom: 16px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 16px;
+}
+
+.timelineBox {
+  position: relative;
+  height: 90px;
+  width: 450px;
+  margin: 0;
+}
+
+.timelineBar {
+  position: absolute;
+  top: 44px;
+  height: 4px;
+  background: #2382f7;
+  border-radius: 2px;
+  z-index: 1;
+}
+
+.timelineDotWrap {
+  position: absolute;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  z-index: 2;
+  transform: translateX(-50%);
+  width: 90px;
+}
+
+.timelineDotRow {
+  display: flex;
+  align-items: flex-end;
+  justify-content: center;
+  margin-top: 0;
+}
+
+.timelineDotBuy,
+.timelineDotSell {
+  width: 24px;
+  height: 24px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: 400;
+  font-size: 1em;
+  border: 2px solid #353943;
+  box-shadow: 0 2px 8px 0 rgba(34, 197, 94, 0.10);
+  position: relative;
+  background: #22c55e;
+  color: #fff;
+}
+
+.timelineDotSell {
+  background: #ef4444;
+}
+
+.timelineDate {
+  color: #7fd7ff;
+  font-size: 0.85em;
+  font-weight: 300;
+  margin-bottom: 2px;
+  margin-top: 0;
+  text-align: center;
+  white-space: normal;
+  word-break: break-word;
+  line-height: 1.2;
+  height: 32px;
+}
+
+.timelineQtyPrice {
+  text-align: center;
+  margin-top: 0;
+  white-space: nowrap;
+  word-break: normal;
+  line-height: 1.1;
+}
+
+.timelineQty,
+.timelinePrice,
+.timelineAtSymbol {
+  color: #e0e2e6;
+  font-size: 0.85em;
+  font-weight: 400;
+}
+
+.timelineAtSymbol {
+  color: #7fd7ff;
+  margin-right: 4px;
+}
+
+.timelineQty {
+  margin-right: 4px;
+}
+
+/* ==========================================================================
+   BUTTONS AND CONTROLS
+   ========================================================================== */
+
+.title {
+  color: #fff;
+  font-size: 1.18rem;
+  font-weight: 600;
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  color: #A5ADBA;
+  font-size: 1.7rem;
+  cursor: pointer;
+  line-height: 1;
+}
+
+.leftButtonGroup {
+  display: flex;
+  gap: 8px;
+}
+
+.saveBtn {
+  padding: 10px 28px;
+  background: radial-gradient(circle at 45deg, #3B82F6 0%, #2563eb 100%);
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  font-weight: 600;
+  font-size: 1.07rem;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+
+.saveBtn:hover {
+  background: #2563eb;
+}
+
+.circleBtn {
+  padding: 8px;
+  border-radius: 50%;
+  min-width: 40px;
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.timeframeButton {
+  background: #A5ADBA;
+  color: #e0e2e6;
+  border: none;
+  border-radius: 12px;
+  padding: 6px 12px;
+  font-size: 0.9em;
+  cursor: pointer;
+  opacity: 0.7;
+  transition: all 0.2s;
+}
+
+.timeframeButton.active {
+  background: #3B82F6;
+  opacity: 1;
+}
+
+.timeframeSwitcher {
+  position: absolute;
+  top: 20px;
+  left: 20px;
+  z-index: 20;
+  display: flex;
+  gap: 8px;
+}
+
+/* ==========================================================================
+   BADGES AND METADATA
+   ========================================================================== */
+
+.metaBadge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-size: 1.1em;
+  font-weight: 500;
+  line-height: 1.0;
+  min-width: 80px;
+}
+
+.metaBadgeBlue {
+  background: #1e293b;
+  color: #60a5fa;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 1.1em;
+  font-weight: 500;
+}
+
+.metaBadgeGreen {
+  background: #22C55E;
+  color: #fff;
+  border-radius: 8px;
+  padding: 5px 12px;
+  font-size: 1.1em;
+  font-weight: 500;
+}
+
+.metaBadges {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.metaLabel {
+  margin-bottom: 4px;
+  color: #74a9ff;
+  text-align: center;
+  font-size: 1em;
+}
+
+.metaValue {
+  color: #D1D5DB;
+  font-size: 1em;
+}
+
+.metaContainer {
+  display: flex;
+  justify-content: center;
+  align-items: flex-start;
+  margin: 16px 0;
+}
+
+.metaColumn {
+  display: flex;
+  flex-direction: row;
+  align-items: flex-end;
+  gap: 8px;
+}
+
+.confidenceBadge {
+  display: inline-flex;
+  align-items: center;
+  color: #fff;
+  border-radius: 8px;
+  padding: 8px 14px;
+  font-size: 1.1em;
+  font-weight: 500;
+  margin: 8px 16px 8px 0;
+}
+
+.confidenceStar {
+  font-size: 1.2em;
+  margin-left: 4px;
+}
+
+/* ==========================================================================
+   RATINGS
+   ========================================================================== */
+
+.ratingBadge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: #fff;
+  border-radius: 8px;
+  padding: 10px 7px;
+  font-size: 1.1em;
+  font-weight: 500;
+  background: #6B7280;
+  line-height: 1.0;
+}
+
+.ratingLabel {
+  margin-bottom: 4px;
+  color: #E0E2E6;
+  text-align: center;
+  font-size: 1em;
+}
+
+.ratingsColumn {
+  display: flex;
+  flex-direction: row;
+  gap: 8px;
+}
+
+.starContainer {
+  display: flex;
+  justify-content: center;
+}
+
+.star {
+  font-size: 1em;
+  margin-right: 2px;
+  color: #FCD34D;
+}
+
+.ratingsInNotes {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #444851;
+}
+
+.ratingInNotesLeft,
+.ratingInNotesRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ratingsInLegend {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  width: 100%;
+  min-width: 280px;
+}
+
+.ratingInLegendLeft,
+.ratingInLegendRight {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.ratingText {
+  color: #e0e2e6;
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+.starsInline {
+  display: flex;
+  gap: 2px;
+}
+
+.starsInline .star {
+  font-size: 1.1em;
+  color: #FCD34D;
+  margin: 0;
+}
+
+/* ==========================================================================
+   P&L AND SYMBOL DISPLAY
+   ========================================================================== */
+
+.plRow {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin: 18px 0 32px 0;
+}
+
+.symbolAndPnl {
+  display: flex;
+  align-items: center;
+  gap: 0;
+}
+
+.symbolBadge {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  background: rgba(60, 154, 239, 0.3);
+  color: #6da5ff;
+  font-size: 20px;
+  font-weight: 500;
+  border-radius: 8px;
+  padding: 6px 14px;
+  line-height: 1.2;
+}
+
+.symbolType {
+  color: #A5ADBA;
+  font-size: 0.75em;
+  font-weight: 400;
+  margin-top: 2px;
+}
+
+.pnlContainer {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  margin-left: 8px;
+}
+
+.plBadge {
+  background: rgba(60, 154, 239, 0.3);
+  color: #74a9ff;
+  border-radius: 8px;
+  padding: 3px 14px;
+  font-size: 20px;
+  font-weight: 500;
+}
+
+.plValue {
+  font-size: 1.2em;
+  font-weight: 600;
+  padding: 1px;
+}
+
+.footerMetaRow {
+  display: inline-flex;
+  align-items: center;
+  color: #fff;
+  font-size: 1.1em;
+  font-weight: 500;
+  margin: 8px 0;
+  padding: 5px 12px;
+  background: #3B82F6;
+  border-radius: 8px;
+  gap: 16px;
+}
+
+/* ==========================================================================
+   NOTES AND CONTENT
+   ========================================================================== */
+
+.notesBox {
+  background: #232733;
+  border: 1px solid #444851;
+  border-radius: 12px;
+  margin: 16px 0 18px 0;
+  padding: 10px 18px;
+}
+
+.notesLegend {
+  color: #e0e2e6;
+  font-size: 1.06em;
+  font-weight: 500;
+  padding: 0 8px;
+}
+
+.notesWrapper {
+  max-height: 180px;
+  overflow-y: auto;
+  scrollbar-width: thin;
+  scrollbar-color: #3B82F6 #353943;
+}
+
+.notesContent {
+  color: #e0e2e6;
+  font-size: 1.06em;
+  margin-bottom: 10px;
+  word-break: break-word;
+  line-height: 1.5;
+}
+
+.notesContent p {
+  margin: 0 0 10px 0;
+}
+
+.notesContent ul,
+.notesContent ol {
+  margin: 0 0 10px 0;
+  padding-left: 20px;
+}
+
+.notesContent li {
+  margin-bottom: 5px;
+}
+
+/* ==========================================================================
+   ATTACHMENTS
+   ========================================================================== */
+
+.attachmentsPreview {
+  display: flex;
+  gap: 10px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+  justify-content: center;
+}
+
+.attachmentThumb {
+  width: 54px;
+  height: 54px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #232837;
+  border: 1.5px solid #3B82F6;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.attachmentThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.attachmentThumb:hover .tooltip {
+  visibility: visible;
+  opacity: 1;
+}
+
+.tooltip {
+  visibility: hidden;
+  opacity: 0;
+  background: #232733;
+  color: #e0e2e6;
+  font-size: 0.9em;
+  padding: 6px 12px;
+  border-radius: 6px;
+  position: absolute;
+  bottom: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  white-space: nowrap;
+  z-index: 10;
+  transition: opacity 0.2s, visibility 0.2s;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  max-width: 200px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tooltip::after {
+  content: '';
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border-width: 5px;
+  border-style: solid;
+  border-color: #232733 transparent transparent transparent;
+}
+
+.aiIcon {
+  width: 24px;
+  height: 24px;
+}
+
+/* ==========================================================================
+   TIMEZONE TOGGLE
+   ========================================================================== */
+
+.timezoneToggle {
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+  user-select: none;
+}
+
+.timezoneToggle input {
+  display: none;
+}
+
+.timezoneToggle span {
+  color: #A5ADBA;
+  font-size: 0.85em;
+  font-weight: 500;
+  margin-right: 8px;
+}
+
+.slider {
+  position: relative;
+  width: 40px;
+  height: 20px;
+  background: #444851;
+  border-radius: 10px;
+  transition: background 0.3s ease;
+}
+
+.slider::before {
+  content: '';
+  position: absolute;
+  width: 16px;
+  height: 16px;
+  background: #A5ADBA;
+  border-radius: 50%;
+  top: 2px;
+  left: 2px;
+  transition: transform 0.3s ease, background 0.3s ease;
+}
+
+.timezoneToggle input:checked+.slider {
+  background: #3B82F6;
+}
+
+.timezoneToggle input:checked+.slider::before {
+  transform: translateX(20px);
+  background: #fff;
+}
+
+/* ==========================================================================
+   STATUS AND LOADER
+   ========================================================================== */
+
+.error {
+  font-size: 0.9em;
+  padding: 8px 16px;
+  border-radius: 8px;
+  background: rgba(239, 68, 68, 0.2);
+}
+
+.loader {
+  display: flex;
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3B82F6;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+  margin: 0 auto;
+}
+
+/* ==========================================================================
+   SCROLLBAR STYLES
+   ========================================================================== */
+
+.tabContent::-webkit-scrollbar,
+.notesWrapper::-webkit-scrollbar {
+  width: 8px;
+}
+
+.tabContent::-webkit-scrollbar-track,
+.notesWrapper::-webkit-scrollbar-track {
+  background: #353943;
+  border-radius: 4px;
+}
+
+.tabContent::-webkit-scrollbar-thumb,
+.notesWrapper::-webkit-scrollbar-thumb {
+  background: #3B82F6;
+  border-radius: 4px;
+}
+
+.tabContent::-webkit-scrollbar-thumb:hover,
+.notesWrapper::-webkit-scrollbar-thumb:hover {
+  background: #2563eb;
+}
+
+/* ==========================================================================
+   ANIMATIONS
+   ========================================================================== */
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+@keyframes popIn {
+  0% {
+    transform: scale(0.2);
+    opacity: 0;
+  }
+
+  60% {
+    transform: scale(1.2);
+    opacity: 1;
+  }
+
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+}
+
+@keyframes spin {
+  0% {
+    transform: rotate(0deg);
+  }
+
+  100% {
+    transform: rotate(360deg);
+  }
+}
+
+/* ==========================================================================
+   MOBILE RESPONSIVE
+   ========================================================================== */
+
+@media screen and (max-width: 700px) {
+  .modal {
+    min-width: 100vw;
+    width: 100vw;
+    max-width: 100vw;
+    height: 100vh;
+    max-height: 100vh;
+    border-radius: 0;
+    margin: 0;
+  }
+
+  .timelineBar {
+    width: calc(100% - 60px) !important;
+    top: 40px;
+    left: 30px !important;
+  }
+
+  .headerRow {
+    padding: 10px 16px;
+    border-radius: 0;
+    gap: 16px;
+  }
+
+  .tabContent {
+    padding: 0 10px;
+    overflow-y: auto;
+    overflow-x: hidden;
+    flex: 1;
+  }
+
+  .footerRow {
+    padding: 10px 16px;
+    flex-wrap: wrap;
+    gap: 8px;
+    border-radius: 0;
+  }
+
+  .timelineBox {
+    width: 100%;
+    min-width: 0;
+  }
+
+  .timelineDotWrap {
+    width: 70px;
+  }
+
+  .timelineDate {
+    font-size: 0.85em;
+    height: 28px;
+  }
+
+  .timelineQtyPrice {
+    font-size: 1em;
+  }
+
+  .timelineQty,
+  .timelinePrice,
+  .timelineAtSymbol {
+    font-size: 0.85em;
+  }
+
+  .notesBox {
+    padding: 8px 12px;
+    margin: 12px 0;
+  }
+
+  .notesWrapper {
+    max-height: 150px;
+  }
+
+  .attachmentThumb {
+    width: 48px;
+    height: 48px;
+  }
+
+  .footerMetaRow {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+    padding: 3px 10px;
+  }
+
+  .plRow {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-direction: row;
+    flex-wrap: wrap;
+    gap: 8px;
+    margin: 12px 0 24px 0;
+  }
+
+  .metaBadges {
+    flex-wrap: wrap;
+  }
+
+  .timezoneToggle {
+    margin-right: 16px;
+  }
+
+  .timezoneToggle span {
+    font-size: 0.75em;
+    margin-right: 6px;
+  }
+
+  .slider {
+    width: 32px;
+    height: 16px;
+  }
+
+  .slider::before {
+    width: 12px;
+    height: 12px;
+    top: 2px;
+    left: 2px;
+  }
+
+  .timezoneToggle input:checked+.slider::before {
+    transform: translateX(16px);
+  }
+
+
+  .inputBubble {
+    font-size: 0.9em;
+    padding: 8px 12px;
+  }
+
+  .metaColumn {
+    flex-direction: row;
+    gap: 6px;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .ratingsColumn {
+    flex-direction: row;
+    gap: 6px;
+    flex-wrap: wrap;
+  }
+
+  .timeframeButtons {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 8px;
+    justify-content: flex-end;
+    max-width: 200px;
+  }
+
+  .symbolBadge {
+    padding: 4px 10px;
+  }
+
+  .plBadge {
+    font-size: 18px;
+  }
+
+  .symbolType {
+    font-size: 0.65em;
+  }
+
+  .plValue {
+    font-size: 1.2em;
+  }
+
+  .pnlContainer {
+    margin-left: 6px;
+  }
+
+  .plRow {
+    flex-wrap: wrap;
+    align-items: flex-start;
+  }
+
+  .timeframeButton {
+    padding: 4px 8px;
+    font-size: 0.8em;
+  }
+
+  .ratingsInNotes {
+    flex-direction: column;
+    gap: 8px;
+    align-items: flex-start;
+  }
+
+  .ratingInNotesLeft,
+  .ratingInNotesRight {
+    gap: 6px;
+  }
+
+  .starsInline .star {
+    font-size: 1em;
+  }
+
+  .ratingInLegendLeft,
+  .ratingInLegendRight {
+    gap: 4px;
+  }
+
+  .starsInline .star {
+    font-size: 0.9em;
+  }
+}

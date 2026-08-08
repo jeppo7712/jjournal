@@ -1,0 +1,150 @@
+/* src/styles.css */
+:root {
+  --primary-dark: #1E1E2E;
+  --secondary-dark: #252535;
+  --tertiary-dark: #2A2A40;
+  --accent-blue: #3B82F6;
+  --accent-green: #10B981;
+  --accent-red: #EF4444;
+  --text-primary: #F3F4F6;
+  --text-secondary: #9CA3AF;
+  --text-tertiary: #6B7280;
+  --border-color: #374151;
+  --card-hover: #2D2D45;
+  --modal-overlay: rgba(0, 0, 0, 0.7);
+  --nav-width: 180px; /* Matches navigation bar's default width */
+}
+
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+html, body {
+  margin: 0;
+  padding: 0;
+  height: 100%;
+  overflow: hidden; /* Default behavior, allows scrolling only if content overflows */
+}
+
+body {
+  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+  font-size: 13px;
+  background-color: var(--primary-dark);
+  color: var(--text-primary);
+  line-height: 1.5;
+}
+
+button {
+  cursor: pointer;
+  font-family: inherit;
+}
+
+.app {
+  display: flex;
+  min-height: 100vh;
+}
+
+.main-content {
+  flex: 1;
+  padding: 20px;
+  overflow-y: auto; /* Allow this container to scroll when content overflows */
+  margin-left: var(--nav-width); /* Dynamic margin based on nav width */
+  width: calc(100% - var(--nav-width)); /* Fill remaining space */
+  display: flex;
+  flex-direction: column;
+  height: calc(100vh - 0px); /* Account for 20px top + 20px bottom padding */
+  box-sizing: border-box;
+}
+
+.loading-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.spinner {
+  border: 4px solid #f3f3f3;
+  border-top: 4px solid #3498db;
+  border-radius: 50%;
+  width: 40px;
+  height: 40px;
+  animation: spin 1s linear infinite;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+@media (max-width: 1200px) {
+  :root {
+    --nav-width: 60px; /* Matches navigation bar's narrow width */
+  }
+}
+
+@media (max-width: 600px) {
+  :root {
+    --nav-width: 0px; /* No left navigation, bottom nav instead */
+    --nav-height: 60px; /* Define the height of the bottom navigation bar */
+    --dashboard-height: 90px;
+  }
+
+  html, body {
+height: calc(var(--vh, 1vh) * 100);
+    margin: 0; /* Ensure no extra margins */
+    overflow: hidden; /* Prevent body scrolling on mobile */
+  }
+
+  .app {
+    display: flex;
+    flex-direction: column;
+    height: calc(var(--vh, 1vh) * 100);
+  }
+
+.main-content {
+    margin-left: 0;
+    width: 100%;
+    padding: 6px;
+    /* Add padding to the bottom to prevent content from being hidden by the fixed nav bar */
+    padding-bottom: calc(var(--nav-height, 60px) + 20px);
+    height: auto; /* Adjust to content, will scroll */
+    flex: 1; /* Allow it to grow and take remaining space */
+    overflow-y: auto; /* Enable scrolling for the trade list */
+    display: flex;
+    flex-direction: column;
+    box-sizing: border-box;
+  }
+  /* styles for fixed dashboard */
+  .dashboard {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    z-index: 100; /* Ensure it's above other content */
+    /* Add any other necessary styling, like background-color */
+  }
+
+  /* style for fixed navigation */
+  .navigation {
+    position: fixed;
+    bottom: 0;
+    left: 0;
+    width: 100%;
+    z-index: 100; /* Ensure it's above other content */
+  }
+
+  /* adjust trade list to account for dashboard height */
+  .tradeListSection {
+    padding-top: var(--dashboard-height); /* assuming you have dashboard height defined */
+  }
+}
