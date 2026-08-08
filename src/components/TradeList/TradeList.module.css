@@ -1,0 +1,600 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+
+.tradeList {
+  width: 100%;
+  background: transparent;
+  border-radius: 10px;
+  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+  font-size: 12px;
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow-x: hidden;
+  position: relative;
+}
+
+.header {
+  display: flex;
+  background-color: #2C3142;
+  padding: 10px 14px;
+  font-size: 13px;
+  color: #A5ADBA;
+  border-bottom: 1px solid #262B39;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.headerCell {
+  flex: 1;
+  cursor: default;
+  display: flex;
+  align-items: center;
+  transition: color 0.2s;
+  user-select: none;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.headerCell.sortable {
+  cursor: pointer;
+}
+
+.headerCell.sortable:hover {
+  color: #fff;
+}
+
+.sorted {
+  color: #fff;
+}
+
+.sortIcon {
+  display: inline-block;
+  margin-left: 5px;
+  font-size: 11px;
+}
+
+.tradeRows {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 0;
+  background: transparent;
+  min-height: 0;
+  width: 100%;
+}
+
+.tradeRows::-webkit-scrollbar {
+  width: 8px;
+}
+
+.tradeRows::-webkit-scrollbar-track {
+  background: #232837;
+}
+
+.tradeRows::-webkit-scrollbar-thumb {
+  background: #333333;
+  border-radius: 4px;
+}
+
+.tradeRows::-webkit-scrollbar-thumb:hover {
+  background: #434343;
+}
+
+.tradeRow {
+  display: flex;
+  padding: 10px 14px;
+  margin: 8px 0;
+  border-radius: 10px;
+  background: #292e3a;
+  border: 1px solid #32384a;
+  cursor: pointer;
+  transition: background 0.18s, transform 0.18s, box-shadow 0.18s;
+  box-shadow: 0 1px 2px 0 rgba(20,22,25,0.08);
+  font-size: 12px;
+  flex-shrink: 0;
+  width: 100%;
+}
+
+.tradeRow:hover {
+  background: #313745;
+  transform: translateX(5px);
+  box-shadow: 0 2px 8px 0 rgba(20,22,25,0.13);
+}
+
+.tradeRowNotClosed {
+  border: 1px dashed #A5ADBA;
+}
+
+.cellContainer {
+  display: none;
+}
+
+.cellColumn {
+  display: none;
+}
+
+.cellTop, .cellBottom {
+  display: none;
+}
+
+.desktopCells {
+  display: flex;
+  width: 100%;
+}
+
+.cell {
+  flex: 1;
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  color: #A5ADBA;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.symbol {
+  color: #8FB6FF;
+  font-weight: 500;
+  letter-spacing: 0.2px;
+}
+
+.status {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 12px;
+  border-radius: 999px;
+  background: #343b4b;
+  color: #fff;
+  width: fit-content;
+  min-width: 48px;
+  justify-content: center;
+}
+
+.statusWin {
+  background: #28372f;
+  color: #22C55E;
+}
+
+.statusLoss {
+  background: #2b1e1e;
+  color: #EF4444;
+}
+
+.statusOpen {
+  background: #343b4b;
+  color: #A5ADBA;
+}
+
+.side {
+  font-size: 12px;
+  font-weight: 500;
+  color: #A5ADBA;
+}
+
+.direction {
+  font-weight: bold;
+  font-size: 14px;
+  display: flex;
+  align-items: center;
+}
+
+.long {
+  color: #22C55E;
+}
+
+.short {
+  color: #EF4444;
+}
+
+.hold {
+  background: #1e293b;
+  color: #60a5fa;
+  border-radius: 999px;
+  padding: 2px 12px;
+  font-weight: 600;
+  width: fit-content;
+  display: inline-block;
+  font-size: 12px;
+}
+
+.positiveItalic {
+  color: #22C55E;
+  font-weight: 500;
+  font-style: italic;
+}
+
+.negativeItalic {
+  color: #EF4444;
+  font-weight: 500;
+  font-style: italic;
+}
+
+.positive {
+  color: #22C55E;
+  font-weight: 500;
+}
+
+.negative {
+  color: #EF4444;
+  font-weight: 500;
+}
+
+.noteRow {
+  display: flex;
+  align-items: center;
+  padding: 10px 14px;
+  margin: 8px 0;
+  border-radius: 10px;
+  background: #222333;
+  border: 1px solid #32384a;
+  cursor: pointer;
+  transition: background 0.18s, transform 0.18s, box-shadow 0.18s;
+  box-shadow: 0 1px 2px 0 rgba(20,22,25,0.08);
+  font-size: 12px;
+}
+
+.noteContainer {
+  display: none;
+}
+
+.noteTop, .noteBottom {
+  display: none;
+}
+
+.noteIconDate {
+  display: none;
+}
+
+.desktopNote {
+  display: flex;
+  width: 100%;
+  align-items: center;
+}
+
+.noteRow:hover {
+  background: #313745;
+  transform: translateX(5px);
+  box-shadow: 0 2px 8px 0 rgba(20,22,25,0.13);
+}
+
+.noteIcon {
+  margin-right: 8px;
+  display: flex;
+  align-items: center;
+}
+
+.noteBadge {
+  width: 16px;
+  height: 16px;
+  transform: rotate(90deg);
+  fill: #a39444;
+}
+
+.noteDate {
+  min-width: 80px;
+  margin-right: 12px;
+  color: #A5ADBA;
+  font-size: 12px;
+}
+
+.noteIcons {
+  display: flex;
+  gap: 4px;
+  margin-right: 22px;
+  align-items: center;
+}
+
+.noteIcons .noteIcon {
+  width: 18px;
+  height: 18px;
+  margin-right: 0;
+}
+
+.noteIcons .noteIcon svg {
+  width: 100%;
+  height: 100%;
+  fill: #A5ADBA;
+}
+
+.noteContent {
+  flex: 1;
+  font-size: 12px;
+  color: #A5ADBA;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.noteStats {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 120px;
+  justify-content: flex-end;
+}
+
+.dailyPnL {
+  display: inline-flex;
+  align-items: center;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 2px 12px;
+  border-radius: 999px;
+  width: fit-content;
+  min-width: 48px;
+  justify-content: center;
+}
+
+.tradeCounts {
+  font-size: 12px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.wins {
+  color: #22C55E;
+  font-weight: 500;
+}
+
+.losses {
+  color: #EF4444;
+  font-weight: 500;
+}
+
+.noTrades {
+  color: #A5ADBA;
+  font-size: 12px;
+}
+
+.noteIconWrapper {
+  position: relative;
+  display: flex;
+  align-items: center;
+}
+
+.noteTooltip {
+  visibility: hidden;
+  position: absolute;
+  top: 100%;
+  right: 0;
+  background: #1e293b;
+  color: #A5ADBA;
+  padding: 8px 12px;
+  border-radius: 6px;
+  border: 1px solid #32384a;
+  box-shadow: 0 2px 8px rgba(20,22,25,0.2);
+  z-index: 10;
+  max-width: 300px;
+  font-size: 12px;
+  line-height: 1.5;
+  white-space: normal;
+  word-wrap: break-word;
+}
+
+.noteIconWrapper:hover .noteTooltip {
+  visibility: visible;
+}
+
+.loading {
+  color: #888;
+  font-style: italic;
+}
+
+.notesPopup {
+  background-color: rgba(0, 0, 0, 0.8);
+  color: white;
+  padding: 10px;
+  border-radius: 5px;
+  max-width: 300px;
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
+  transition: top 0.1s, left 0.1s; /* Smooths out position changes */
+}
+
+/* Hide Entry Total, Exit Total, and Pos columns at 992px or below.
+   Targets stable per-column classes rather than nth-child position, since
+   a hidden column (see hiddenColumns/TRADE_LIST_COLUMNS) can be omitted
+   from the DOM entirely, which would otherwise shift nth-child indices. */
+@media (max-width: 992px) {
+  .colEntryTotal,
+  .colExitTotal,
+  .colPosition {
+    display: none;
+  }
+}
+
+/* Mobile layout at 600px or below */
+@media (max-width: 600px) {
+  .header {
+    display: none;
+  }
+
+  .tradeRow {
+    padding: 8px 10px;
+    margin: 6px 0;
+  }
+
+  .desktopCells {
+    display: none;
+  }
+
+  .cellContainer {
+    display: flex;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .cellColumn {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    gap: 4px;
+  }
+
+  .cellTop, .cellBottom {
+    display: flex;
+    align-items: center;
+    min-height: 22px;
+    font-size: 14px;
+    color: #A5ADBA;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+  }
+
+  /* Specific styling for the first column's cellTop to align symbol and arrow */
+  .cellColumn:first-child .cellTop {
+    display: flex;
+    align-items: center;
+    gap: 6px; /* Space between symbol and arrow */
+  }
+
+  .cellColumn:first-child .cellTop .symbol {
+    font-size: 16px;
+  }
+
+  .cellColumn:first-child .cellBottom {
+    font-size: 14px;
+    color: #A5ADBA;
+  }
+
+  .cellColumn:nth-child(3) .cellTop,
+  .cellColumn:nth-child(3) .cellBottom {
+    justify-content: flex-end;
+  }
+
+  .cellBottom .side {
+    font-size: 14px;
+  }
+
+  .noteRow {
+    padding: 8px 10px;
+    margin: 6px 0;
+  }
+
+  .desktopNote {
+    display: none;
+  }
+
+  .noteContainer {
+    display: flex;
+    flex-direction: column;
+    width: 100%;
+    gap: 4px;
+  }
+
+  .noteTop {
+    display: flex;
+    align-items: center;
+    width: 100%;
+    gap: 8px;
+  }
+
+  .noteBottom {
+    display: flex;
+    width: 100%;
+  }
+
+  .noteIconDate {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    min-width: 90px;
+  }
+
+  .noteDate {
+    font-size: 14px;
+    min-width: 0;
+    margin-right: 0;
+  }
+
+  .noteIcons {
+    flex: 1;
+    margin-right: 0;
+    gap: 6px;
+  }
+
+  .noteIcons .noteIcon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .noteStats {
+    justify-content: flex-end;
+    min-width: 100px;
+  }
+
+  .dailyPnL {
+    font-size: 14px;
+    padding: 2px 10px;
+  }
+
+  .tradeCounts {
+    font-size: 14px;
+  }
+
+  .noTrades {
+    font-size: 14px;
+  }
+
+  .noteContent {
+    font-size: 14px;
+  }
+
+  .noteBadge {
+    width: 18px;
+    height: 18px;
+  }
+  .tradeRows {
+    padding-bottom: 60px;
+  }
+}
+
+/* Pagination Styles */
+.paginationContainer {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 15px;
+  padding: 20px;
+  border-top: 1px solid #32384a;
+  background: transparent;
+  font-size: 12px;
+}
+
+.paginationBtn {
+  background: #3B82F6;
+  color: #fff;
+  border: none;
+  border-radius: 5px;
+  padding: 8px 16px;
+  cursor: pointer;
+  font-size: 12px;
+  font-weight: 500;
+  transition: background 0.2s, opacity 0.2s;
+}
+
+.paginationBtn:hover:not(:disabled) {
+  background: #2563EB;
+}
+
+.paginationBtn:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.paginationInfo {
+  color: #A5ADBA;
+  white-space: nowrap;
+}

@@ -1,0 +1,716 @@
+.settings {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  width: 100%;
+  padding: 16px;
+  box-sizing: border-box;
+  flex: 1;
+  /* REMOVED: These properties were creating a problematic nested scroll container. */
+  /* min-height: 100vh; */
+  /* overflow-y: auto; */
+}
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+/* === NEW TAB STYLES (MATCHING STATS) === */
+.tabsRow {
+  display: flex;
+  position: sticky;
+  top: 0;
+  background-color: var(--primary-dark, #1E1E2E);
+  z-index: 1999;
+  padding-top: 16px;
+  padding-bottom: 0; /* Match new style */
+  border-bottom: 1px solid #32384a; /* Add border */
+  flex-wrap: nowrap; /* Prevent wrapping */
+  gap: 8px;
+  width: 100%;
+}
+
+.tabButton {
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 4px 4px 0 0;
+  padding: 10px 16px;
+  color: #A5ADBA;
+  cursor: pointer;
+  transition: background-color 0.18s, color 0.18s, border-color 0.18s;
+  font-weight: 500;
+  white-space: nowrap;
+  flex-shrink: 0; /* Important for mobile scrolling */
+}
+
+.tabButton:hover {
+  background-color: #262B39;
+  color: #ffffff;
+}
+
+.tabButton.activeTab {
+  background-color: #262B39;
+  border-bottom-color: #3B82F6;
+  color: #ffffff;
+  font-weight: 600;
+}
+/* ========================================= */
+
+.tabContent {
+  background: #232837;
+  border: 1px solid #32384a;
+  border-radius: 7px;
+  padding: 16px;
+}
+
+.accountsList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.accountItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #353943;
+  padding: 10px 16px;
+  border-radius: 12px;
+  color: #e0e2e6;
+}
+
+.accountItem .itemActions,
+.exchangeItem .itemActions {
+  display: flex;
+  gap: 8px;
+}
+
+.accountItem .actionBtn,
+.exchangeItem .actionBtn {
+  background: #3B82F6;
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 5px;
+  font-weight: 500;
+  transition: background 0.2s ease-in-out;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.accountItem .actionBtn:hover,
+.exchangeItem .actionBtn:hover {
+  background: #4B9BFF;
+}
+
+.modal {
+  background: #232733;
+  border-radius: 18px;
+  padding: 24px;
+  width: 600px;
+  max-width: 90%;
+  max-height: calc(90vh - 48px); /* Account for tabsRow */
+  overflow-y: auto;
+  position: relative;
+  box-shadow: 0 4px 32px 0 rgba(0,0,0,0.18);
+  margin-top: 48px; /* Prevent overlap with tabsRow */
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 20px;
+}
+
+.title {
+  color: #fff;
+  font-size: 1.5rem;
+  font-weight: 500;
+}
+
+.closeBtn {
+  background: none;
+  border: none;
+  color: #A5ADBA;
+  font-size: 1.8rem;
+  cursor: pointer;
+  transition: color 0.18s;
+}
+
+.closeBtn:hover {
+  color: #fff;
+}
+
+.accountsTab, .futuresTab, .twsTab, .exchangesTab {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.accountsTab h3, .futuresTab h3, .twsTab h3, .exchangesTab h3 {
+  color: #fff;
+  font-size: 1.2rem;
+  margin-bottom: 10px;
+}
+
+.logsTab {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.logsControls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 10px;
+}
+
+.logOutput {
+  background: #1b1f29;
+  border: 1px solid #32384a;
+  border-radius: 12px;
+  padding: 12px;
+  color: #e0e2e6;
+  font-family: ui-monospace, Menlo, Monaco, 'Courier New', monospace;
+  font-size: 0.85rem;
+  width: 100%;
+  min-height: 320px;
+  resize: vertical;
+}
+
+.accountsTab ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.inputBubble {
+  background: #353943;
+  border: none;
+  border-radius: 18px;
+  color: #e0e2e6;
+  padding: 10px 16px;
+  font-size: 1em;
+  outline: none;
+  margin-bottom: 0;
+  transition: background 0.18s, color 0.18s;
+  box-shadow: none;
+  font-family: inherit;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+}
+
+.inputBubble::placeholder {
+  color: #A5ADBA;
+}
+
+.inputBubble:disabled {
+  background: #2a2f3a;
+  color: #6b7280;
+  cursor: not-allowed;
+}
+
+.actionStatus {
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: rgba(16, 185, 129, 0.12);
+  border: 1px solid rgba(16, 185, 129, 0.35);
+  border-radius: 10px;
+  color: #d1fae5;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.inlineSpinner {
+  width: 16px;
+  height: 16px;
+  border: 3px solid rgba(255,255,255,0.35);
+  border-top: 3px solid #3B82F6;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+}
+
+.saveBtn {
+  color: #fff;
+  border: none;
+  font-size: 1em;
+  transition: opacity 0.18s;
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 16px;
+}
+
+.formField {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.formField label {
+  color: #A5ADBA;
+  font-size: 0.95em;
+}
+
+.footerRow {
+  display: flex;
+  justify-content: flex-end;
+  margin-top: 16px;
+}
+
+.exchangesList {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.exchangeItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: #353943;
+  padding: 10px 16px;
+  border-radius: 12px;
+  color: #e0e2e6;
+}
+
+.openingHoursMatrix {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  background: #353943;
+  padding: 8px;
+  border-radius: 8px;
+}
+
+.matrixHeader {
+  font-size: 0.8em;
+  color: #A5ADBA;
+  text-align: center;
+}
+
+.matrixCell {
+  width: 20px;
+  height: 20px;
+  background: #2a2f3a;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background 0.18s;
+}
+
+.matrixCell.active {
+  background: #3B82F6;
+}
+
+.matrixCell:hover {
+  background: #4B9BFF;
+}
+
+.matrixCell.selected {
+  background: #6B7280;
+}
+
+.matrixCell.active.selected {
+  background: #1E40AF;
+}
+
+.symbolsContainer {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 16px;
+}
+
+@media (min-width: 768px) {
+  .symbolsContainer {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+.symbolBox {
+  background: #3e4762;
+  border: 1px solid #32384a;
+  border-radius: 7px;
+  padding: 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.badgeContainer {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.symbolBadge {
+  background: #2754c3;
+  padding: 8px 12px;
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 80px;
+}
+
+.settingBadge {
+  padding: 8px 12px;
+  border-radius: 5px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  min-width: 80px;
+}
+
+.badgeLabel {
+  color: #e0e0e0;
+  font-size: 0.8em;
+  text-transform: uppercase;
+}
+
+.badgeValue {
+  color: #00ebff;
+  font-size: 1.3em;
+  font-weight: 500;
+}
+
+.symbolType {
+  color: #e0e3e8;
+  font-size: 0.75em;
+  font-weight: 400;
+  margin-top: 2px;
+}
+
+.buttonContainer {
+  display: flex;
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.actionBtn {
+  background: #3B82F6;
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 5px;
+  font-weight: 500;
+  transition: background 0.2s ease-in-out;
+  border: none;
+  cursor: pointer;
+  font-size: 0.9em;
+}
+
+.actionBtn:hover {
+  background: #4B9BFF;
+}
+
+.noSettings {
+  background: #232837;
+  border: 1px solid #32384a;
+  border-radius: 7px;
+  padding: 16px;
+  text-align: center;
+}
+
+/* New styles for tree visualization */
+.treeContainer {
+  background: #232837;
+  border: 1px solid #32384a;
+  border-radius: 7px;
+  padding: 16px;
+  color: #e0e2e6;
+}
+
+.tree {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.treeNode {
+  margin-bottom: 8px;
+}
+
+.treeNodeLabel {
+  font-size: 1.1em;
+  font-weight: 500;
+  color: #fff;
+  margin-bottom: 4px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.treeNodeChildren {
+  margin-left: 20px;
+  border-left: 1px solid #A5ADBA;
+  padding-left: 16px;
+}
+
+.sourceBlock {
+  background: #353943;
+  padding: 12px;
+  border-radius: 5px;
+  margin-bottom: 8px;
+}
+
+.sourceHeader {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 1em;
+  font-weight: 500;
+  color: #fff;
+  margin-bottom: 8px;
+}
+
+.dataEntry {
+  display: flex;
+  justify-content: space-between;
+  font-size: 0.9em;
+  color: #e0e2e6;
+}
+
+.rolloverSection {
+  margin-top: 12px;
+}
+
+.rolloverTitle {
+  font-size: 0.95em;
+  color: #A5ADBA;
+  margin-bottom: 8px;
+}
+
+.rolloverList {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.rolloverItem {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: 0.9em;
+  color: #e0e2e6;
+  margin-bottom: 4px;
+}
+
+.rolloverContracts {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.rolloverFrom, .rolloverTo {
+  color: #00ebff;
+}
+
+.rolloverDate {
+  color: #A5ADBA;
+}
+
+.contractsContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.contractData {
+  background: #2a2f3a;
+  padding: 8px;
+  border-radius: 5px;
+}
+
+.rolloverTypeTag {
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-size: 0.8em;
+  margin-left: 4px;
+  color: white;
+}
+
+.volume {
+  background-color: #10B981; /* Green for Volume */
+}
+
+.manual {
+  background-color: #3B82F6; /* Blue for Manual */
+}
+
+.fallback {
+  background-color: #F59E0B; /* Orange for Fallback */
+}
+
+@media (max-width: 768px) {
+  .settings {
+    padding: 8px;
+    padding-top: 48px; /* Space for tabsRow */
+    /* REMOVED: Redundant padding, now handled by .main-content */
+    /* padding-bottom: calc(var(--nav-height, 60px) + 20px); */
+  }
+
+  .tabsRow {
+    overflow-x: auto;
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  .tabsRow::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, and Opera */
+  }
+
+  .tabContent {
+    /* REMOVED: This was creating a nested scroll area and hiding content */
+    /* max-height: calc(100vh - 80px); */
+    /* overflow-y: auto; */
+  }
+
+  .tabButton {
+    flex-shrink: 0;
+    font-size: 0.9em;
+  }
+
+  .accountItem,
+  .exchangeItem {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 5px;
+  }
+
+  .accountItem .itemActions,
+  .exchangeItem .itemActions {
+    margin-top: 8px;
+    width: 100%;
+    justify-content: flex-start;
+  }
+
+  .accountItem .actionBtn,
+  .exchangeItem .actionBtn {
+    padding: 8px 16px;
+    font-size: 1em;
+    width: auto;
+  }
+
+  .modal {
+    width: 90%;
+    max-width: 90%;
+  }
+
+  .title {
+    font-size: 1.3rem;
+  }
+
+  .closeBtn {
+    font-size: 1.5rem;
+  }
+
+  .accountsTab h3, .futuresTab h3, .twsTab h3, .exchangesTab h3 {
+    font-size: 1.1rem;
+  }
+
+  .formGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .openingHoursMatrix {
+    overflow-x: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .matrixHeader {
+    font-size: 0.7em;
+  }
+
+  .matrixCell {
+    min-width: 15px;
+    height: 15px;
+  }
+
+  .settingBadge {
+    min-width: 70px;
+    padding: 6px 10px;
+  }
+
+  .badgeLabel {
+    font-size: 0.75em;
+  }
+
+  .badgeValue {
+    font-size: 1.2em;
+  }
+
+  .symbolBadge {
+    min-width: 70px;
+    padding: 6px 10px;
+  }
+
+  .symbolType {
+    font-size: 0.65em;
+  }
+
+  .treeNodeLabel {
+    font-size: 1em;
+  }
+
+  .treeNodeChildren {
+    margin-left: 12px;
+    padding-left: 12px;
+  }
+
+  .sourceBlock {
+    padding: 8px;
+  }
+
+  .sourceHeader {
+    font-size: 0.9em;
+  }
+
+  .dataEntry {
+    font-size: 0.85em;
+  }
+}
+
+@media (max-width: 600px) {
+  .settings {
+    padding: 5px;
+    /* REMOVED: Redundant padding, now handled by .main-content */
+    /* padding-bottom: calc(var(--nav-height, 60px) + 20px); */
+  }
+
+  .tabContent {
+    padding: 8px;
+  }
+
+  .accountItem .itemActions,
+  .exchangeItem .itemActions {
+    justify-content: center;
+  }
+
+  .accountItem .actionBtn,
+  .exchangeItem .actionBtn {
+    width: 100%;
+    text-align: center;
+  }
+
+  .treeNodeLabel {
+    font-size: 0.95em;
+  }
+
+  .treeNodeChildren {
+    margin-left: 8px;
+    padding-left: 8px;
+  }
+}

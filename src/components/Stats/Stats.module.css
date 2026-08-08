@@ -1,0 +1,615 @@
+.statsContainer {
+  padding: 20px;
+  background: #1e1e2e;
+  border-radius: 10px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  color: #fff;
+  position: relative;
+  box-sizing: border-box; 
+  display: flex;
+  flex-direction: column;
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+}
+
+/* === PROMINENT FILTER WARNING === */
+.filterWarning {
+  background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%);
+  border: 3px solid #7F1D1D;
+  border-radius: 12px;
+  padding: 16px 20px;
+  margin: 0 0 20px 0;
+  color: #FEE2E2;
+  font-weight: 600;
+  font-size: 15px;
+  text-align: center;
+  box-shadow: 0 4px 20px rgba(220, 38, 38, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 12px;
+  animation: pulse-warning 2s infinite;
+}
+
+.filterWarning::before {
+  content: '⚠️';
+  font-size: 20px;
+}
+
+@keyframes pulse-warning {
+  0%, 100% {
+    box-shadow: 0 4px 20px rgba(220, 38, 38, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
+  }
+  50% {
+    box-shadow: 0 4px 30px rgba(220, 38, 38, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.2);
+  }
+}
+
+/* === NEW & IMPROVED TAB NAVIGATION === */
+.tabNavigation {
+  display: flex;
+  position: sticky;
+  top: 0;
+  background-color: #1e1e2e;
+  z-index: 10;
+  padding-top: 16px;
+  padding-bottom: 0; /* Adjusted padding */
+  border-bottom: 1px solid #32384a; /* Adds a clean separator */
+  flex-wrap: nowrap; /* Prevents wrapping on all screen sizes */
+  gap: 8px;
+}
+
+.tabNavigation button {
+  background: transparent; /* A cleaner, more integrated look */
+  border: none;
+  border-bottom: 3px solid transparent; /* Serves as the active tab indicator */
+  border-radius: 4px 4px 0 0;
+  padding: 10px 16px;
+  color: #A5ADBA;
+  cursor: pointer;
+  transition: background-color 0.18s, color 0.18s, border-color 0.18s;
+  font-weight: 500;
+  white-space: nowrap; /* Ensures tab labels don't wrap */
+  flex: 0 0 auto;
+  min-width: auto;
+}
+
+.tabNavigation button:hover {
+  background-color: #262B39;
+  color: #ffffff;
+}
+
+.tabNavigation button.activeTab {
+  background-color: #262B39;
+  border-bottom-color: #3B82F6; /* Highlights the active tab */
+  color: #ffffff;
+  font-weight: 600;
+}
+/* ======================================= */
+
+.tabContent {
+  padding: 20px 0;
+  overflow-y: auto;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 10px;
+}
+
+.statBox {
+  background: #2A3B4D;
+  border: 1px solid #32384a;
+  border-radius: 7px;
+  padding: 12px;
+  text-align: center;
+  transition: background 0.18s;
+}
+
+.statBox:hover {
+  background: #344458;
+}
+
+.statLabel {
+  font-size: 12px;
+  color: #A5ADBA;
+  margin-bottom: 5px;
+}
+
+.statValue {
+  font-size: 18px;
+  font-weight: bold;
+  color: #fff;
+}
+
+.symbolSelector {
+  margin: 10px 0;
+  padding: 8px;
+  background: #232837;
+  border: 1px solid #32384a;
+  color: #fff;
+  border-radius: 5px;
+  width: 100%;
+  max-width: 200px;
+}
+
+.tableSection {
+  margin-top: 20px;
+}
+
+.tableSection h3 {
+  font-size: 16px;
+  margin-bottom: 10px;
+  color: #A5ADBA;
+}
+
+.statsTable {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 10px;
+}
+
+.statsTable th,
+.statsTable td {
+  padding: 8px;
+  text-align: left;
+  border-bottom: 1px solid #32384a;
+}
+
+.statsTable th {
+  background: #232837;
+  color: #A5ADBA;
+}
+
+.statsTable td {
+  color: #fff;
+}
+
+.visualizations {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.chartContainer {
+  display: flex;
+  flex-direction: column;
+  min-height: 600px;
+  width: 100%;
+  background: #232837;
+  border: 2px solid #32384a;
+  border-radius: 7px;
+  padding: 16px;
+  box-sizing: border-box;
+  margin-top: 24px;
+  margin-bottom: 24px;
+}
+
+.chartExplanation {
+  color: #bbbbbb;
+}
+
+.chartCanvasWrapper {
+  flex-grow: 1;
+  width: 100%;
+  position: relative;
+  min-height: 0;
+  border: 1px solid #32384a;
+  border-radius: 7px;
+  margin-top: 24px;
+}
+
+.chartContainer h4 {
+  font-size: 18px;
+  text-align: center;
+  margin-bottom: 10px;
+  color: #ffffff;
+}
+
+.errorContainer {
+  padding: 20px;
+  background: #EF4444;
+  border-radius: 7px;
+  color: #fff;
+  text-align: center;
+}
+
+/* === TRADE NOTES TAB STYLES === */
+.tradeNotesContainer {
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.notesSortControls {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px;
+  background: #232837;
+  border-radius: 8px;
+  flex-wrap: wrap;
+}
+
+.notesSortControls span {
+  font-weight: 500;
+  color: #A5ADBA;
+}
+
+.notesSortControls button {
+  background: #2A3B4D;
+  border: 1px solid #32384a;
+  color: #fff;
+  padding: 6px 12px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.notesSortControls button:hover {
+  background: #344458;
+}
+
+.notesSortControls button.activeSort {
+  background: #3B82F6;
+  border-color: #3B82F6;
+}
+
+.notesSortControls .exportButton {
+  margin-left: auto;
+  background: #10B981;
+  border-color: #10B981;
+}
+
+.notesSortControls .exportButton:hover {
+  background: #059669;
+}
+
+.tradeNotesList {
+  display: flex;
+  flex-direction: column;
+  gap: 15px;
+}
+
+.tradeNoteCard {
+  background: #2a2d34;
+  border-radius: 12px;
+  border: 1px solid #444851;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  overflow: hidden;
+  cursor: pointer;
+  transition: border-color 0.2s;
+}
+
+.tradeNoteCard:hover {
+  border-color: #3B82F6;
+}
+
+.tradeNoteHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 10px 15px;
+  background: #353943;
+  border-bottom: 1px solid #444851;
+}
+
+.headerLeft, .headerRight {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.symbolBadge {
+  background: rgba(60, 154, 239, 0.3);
+  color: #6da5ff;
+  font-size: 1.1em;
+  font-weight: 600;
+  border-radius: 6px;
+  padding: 4px 10px;
+}
+
+.sideBadge {
+  font-size: 0.9em;
+  font-weight: 500;
+  border-radius: 6px;
+  padding: 4px 8px;
+  color: #fff;
+}
+
+.sideBadge.long {
+  background: #22C55E;
+}
+
+.sideBadge.short {
+  background: #EF4444;
+}
+
+.pnlBadge {
+  font-size: 1.1em;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+}
+
+.pnlBadge.win {
+  background: rgba(34, 197, 94, 0.2);
+  color: #22C55E;
+}
+
+.pnlBadge.loss {
+  background: rgba(0, 0, 0, 0.2);
+  color: #EF4444;
+}
+
+.dateBadge {
+  background: #1e293b;
+  color: #9ca3af;
+  font-size: 0.9em;
+  padding: 4px 8px;
+  border-radius: 6px;
+}
+
+.tradeNoteBody {
+  padding: 15px;
+}
+
+.ratingsInNotes {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #444851;
+}
+
+.ratingInNotesLeft,
+.ratingInNotesRight {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.ratingText {
+  color: #e0e2e6;
+  font-size: 0.9em;
+  font-weight: 500;
+}
+
+.starsInline {
+  display: flex;
+  gap: 2px;
+}
+
+.starsInline .star {
+  font-size: 1.2em;
+  color: #FCD34D;
+  margin: 0;
+  letter-spacing: 1px;
+}
+
+.notesContentWrapper {
+  max-height: 250px;
+  overflow-y: auto;
+  padding-right: 10px;
+  scrollbar-width: thin;
+  scrollbar-color: #3B82F6 #353943;
+}
+
+.notesContentWrapper::-webkit-scrollbar {
+  width: 8px;
+}
+.notesContentWrapper::-webkit-scrollbar-track {
+  background: #353943;
+}
+.notesContentWrapper::-webkit-scrollbar-thumb {
+  background-color: #3B82F6;
+  border-radius: 4px;
+}
+
+.notesContent {
+  color: #e0e2e6;
+  font-size: 1em;
+  line-height: 1.5;
+  word-break: break-word;
+}
+.notesContent p {
+  margin: 0 0 10px 0;
+}
+
+.notesContent ul,
+.notesContent ol {
+  margin: 0 0 10px 0;
+  padding-left: 20px;
+}
+
+.notesContent li {
+  margin-bottom: 5px;
+}
+
+.noNotesText {
+  color: #718096;
+  font-style: italic;
+  padding: 10px 0;
+}
+
+.attachmentsPreview {
+  display: flex;
+  gap: 10px;
+  margin-top: 15px;
+  flex-wrap: wrap;
+  justify-content: flex-start;
+}
+
+.attachmentThumb {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  background: #232837;
+  border: 1.5px solid #4a5568;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  position: relative;
+}
+
+.attachmentThumb img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+
+/* === Mobile Responsiveness === */
+@media (max-width: 768px) {
+
+  /* --- Horizontal Scrolling on Mobile --- */
+  .tabNavigation {
+    overflow-x: auto;
+    /* Hide the scrollbar for a cleaner UI, but keep it scrollable */
+    -ms-overflow-style: none;  /* IE and Edge */
+    scrollbar-width: none;  /* Firefox */
+  }
+  .tabNavigation::-webkit-scrollbar {
+    display: none; /* Chrome, Safari, and Opera */
+  }
+  /* ------------------------------------ */
+
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  /* The following rules are no longer needed and have been removed */
+  /*
+  .tabNavigation { 
+    flex-direction: column;
+  }
+
+  .tabNavigation button {
+    min-width: 100%;
+  }
+  */
+
+  .symbolSelector {
+    max-width: 100%;
+  }
+
+  .chartContainer {
+    min-height: 500px; 
+  }
+
+  .tradeNoteHeader {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 10px;
+  }
+  .ratingsInNotes {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 8px;
+  }
+}
+
+/* Specific adjustments for when bottom navigation is active */
+@media (max-width: 600px) {
+  .statsContainer {
+    /* Fix sticky header issue by letting the parent (.main-content) handle scrolling */
+    overflow-y: visible;
+    min-height: auto;
+    
+    /* The large padding for the nav bar is now handled by .main-content, 
+       so we can revert to the component's default padding. */
+    padding-bottom: 20px;
+  }
+}
+
+/* === ENHANCED STATS GRID & BOX STYLING === */
+.statBox {
+  transition: all 0.3s ease;
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
+}
+
+.statBox:hover {
+  transform: translateY(-4px);
+  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+  border-color: #3B82F6;
+}
+
+.statValue {
+  word-break: break-word;
+}
+
+/* === CALENDAR IN STATS === */
+.calendarWrapper {
+  margin: 10px 0;
+}
+
+/* === ENHANCED TABLE STYLING === */
+.statsTable tbody tr {
+  transition: background-color 0.2s ease;
+}
+
+.statsTable tbody tr:hover {
+  background-color: #2D3345;
+}
+
+.statsTable tbody tr:nth-child(even) {
+  background-color: rgba(59, 130, 246, 0.05);
+}
+
+/* === INTERACTIVE ANIMATIONS === */
+.chartContainer {
+  transition: box-shadow 0.3s ease;
+}
+
+.chartContainer:hover {
+  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.2);
+}
+
+/* === MOBILE OPTIMIZATION FOR NEW COMPONENTS === */
+@media (max-width: 768px) {
+  .statsGrid {
+    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
+    gap: 8px;
+  }
+
+  .statBox {
+    padding: 10px;
+  }
+
+  .statLabel {
+    font-size: 11px;
+  }
+
+  .statValue {
+    font-size: 16px;
+  }
+
+  .tableSection h3 {
+    font-size: 14px;
+  }
+
+  .statsTable th,
+  .statsTable td {
+    padding: 6px;
+    font-size: 12px;
+  }
+}
+
+@media (max-width: 500px) {
+  .statsGrid {
+    grid-template-columns: 1fr;
+  }
+
+  .statsTable {
+    font-size: 11px;
+  }
+
+  .statsTable th,
+  .statsTable td {
+    padding: 4px;
+  }
+}

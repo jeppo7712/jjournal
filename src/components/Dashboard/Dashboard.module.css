@@ -1,0 +1,890 @@
+.dashboard {
+  display: flex;
+  flex-direction: column;
+  gap: 0px;
+  width: 100%;
+  height: 100%;
+  box-sizing: border-box;
+}
+
+.tradeListSection {
+  width: 100%;
+  position: relative;
+  z-index: 1;
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+  overflow: auto;
+}
+
+.timeFilterButtonContainer {
+  position: relative;
+  min-width: 80px;
+  z-index: 20;
+  flex-shrink: 1;
+}
+
+.timeFilterContainer {
+  display: flex;
+  align-items: center;
+  position: relative;
+  z-index: 20;
+}
+
+.timeFilterButton {
+  background: #232837;
+  border: 1px solid #32384a;
+  border-right: none;
+  border-radius: 5px 0 0 5px;
+  padding: 4px 10px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-family: Arial, sans-serif;
+  font-weight: 500;
+  color: #A5ADBA;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+  min-width: 120px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timeFilterButton:hover {
+  background: #262B39;
+  border-right: none;
+}
+
+.timeFilterButton.active {
+  background: #262B39;
+  border-color: #3B82F6;
+  border-right: none;
+  color: #fff;
+}
+
+.timeFilterMenu {
+  background: #232837;
+  border: 1px solid #32384a;
+  border-top: none;
+  border-radius: 0 0 5px 5px;
+  padding: 6px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  width: calc(100% + 28px);
+  min-width: 120px;
+  overflow: hidden;
+  max-height: 0;
+  transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
+  opacity: 0;
+  position: absolute;
+  top: 28px;
+  left: 0;
+  z-index: 1000;
+}
+
+.timeFilterMenu.open {
+  max-height: 300px;
+  opacity: 1;
+}
+
+.timeFilterBox {
+  background: #232837;
+  border: 1px solid #32384a;
+  border-radius: 5px;
+  padding: 4px 6px;
+  height: 20px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-family: Arial, sans-serif;
+  font-weight: 500;
+  color: #A5ADBA;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.timeFilterBox.custom {
+  font-size: 9px;
+  font-family: Arial, sans-serif;
+  font-weight: 500;
+  padding: 4px 4px;
+}
+
+.timeFilterBox:hover {
+  background: #262B39;
+}
+
+.timeFilterBox.active {
+  background: #262B39;
+  border-color: #3B82F6;
+  color: #fff;
+}
+
+.bullseyeButton {
+  background: #232837;
+  border: 1px solid #3B82F6;
+  border-left: none;
+  border-radius: 0 5px 5px 0;
+  padding: 4px;
+  height: 28px;
+  width: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+
+.bullseyeButton:hover:not(.disabled) {
+  background: #262B39;
+  border-left: none;
+}
+
+.bullseyeButton.active {
+  background: #262B39;
+  border-color: #EF4444;
+  border-left: none;
+}
+
+.bullseyeButton.disabled {
+  background: #232837;
+  border-color: #32384a;
+  border-left: none;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.bullseyeIcon {
+  width: 16px;
+  height: 16px;
+  fill: #A5ADBA;
+  transition: fill 0.18s;
+}
+
+.bullseyeButton.active .bullseyeIcon {
+  fill: #EF4444;
+}
+
+.bullseyeButton.disabled .bullseyeIcon {
+  fill: #A5ADBA;
+  opacity: 0.5;
+}
+
+.datePickerContainer {
+  position: absolute;
+  top: 28px;
+  right: 28px;
+  z-index: 20;
+}
+
+.datePickerCalendar {
+  background: #c8c8c8 !important;
+  border: none !important;
+  font-family: Arial, sans-serif !important;
+  color: #A5ADBA !important;
+}
+
+.datePickerCalendar .react-datepicker__header {
+  background: #2C3142 !important;
+  border-bottom: none !important;
+  padding: 8px 0 !important;
+}
+
+.datePickerCalendar .react-datepicker__current-month,
+.datePickerCalendar .react-datepicker__day-name {
+  color: #fff !important;
+  font-size: 10px !important;
+}
+
+.datePickerCalendar .react-datepicker__day {
+  color: #F3F4F6 !important;
+  font-size: 10px !important;
+  width: 24px !important;
+  height: 24px !important;
+  line-height: 24px !important;
+  margin: 2px !important;
+}
+
+.datePickerCalendar .react-datepicker__day--selected,
+.datePickerCalendar .react-datepicker__day--in-range,
+.datePickerCalendar .react-datepicker__day--in-selecting-range {
+  background: #3B82F6 !important;
+  color: #fff !important;
+  border-radius: 4px !important;
+}
+
+.datePickerCalendar .react-datepicker__day--in-range {
+  background: rgba(59, 130, 246, 0.2) !important;
+}
+
+.datePickerCalendar .react-datepicker__day--today {
+  color: #3B82F6 !important;
+  font-weight: 700 !important;
+}
+
+.datePickerCalendar .react-datepicker__day--outside-month {
+  color: #4B5266 !important;
+}
+
+.datePickerCalendar .react-datepicker__day:hover {
+  background: #262B39 !important;
+  color: #fff !important;
+  border-radius: 4px !important;
+}
+
+.datePickerCalendar .react-datepicker__navigation {
+  top: 8px !important;
+}
+
+.datePickerCalendar .react-datepicker-box {
+  border-color: #A5ADBA !important;
+}
+
+.datePickerCalendar .react-datepicker__month-container {
+  padding: 4px !important;
+}
+
+.datePickerCalendar .react-datepicker__month {
+  margin: 4px !important;
+}
+
+.topRow {
+  display: flex;
+  flex-direction: row;
+  gap: 16px;
+  align-items: stretch;
+  margin-bottom: 30px;
+  width: 100%;
+}
+
+.graphBubble {
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  background: #292e3a;
+  border: 1.5px solid #32384a;
+  border-radius: 6px;
+  flex: 1;
+  min-width: 200px;
+  padding: 10px 1px 1px 5px;
+  box-shadow: 0 1px 2px 0 rgba(20,22,25,0.08);
+  height: 160px;
+  box-sizing: border-box;
+}
+
+.graphArea {
+  flex: 1;
+  min-height: 80px;
+  max-height: 140px;
+  width: 100%;
+}
+
+.graphPopup {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background: rgba(0, 0, 0, 0.8);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 2000;
+}
+
+.graphPopupContent {
+  position: relative;
+  background: #292e3a;
+  border: 1.5px solid #32384a;
+  border-radius: 6px;
+  padding: 20px;
+  width: 90%;
+  max-width: 600px;
+  height: 70%;
+  max-height: 400px;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+}
+
+.graphPopupArea {
+  width: 100%;
+  height: 100%;
+}
+
+.graphPopupClose {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: #232837;
+  border: 1px solid #32384a;
+  border-radius: 4px;
+  width: 24px;
+  height: 24px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 16px;
+  color: #A5ADBA;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s, color 0.18s;
+}
+
+.graphPopupClose:hover {
+  background: #262B39;
+  border-color: #3B82F6;
+  color: #F3F4F6;
+}
+
+.statsContainer {
+  display: flex;
+  flex-direction: column;
+  min-width: 538px;
+  height: 160px;
+  box-sizing: border-box;
+}
+
+.statsGrid {
+  display: grid;
+  grid-template-columns: repeat(4, 1fr);
+  grid-template-rows: repeat(2, auto);
+  gap: 6px;
+  flex: 1;
+  align-items: stretch;
+}
+
+.statGridCol {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  height: 100%;
+  min-width: 130px;
+}
+
+.statBox {
+  background: #232837;
+  border: 1px solid #32384a;
+  border-radius: 7px;
+  padding: 8px 12px;
+  height: 50px;
+  transition: background 0.18s, border-color 0.18s;
+  box-sizing: border-box;
+  position: relative;
+}
+
+.statBox:hover {
+  background: #262B39;
+  opacity: 0.97;
+}
+
+.statBox.active {
+  background: #262B39;
+  border: 1px solid #3B82F6 !important;
+}
+
+.statBox.excluded {
+  background: #262B39;
+  border: 1px solid #EF4444 !important;
+}
+
+.statLabel {
+  font-size: 10px;
+  color: #A5ADBA;
+  font-weight: 500;
+  letter-spacing: 0.04em;
+  position: absolute;
+  top: 3px;
+  left: 12px;
+}
+
+.statValue {
+  font-size: 1.1em;
+  font-weight: 600;
+  position: absolute;
+  top: 20px;
+  left: 12px;
+  transform: translateX(10px);
+}
+
+.statPctContainer {
+  position: absolute;
+  top: 50%;
+  right: 12px;
+  transform: translateY(-50%);
+  width: 34px;
+  height: 34px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.statPct {
+  font-size: 9px;
+  color: #A5ADBA;
+  font-weight: 500;
+  position: absolute;
+  text-align: center;
+}
+
+.progressRing {
+  position: absolute;
+}
+
+.progressRingCircle {
+  transition: stroke-dashoffset 0.35s;
+}
+
+.pnlAndButtonsCol {
+  grid-row: 1 / span 1;
+  grid-column: 4 / span 1;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.toggleButton {
+  flex: 1;
+  background: #232837;
+  border: 1px solid #32384a;
+  border-radius: 5px;
+  padding: 4px 6px;
+  height: 28px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 9px;
+  font-family: Arial, sans-serif;
+  font-weight: 500;
+  color: #A5ADBA;
+  text-transform: uppercase;
+  cursor: pointer;
+  transition: background 0.18s, border-color 0.18s;
+}
+
+.toggleButton:hover {
+  background: #262B39;
+}
+
+.toggleButton.active {
+  background: #262B39;
+  border-color: #3B82F6;
+  color: #fff;
+}
+
+.toggleButton.excluded {
+  background: #262B39;
+  border-color: #EF4444;
+  color: #fff;
+}
+
+.openTradesButton {
+  display: none;
+}
+
+.openTradesButton.active {
+  background: #262B39;
+  border-color: #3B82F6;
+  color: #fff;
+}
+
+.openTradesButton.excluded {
+  background: #262B39;
+  border-color: #EF4444;
+  color: #fff;
+}
+
+.symbolFilterContainer {
+  display: flex;
+  align-items: center;
+  height: 28px;
+  position: relative;
+  flex: 2;
+}
+
+.symbolFilterInput {
+  background: #232837;
+  border: 1px solid #32384a;
+  border-radius: 5px;
+  padding: 4px 24px 4px 8px;
+  height: 28px;
+  width: 100%;
+  font-size: 10px;
+  font-family: Arial, sans-serif;
+  font-weight: 500;
+  color: #F3F4F6;
+  text-transform: uppercase;
+  transition: background 0.18s, border-color 0.18s;
+  box-sizing: border-box;
+}
+
+.symbolFilterInput.active {
+  border-color: #3B82F6;
+}
+
+.symbolFilterInput::placeholder {
+  color: #A5ADBA;
+}
+
+.symbolFilterInput:focus {
+  outline: none;
+  background: #262B39;
+  border-color: #3B82F6;
+}
+
+.clearSymbolFilter {
+  position: absolute;
+  right: 8px;
+  top: 50%;
+  transform: translateY(-50%);
+  background: transparent;
+  border: none;
+  color: #A5ADBA;
+  font-size: 12px;
+  cursor: pointer;
+  padding: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.clearSymbolFilter:hover {
+  color: #F3F4F6;
+}
+
+.filterSections {
+  display: flex;
+  gap: 12px;
+  width: 100%;
+  margin-top: 2px;
+}
+
+.filterSection {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+}
+
+.separatorContainer {
+  position: relative;
+  width: 100%;
+  margin: 2px 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.separatorLine {
+  flex: 1;
+  height: 1px;
+  background: #32384a;
+}
+
+.separatorText {
+  background: #1e1e2e;
+  padding: 0 8px;
+  font-size: 8px;
+  color: #A5ADBA;
+  text-transform: uppercase;
+  position: relative;
+  z-index: 1;
+}
+
+.buttonRow {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+  align-items: center;
+}
+
+.toggleButtonGroup {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+}
+@media (max-width: 992px) {
+  .statsGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .statGridCol:nth-child(2) {
+    display: none;
+  }
+
+  .pnlAndButtonsCol {
+    grid-column: 3 / span 1;
+  }
+
+  .statsContainer {
+    min-width: 402px;
+  }
+
+  .openTradesButton {
+    display: flex;
+  }
+}
+
+@media (max-width: 750px) {
+  .topRow {
+    flex-direction: column;
+    gap: 16px;
+  }
+
+  .graphBubble {
+    display: none;
+  }
+
+  .statsContainer {
+    min-width: 0;
+    width: 100%;
+  }
+
+  .statsGrid {
+    grid-template-columns: repeat(3, 1fr);
+  }
+
+  .statGridCol {
+    min-width: 0;
+  }
+}
+
+@media (max-width: 600px) {
+  .tradeListSection {
+    padding-bottom: calc(60px + env(safe-area-inset-bottom));
+  }
+
+  .symbolFilterInput {
+    font-size: 14px;
+    padding: 2px 20px 2px 6px;
+    height: 32px;
+  }
+
+  .clearSymbolFilter {
+    right: 10px;
+    font-size: 14px;
+  }
+
+  .timeFilterButton {
+    font-size: 14px;
+    padding: 2px 8px;
+    height: 32px;
+    min-width: 100px;
+    border-right: none;
+    border-radius: 5px 0 0 5px;
+  }
+
+  .bullseyeButton {
+    height: 32px;
+    width: 32px;
+    padding: 2px;
+    border-left: none;
+    border-radius: 0 5px 5px 0;
+  }
+
+  .bullseyeIcon {
+    width: 20px;
+    height: 20px;
+  }
+
+  .timeFilterMenu {
+    width: calc(100% + 32px);
+    min-width: 100px;
+    top: 32px;
+  }
+
+  .datePickerContainer {
+    right: 32px;
+    top: 32px;
+  }
+
+  .timeFilterBox {
+    font-size: 14px;
+    padding: 2px 4px;
+    height: 24px;
+  }
+
+  .timeFilterBox.custom {
+    font-size: 14px;
+    padding: 2px 4px;
+  }
+
+  .toggleButton {
+    font-size: 0;
+    padding: 2px 6px;
+    height: 32px;
+    position: relative;
+    justify-content: center;
+    align-items: center;
+    min-width: 32px;
+  }
+
+  .openTradesButton {
+    font-size: 0;
+    padding: 2px 6px;
+    height: 32px;
+    min-width: 32px;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+  }
+
+  .openTradesButton.active {
+    background: #262B39;
+    border-color: #3B82F6;
+    color: #fff;
+  }
+
+  .openTradesButton.excluded {
+    background: #262B39;
+    border-color: #EF4444;
+    color: #fff;
+  }
+
+  .toggleButton::before {
+    display: none;
+    content: '';
+    width: 20px;
+    height: 20px;
+    color: #A5ADBA;
+  }
+
+  .toggleButton.active::before {
+    color: #fff;
+  }
+
+  .toggleButton:nth-child(1)::before {
+    display: block;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23A5ADBA"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+
+  .toggleButton.active:nth-child(1)::before {
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23fff"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>');
+  }
+
+  .toggleButton:nth-child(2)::before {
+    display: block;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23A5ADBA"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
+  }
+
+  .toggleButton.active:nth-child(2)::before {
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23fff"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>');
+  }
+
+  .openTradesButton::before {
+    display: block;
+    content: 'O';
+    font-size: 14px;
+    font-weight: 500;
+    color: #A5ADBA;
+    text-align: center;
+  }
+
+  .openTradesButton.active::before {
+    color: #fff;
+  }
+
+  .openTradesButton.excluded::before {
+    color: #fff;
+  }
+
+  .statPctContainer {
+    display: none;
+  }
+
+  .statBox {
+    height: 30px;
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+  }
+
+  .statBox.active {
+    background: #262B39;
+    border: 1px solid #3B82F6 !important;
+  }
+
+  .statBox.excluded {
+    background: #262B39;
+    border: 1px solid #EF4444 !important;
+  }
+
+  .statLabel {
+    font-size: 14px;
+    position: static;
+    margin-right: 8px;
+  }
+
+  .statValue {
+    font-size: 14px;
+    position: static;
+    transform: none;
+    margin-left: auto;
+  }
+
+  .topRow {
+    margin-bottom: 10px;
+    flex-direction: column;
+    gap: 10px;
+    max-height: 150px;
+    overflow: visible;
+  }
+
+  .statsContainer {
+    height: auto;
+    min-height: auto;
+    width: 100%;
+    display: flex;
+    justify-content: flex-start;
+    max-height: 140px;
+    overflow: visible;
+  }
+
+  .statsGrid {
+    grid-template-columns: auto auto auto;
+    gap: 6px;
+    flex: none;
+    height: auto;
+    max-height: 100%;
+  }
+
+  .statBox {
+    height: 30px;
+    display: flex;
+    align-items: center;
+    padding: 8px 12px;
+    touch-action: manipulation;
+  }
+  
+  .toggleButtonGroup {
+    display: flex;
+    gap: 0;
+  }
+
+  .toggleButtonGroup .toggleButton:first-child {
+    border-radius: 5px 0 0 5px;
+  }
+
+  .toggleButtonGroup .toggleButton:not(:first-child):not(:last-child) {
+    border-radius: 0;
+  }
+
+  .toggleButtonGroup .toggleButton:last-child {
+    border-radius: 0 5px 5px 0;
+  }
+}
