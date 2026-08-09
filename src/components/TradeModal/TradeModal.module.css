@@ -850,7 +850,10 @@ ibkrModal {
 @media screen and (max-width: 600px) {
   .modal {
     width: 100vw;
-    height: 100vh;
+    /* Not 100vh — see the matching inline style in TradeModal.jsx, which
+       normally wins over this rule anyway; kept in sync here so this isn't
+       misleading if it's ever the one that applies. */
+    height: calc(var(--vh, 1vh) * 100);
     border-radius: 0;
     min-width: unset;
     max-height: none;
@@ -867,6 +870,25 @@ ibkrModal {
   /* Ensure all form fields span one column if needed, or adjust as desired */
   .formGrid>div {
     grid-column: span 1;
+  }
+
+  .headerRow {
+    border-radius: 0; /* .modal itself is square-cornered full-screen on mobile */
+    padding: 10px 12px 6px;
+  }
+
+  /* footerRow holds up to 5 buttons (Fetch IBKR, Fetch TWS, Show/Hide Chart,
+     Delete, Save) — plenty of room on desktop, but with no wrap it silently
+     overflowed off both edges of a phone screen (the modal's own
+     overflow:hidden clipped it rather than showing a scrollbar, so the
+     overflowing buttons were just unreachable). The JSX also adds
+     flex-wrap to the inner button group inline, for the same reason. */
+  .footerRow {
+    flex-wrap: wrap;
+    justify-content: center;
+    padding: 10px 16px;
+    gap: 10px;
+    border-radius: 0; /* .modal itself is square-cornered full-screen on mobile */
   }
 
   /* Actions table adjustments for screens <= 600px */
