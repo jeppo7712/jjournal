@@ -8,4 +8,7 @@ ENV NODE_ENV=development
 # src/utils/getWebSocketUrl.js for how it's consumed).
 EXPOSE 3999
 EXPOSE 3000
+# See the matching note in Dockerfile — mitigates OOM crashes when rebuilding
+# a high-frequency symbol's continuous series (e.g. CL 1M, 10M+ rows).
+ENV NODE_OPTIONS=--max-old-space-size=8192
 CMD ["npm", "start"]

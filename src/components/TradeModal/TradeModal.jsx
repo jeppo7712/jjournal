@@ -1,4 +1,5 @@
 import React, { useContext, useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
+import { createPortal } from 'react-dom';
 import ReactQuill from 'react-quill';
 import { useDropzone } from 'react-dropzone';
 import 'react-quill/dist/quill.snow.css';
@@ -91,11 +92,22 @@ function isFormDirty(form, actions, tags, notes, confidence, executionRating, at
   }
 }
 
-function BubbleButton({ children, onClick, color = '#3B82F6', disabled, ...rest }) {
+// `small` shrinks padding/font/radius for mobile, where these were full
+// desktop size regardless of viewport — fine for one row of buttons, but
+// this modal's footer can have up to 5 of them stacked, and full-size made
+// each one take a disproportionate share of a phone screen's height.
+function BubbleButton({ children, onClick, color = '#3B82F6', disabled, small, ...rest }) {
   return (
     <button
       className={styles.saveBtn}
-      style={{
+      style={small ? {
+        background: color,
+        borderRadius: 12,
+        padding: '7px 14px',
+        fontSize: '0.9rem',
+        opacity: disabled ? 0.5 : 1,
+        cursor: disabled ? 'not-allowed' : 'pointer'
+      } : {
         background: color,
         marginRight: 10,
         borderRadius: 18,
@@ -150,6 +162,20 @@ export default function TradeModal({ trade, onClose }) {
     storeDisplayTimezone(value);
   }, []);
   const [showFormChart, setShowFormChart] = useState(false);
+  // Matches TradeModal.module.css's own `@media (max-width: 600px)`
+  // breakpoint — tracked in JS too because the modal's width/layout below is
+  // driven by inline styles (to animate smoothly when the chart opens/
+  // closes), and inline styles always win over a CSS class's media query on
+  // the same element. Without this, the modal silently stayed desktop-sized
+  // on mobile no matter what the stylesheet said.
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 600px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 600px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
   const [form, setForm] = useState({
     type: isEditMode ? trade.type : 'FUT',
     symbol: isEditMode ? trade.symbol : '',
@@ -898,7 +924,24 @@ export default function TradeModal({ trade, onClose }) {
       <div
         className={styles.modal}
         ref={modalRef}
-        style={{
+        style={isMobile ? {
+          display: 'flex',
+          flexDirection: 'column',
+          width: '100vw',
+          // Not 100vh: mobile browsers' collapsible address bar means 100vh
+          // reports a taller height than what's actually visible whenever
+          // the bar is showing — enough to push the footer's Save/Delete
+          // buttons below the fold, outside the modal's own overflow:hidden
+          // clip, genuinely unreachable rather than just requiring a scroll.
+          // --vh (set in public/index.html from window.innerHeight, updated
+          // on resize) is this app's existing fix for that; .app/html/body
+          // already use it the same way in styles.css.
+          height: 'calc(var(--vh, 1vh) * 100)',
+          maxHeight: 'none',
+          maxWidth: 'none',
+          overflow: 'hidden',
+          borderRadius: 0,
+        } : {
           display: 'flex',
           flexDirection: 'column',
           maxHeight: '90vh',
@@ -918,8 +961,8 @@ export default function TradeModal({ trade, onClose }) {
           </div>
           <button className={styles.closeBtn} onClick={handleRequestClose}>×</button>
         </div>
-        <div style={{ display: 'flex', flex: 1, overflow: 'hidden' }}>
-        <div style={{ flex: showFormChart ? '0 0 700px' : '1 1 auto', display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
+        <div style={{ display: 'flex', flex: 1, overflow: 'hidden', position: 'relative' }}>
+        <div style={{ flex: (!isMobile && showFormChart) ? '0 0 700px' : '1 1 auto', display: 'flex', flexDirection: 'column', overflow: 'hidden', minWidth: 0 }}>
         <div className={styles.tabsBar}>
           <button className={`${styles.tabBtn} ${activeTab === 'general' ? styles.activeTab : ''}`} onClick={() => setActiveTab('general')}>
             General
@@ -1196,11 +1239,12 @@ export default function TradeModal({ trade, onClose }) {
           )}
         </div>
         <div className={styles.footerRow}>
-          <div style={{ marginRight: 'auto', display: 'flex', gap: 10 }}>
+          <div style={{ marginRight: 'auto', display: 'flex', flexWrap: isMobile ? 'wrap' : 'nowrap', gap: 10 }}>
             <BubbleButton
               onClick={() => fetchIBKRData(true)}
               disabled={!form.symbol || ibkrLoading}
               color="#6366F1"
+              small={isMobile}
             >
               {ibkrLoading && ibkrSource === 'flex' ? 'Loading...' : 'Fetch IBKR (Flex)'}
             </BubbleButton>
@@ -1208,6 +1252,7 @@ export default function TradeModal({ trade, onClose }) {
               onClick={() => fetchIBKRData(false)}
               disabled={!form.symbol || ibkrLoading}
               color="#10B981"
+              small={isMobile}
             >
               {ibkrLoading && ibkrSource === 'tws' ? 'Loading...' : 'Fetch TWS (fallback)'}
             </BubbleButton>
@@ -1216,24 +1261,25 @@ export default function TradeModal({ trade, onClose }) {
               disabled={!form.symbol}
               color="#F59E0B"
               title="See the price action around your fills to help pick Stop-Loss / Target"
+              small={isMobile}
             >
               {showFormChart ? 'Hide Chart' : 'Show Chart'}
             </BubbleButton>
           </div>
           <div>
             {isEditMode && (
-              <BubbleButton onClick={() => setShowDeletePopup(true)} color="#EF4444">
+              <BubbleButton onClick={() => setShowDeletePopup(true)} color="#EF4444" small={isMobile}>
                 Delete
               </BubbleButton>
             )}
           </div>
 
-          <BubbleButton onClick={saveTrade} disabled={!canSave} color="#3B82F6">
+          <BubbleButton onClick={saveTrade} disabled={!canSave} color="#3B82F6" small={isMobile}>
             Save
           </BubbleButton>
         </div>
         </div>
-        {showFormChart && (
+        {showFormChart && !isMobile && (
           <TradeFormChart
             symbol={form.symbol}
             type={form.type}
@@ -1245,30 +1291,81 @@ export default function TradeModal({ trade, onClose }) {
             onClose={() => setShowFormChart(false)}
           />
         )}
+        {showFormChart && isMobile && createPortal(
+          <>
+            {/* Backdrop: tapping outside the sheet closes it, same as the × inside.
+                Rendered via a portal straight into <body> — nested inside .modal
+                (which has overflow:hidden, as does an intermediate wrapper), a
+                position:fixed backdrop here visually painted on top just fine but
+                did NOT receive clicks over the header (elementFromPoint kept
+                resolving to the header's contents instead of the backdrop) —
+                a real Chromium hit-testing quirk with overflow:hidden ancestors
+                and fixed descendants, not just theoretical. Escaping to <body>
+                sidesteps it entirely instead of chasing z-index further. */}
+            <div
+              onClick={() => setShowFormChart(false)}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1500 }}
+            />
+            {/* Bottom sheet: there's no room to show the chart beside the form on a
+                phone screen, so on mobile it slides up over the form instead of
+                sitting next to it — closer to how a native app would surface a
+                secondary panel. */}
+            <div
+              style={{
+                position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 1501,
+                height: 'calc(var(--vh, 1vh) * 82)', maxHeight: 'calc(var(--vh, 1vh) * 82)',
+                background: '#2a2d34', borderRadius: '18px 18px 0 0',
+                boxShadow: '0 -4px 32px 0 rgba(0,0,0,0.35)',
+                display: 'flex', flexDirection: 'column', overflow: 'hidden',
+                animation: 'tradeFormChartSheetUp 0.2s ease-out',
+              }}
+            >
+              <div style={{ width: 40, height: 4, borderRadius: 2, background: '#555b68', margin: '10px auto 0' }} />
+              <TradeFormChart
+                symbol={form.symbol}
+                type={form.type}
+                actions={actions}
+                exchangeTimezone={exchangeTimezone}
+                displayTimezone={displayTimezone}
+                pricePrecision={formPricePrecision}
+                enabledTimeframes={enabledTimeframes}
+                onClose={() => setShowFormChart(false)}
+                isMobile
+              />
+            </div>
+          </>,
+          document.body
+        )}
         </div>
         {showUnsavedPopup && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ background: '#232733', borderRadius: 18, padding: '36px 36px 28px 36px', minWidth: 320, boxShadow: '0 4px 32px 0 rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            {/* minWidth:320 + padding used to add up to more than a phone's own
+                width before the buttons even laid out, and with 3 buttons
+                (Cancel/Save/Don't Save) possible in one unwrapped row, this was
+                the same "overflows off the edge, unreachable" failure as the
+                footer buttons above — just easier to miss since it only shows
+                up with a valid, unsaved trade (Save only renders when canSave). */}
+            <div style={{ background: '#232733', borderRadius: 18, padding: isMobile ? '24px 20px 20px' : '36px 36px 28px 36px', minWidth: isMobile ? 0 : 320, maxWidth: '90vw', boxShadow: '0 4px 32px 0 rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{ color: '#fff', fontSize: '1.12rem', marginBottom: 24, textAlign: 'center' }}>
                 You have unsaved changes. What do you want to do?
               </div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <BubbleButton color="#353943" onClick={() => setShowUnsavedPopup(false)}>Cancel</BubbleButton>
-                {canSave && <BubbleButton color="#3B82F6" onClick={() => { setShowUnsavedPopup(false); saveTrade(); }}>Save</BubbleButton>}
-                <BubbleButton color="#EF4444" onClick={() => { setShowUnsavedPopup(false); onClose(); }}>Don't Save</BubbleButton>
+              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 12 }}>
+                <BubbleButton color="#353943" onClick={() => setShowUnsavedPopup(false)} small={isMobile}>Cancel</BubbleButton>
+                {canSave && <BubbleButton color="#3B82F6" onClick={() => { setShowUnsavedPopup(false); saveTrade(); }} small={isMobile}>Save</BubbleButton>}
+                <BubbleButton color="#EF4444" onClick={() => { setShowUnsavedPopup(false); onClose(); }} small={isMobile}>Don't Save</BubbleButton>
               </div>
             </div>
           </div>
         )}
         {showDeletePopup && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ background: '#232733', borderRadius: 18, padding: '36px 36px 28px 36px', minWidth: 320, boxShadow: '0 4px 32px 0 rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ background: '#232733', borderRadius: 18, padding: isMobile ? '24px 20px 20px' : '36px 36px 28px 36px', minWidth: isMobile ? 0 : 320, maxWidth: '90vw', boxShadow: '0 4px 32px 0 rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{ color: '#fff', fontSize: '1.12rem', marginBottom: 24, textAlign: 'center' }}>
                 Are you sure you want to delete this trade? This cannot be undone.
               </div>
-              <div style={{ display: 'flex', gap: 18 }}>
-                <BubbleButton color="#353943" onClick={() => setShowDeletePopup(false)}>Cancel</BubbleButton>
-                <BubbleButton color="#EF4444" onClick={deleteTrade}>Delete</BubbleButton>
+              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 18 }}>
+                <BubbleButton color="#353943" onClick={() => setShowDeletePopup(false)} small={isMobile}>Cancel</BubbleButton>
+                <BubbleButton color="#EF4444" onClick={deleteTrade} small={isMobile}>Delete</BubbleButton>
               </div>
             </div>
           </div>

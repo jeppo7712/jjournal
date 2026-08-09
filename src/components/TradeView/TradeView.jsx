@@ -204,6 +204,20 @@ export default function TradeView({ trade, onClose, onEdit }) {
     storeDisplayTimezone(value);
   }, []);
   const [modalHeight, setModalHeight] = useState(undefined);
+  // Matches TradeView.module.css's own `@media (max-width: 700px)` — tracked
+  // in JS too because the modal below sizes itself via inline style (width/
+  // maxWidth/maxHeight), and an inline style always wins over a CSS class's
+  // media query on the same element. Without this, the modal (and its close
+  // button) stayed desktop-sized no matter what the stylesheet said — same
+  // bug already found and fixed in TradeModal.jsx.
+  const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 700px)').matches);
+  useEffect(() => {
+    const mq = window.matchMedia('(max-width: 700px)');
+    const update = () => setIsMobile(mq.matches);
+    update();
+    mq.addEventListener('change', update);
+    return () => mq.removeEventListener('change', update);
+  }, []);
   const [selectedAttachment, setSelectedAttachment] = useState(null);
   const [showChart, setShowChart] = useState(false);
   const [error, setError] = useState(null);
@@ -290,6 +304,27 @@ export default function TradeView({ trade, onClose, onEdit }) {
   const isFetchingMoreRef = useRef(false);
   const noMoreOlderDataRef = useRef(false);
   const noMoreNewerDataRef = useRef(false);
+  // Tracks how far back/forward a fetch has already been REQUESTED, as
+  // opposed to chartDataRef's own oldest/newest bar. fetchMoreHistory used to
+  // derive its next window purely from the oldest/newest bar actually
+  // returned — fine on a normal weekday, but a chunk landing mostly on a
+  // closed weekend can come back with just one bar sitting right at the
+  // window's edge, barely moving that boundary. The next window then gets
+  // computed as nearly identical to the one that just ran, re-fetching the
+  // same near-empty slice forever instead of ever reaching the denser data
+  // (and eventually much older history) just beyond it. Requested boundaries
+  // always advance by a full chunk regardless of how sparse the response
+  // was, so using these instead guarantees real progress every time.
+  const oldestRequestedTimeRef = useRef(null);
+  const newestRequestedTimeRef = useRef(null);
+  // A single chunk coming back empty isn't reliable proof there's nothing
+  // further — a multi-day holiday closure (or a chunk that happens to land
+  // almost entirely on one) can span more than one chunk-width on its own.
+  // Only give up after a few consecutive empty chunks in the same
+  // direction, not the first one.
+  const consecutiveEmptyOlderRef = useRef(0);
+  const consecutiveEmptyNewerRef = useRef(0);
+  const MAX_CONSECUTIVE_EMPTY_CHUNKS = 4;
 const [dataVersion, setDataVersion] = useState(0);
 
   const exchangeTimezone = React.useMemo(() => {
@@ -539,32 +574,55 @@ const [dataVersion, setDataVersion] = useState(0);
       const CHUNK_BARS = 3000;
       const barDurationSecs = getBarDurationInSeconds(timeframe);
       const chunkDuration = CHUNK_BARS * barDurationSecs;
-      const currentMin = chartDataRef.current[0].time;
-      const currentMax = chartDataRef.current[chartDataRef.current.length - 1].time;
+      // Fall back to the loaded data's own bounds the first time this runs
+      // for a given edge (oldestRequestedTimeRef/newestRequestedTimeRef
+      // start out null), then always advance from the last REQUESTED
+      // boundary from here on — see the ref declarations above for why.
+      const currentMin = oldestRequestedTimeRef.current ?? chartDataRef.current[0].time;
+      const currentMax = newestRequestedTimeRef.current ?? chartDataRef.current[chartDataRef.current.length - 1].time;
 
       let startDate, endDate;
       if (direction === 'older') {
         endDate = DateTime.fromSeconds(currentMin).toISO();
         startDate = DateTime.fromSeconds(currentMin - chunkDuration).toISO();
+        oldestRequestedTimeRef.current = currentMin - chunkDuration;
       } else {
         startDate = DateTime.fromSeconds(currentMax).toISO();
         endDate = DateTime.fromSeconds(currentMax + chunkDuration).toISO();
+        newestRequestedTimeRef.current = currentMax + chunkDuration;
       }
 
       const url = `${process.env.REACT_APP_API_URL}/api/historical/db?symbol=${encodeURIComponent(trade.symbol)}&type=${encodeURIComponent(trade.type)}&timeframe=${timeframe}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
       const guardedFetch = guardedFetchRef.current;
       const { response, data: responseData } = await guardedFetch(url, { headers: { 'x-account-id': '1' } });
 
-      if (!response.ok || !Array.isArray(responseData) || responseData.length === 0) {
-        // Nothing further in this direction — could genuinely be the edge of
-        // history, or (202/still-populating) just not fetched yet; either
-        // way, stop re-requesting this edge on every scroll tick. A
-        // symbol/timeframe change resets this (see the chart-creation
-        // effect), so it's not a permanent dead end.
-        if (direction === 'older') noMoreOlderDataRef.current = true;
-        else noMoreNewerDataRef.current = true;
+      if (!response.ok || !Array.isArray(responseData)) {
+        // A real HTTP/parse failure — don't keep hammering it on every
+        // scroll tick, but don't treat it as "reached the edge of history"
+        // either (that's a data-availability fact, this is a request
+        // failure); the direction stays retryable.
         return;
       }
+
+      if (responseData.length === 0) {
+        // Empty chunks are expected on their own (weekends, one-day
+        // holidays) and don't mean anything by themselves — the requested
+        // boundary already advanced by a full chunk above, so the next
+        // attempt naturally reaches further back/forward regardless. Only a
+        // *run* of consecutive empty chunks (a closure wider than one
+        // chunk) is treated as reaching the real edge of history.
+        const counterRef = direction === 'older' ? consecutiveEmptyOlderRef : consecutiveEmptyNewerRef;
+        counterRef.current += 1;
+        if (counterRef.current >= MAX_CONSECUTIVE_EMPTY_CHUNKS) {
+          if (direction === 'older') noMoreOlderDataRef.current = true;
+          else noMoreNewerDataRef.current = true;
+        }
+        return;
+      }
+
+      // Got real data — this direction is confirmed productive again.
+      if (direction === 'older') consecutiveEmptyOlderRef.current = 0;
+      else consecutiveEmptyNewerRef.current = 0;
 
       // No view snapshot taken here — the render effect captures and
       // restores the user's current view itself, synchronously right before
@@ -915,6 +973,10 @@ useEffect(() => {
       // New symbol/timeframe — neither edge has been confirmed exhausted yet.
       noMoreOlderDataRef.current = false;
       noMoreNewerDataRef.current = false;
+      oldestRequestedTimeRef.current = null;
+      newestRequestedTimeRef.current = null;
+      consecutiveEmptyOlderRef.current = 0;
+      consecutiveEmptyNewerRef.current = 0;
 
       setChartLoading(true);
       setError(null);
@@ -1382,7 +1444,17 @@ useEffect(() => {
       <div
         className={styles.modal}
         ref={modalRef}
-        style={{
+        style={isMobile ? {
+          width: '100vw',
+          maxWidth: 'none',
+          // Not 100vh — see TradeModal.jsx's identical note: mobile browsers'
+          // collapsible address bar makes 100vh taller than what's actually
+          // visible, which is what was pushing the close button off-screen.
+          height: 'calc(var(--vh, 1vh) * 100)',
+          maxHeight: 'none',
+          display: 'flex',
+          flexDirection: 'column',
+        } : {
           width: '700px',
           maxWidth: '98vw',
           maxHeight: '90vh',
