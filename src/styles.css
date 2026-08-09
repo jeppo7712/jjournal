@@ -86,6 +86,15 @@ button {
   0% { transform: rotate(0deg); }
   100% { transform: rotate(360deg); }
 }
+
+/* Used by TradeModal's mobile chart bottom-sheet (inline style, so this
+   needs to be a genuinely global keyframe name, not a CSS-module class —
+   module-scoped @keyframes get hashed and wouldn't match an inline
+   `animation: 'tradeFormChartSheetUp ...'` string). */
+@keyframes tradeFormChartSheetUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
 @media (max-width: 1200px) {
   :root {
     --nav-width: 60px; /* Matches navigation bar's narrow width */
@@ -100,7 +109,17 @@ button {
   }
 
   html, body {
-height: calc(var(--vh, 1vh) * 100);
+    height: calc(var(--vh, 1vh) * 100);
+    /* 100dvh (dynamic viewport height) tracks the real, currently-visible
+       viewport continuously — including mobile Safari's address bar
+       showing/hiding mid-scroll, which does NOT reliably fire the `resize`
+       event the --vh custom property (public/index.html) depends on. That
+       gap is exactly what let scrolled-to-bottom content (e.g. the
+       Calendar's weekly summary row) end up sized against a stale height
+       and land behind the fixed bottom nav bar. Kept as a second
+       declaration, not a replacement: older browsers without dvh support
+       just don't parse this line and silently keep the --vh value above. */
+    height: 100dvh;
     margin: 0; /* Ensure no extra margins */
     overflow: hidden; /* Prevent body scrolling on mobile */
   }
@@ -109,6 +128,7 @@ height: calc(var(--vh, 1vh) * 100);
     display: flex;
     flex-direction: column;
     height: calc(var(--vh, 1vh) * 100);
+    height: 100dvh;
   }
 
 .main-content {

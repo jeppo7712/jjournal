@@ -518,11 +518,13 @@
   padding: 4px 24px 4px 8px;
   height: 28px;
   width: 100%;
+  min-width: 0;
   font-size: 10px;
   font-family: Arial, sans-serif;
   font-weight: 500;
   color: #F3F4F6;
   text-transform: uppercase;
+  text-overflow: ellipsis;
   transition: background 0.18s, border-color 0.18s;
   box-sizing: border-box;
 }

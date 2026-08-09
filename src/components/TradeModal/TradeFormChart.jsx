@@ -40,7 +40,7 @@ const BARS_PADDING_FULL = 1000;
 // data-loading strategy: a fast padded initial fetch, one background fetch
 // for full history, and WebSocket-driven refreshes after that — not a
 // separately-invented, weaker approximation of it.
-export default function TradeFormChart({ symbol, type, actions, exchangeTimezone, displayTimezone, pricePrecision = 2, enabledTimeframes, onClose }) {
+export default function TradeFormChart({ symbol, type, actions, exchangeTimezone, displayTimezone, pricePrecision = 2, enabledTimeframes, onClose, isMobile = false }) {
   // Only the timeframes the symbol is actually set up to fetch — a
   // deselected timeframe never gets populated, so offering its button just
   // led to a chart stuck empty with no explanation. Falls back to the full
@@ -432,12 +432,20 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
     }
   }, [bars, actions, zone, timeframe, pricePrecision]);
 
-  // Inline panel — sits alongside the form (see TradeModal.jsx, which widens
-  // its modal and splits into a left column for the form / right column for
-  // this) rather than covering it, so both are visible at once and setting
-  // Stop-Loss/Target doesn't mean bouncing back and forth between two views.
+  // Desktop: an inline panel that sits alongside the form (see TradeModal.jsx,
+  // which widens its modal and splits into a left column for the form /
+  // right column for this) rather than covering it, so both are visible at
+  // once and setting Stop-Loss/Target doesn't mean bouncing back and forth
+  // between two views. Mobile: there's no room for a side-by-side column, so
+  // TradeModal.jsx instead renders this inside a bottom sheet that slides up
+  // over the form — the border/padding/margin below are specifically the
+  // "I'm a column next to something" decoration, dropped in that case since
+  // the sheet wrapper already provides its own edges.
   return (
-    <div style={{ flex: '1 1 auto', minWidth: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #3a3f4d', paddingLeft: 20, marginLeft: 4 }}>
+    <div style={isMobile
+      ? { flex: '1 1 auto', minWidth: 0, width: '100%', height: '100%', display: 'flex', flexDirection: 'column', padding: '4px 16px 12px' }
+      : { flex: '1 1 auto', minWidth: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #3a3f4d', paddingLeft: 20, marginLeft: 4 }
+    }>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
         <span className={styles.title} style={{ fontSize: '1rem' }}>{symbol} — reference chart</span>
         <button className={styles.closeBtn} onClick={onClose} title="Hide chart">×</button>
