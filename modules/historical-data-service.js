@@ -53,6 +53,8 @@ const ibkr = require('./ibkr-conn.js');
 const { v4: uuidv4 } = require('uuid');
 const WebSocket = require('ws');
 const { logger } = require('./logger.js');
+const path = require('path');
+const { Worker } = require('worker_threads');
 
 // --- Constants ---
 const VALID_TIMEFRAMES = ['1M', '5M', '15M', '1H', '4H', '1D', '1W'];
@@ -263,7 +265,6 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
 
     let client; // Define client here to be accessible in finally if connection fails early
     let earliestInvalidationTimestamp = null; // OPTIMIZATION: Track the earliest time data was changed
-    let ibkrTxnOpen = false; // Tracks whether the IBKR write transaction (below) is currently open
 
     try {
         // Cancellation Check Point
@@ -734,24 +735,17 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
             }
         }
 
-        // This one DOES need a transaction — it deletes the old continuous
-        // range and inserts the rebuilt one, and those two need to land
-        // together (a crash/cancellation between them would otherwise leave
-        // a real gap in the continuous series, not just missing new data).
-        // Scoped tightly around just this call, not the raw fetch above.
+        // Runs in its own worker thread now (runContinuousSeriesRebuild),
+        // with its own connection and its own transaction — it deletes the
+        // old continuous range and inserts the rebuilt one, and those two
+        // still need to land together, just no longer on this task's own
+        // client/transaction (a rebuild here can be tens of
+        // seconds-to-minutes for a high-frequency symbol; doing that inline
+        // used to block every other request the app was handling for the
+        // same stretch).
         if (type === 'FUT' && (ibkrDataWasModified || continuousSeriesMissing)) {
             logger.debug(`[populate][${taskId}] IBKR data was modified. Rebuilding continuous series for ${symbol} (${timeframe}) from ${earliestInvalidationTimestamp ? earliestInvalidationTimestamp.toISO() : 'the beginning'}.`);
-            await client.query('BEGIN');
-            ibkrTxnOpen = true;
-            try {
-                await _buildAndStoreContinuousSeries(client, futuresSettingId, timeframe, rollover_months, exchangeInfo, earliestInvalidationTimestamp);
-                await client.query('COMMIT');
-                ibkrTxnOpen = false;
-            } catch (seriesErr) {
-                await client.query('ROLLBACK').catch(() => {});
-                ibkrTxnOpen = false;
-                throw seriesErr;
-            }
+            await runContinuousSeriesRebuild(futuresSettingId, timeframe, rollover_months, exchangeInfo, earliestInvalidationTimestamp);
         }
 
         logger.debug(`[populate][${taskId}] (phase: ${fetchPhase}) completed and committed for ${symbol} (${timeframe}, contract: ${contractMonth || 'N/A'})`);
@@ -775,11 +769,12 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
         }
 
     } catch (err) {
-        // Rollback the IBKR transaction if one was open when the error occurred.
-        // (The Yahoo write, if it ran, already committed or rolled back on its own above.)
-        if (client && ibkrTxnOpen) {
-            try { await client.query('ROLLBACK'); ibkrTxnOpen = false; logger.info(`[populate][${taskId}] (phase: ${fetchPhase}) ROLLED BACK for ${symbol} (${timeframe})`); } catch (rbErr) { logger.error(`[populate][${taskId}] Rollback failed: ${rbErr.message}`); }
-        }
+        // No IBKR transaction to roll back here anymore — the continuous-
+        // series rebuild that used to run (and hold a transaction open) on
+        // this task's own client now runs in its own worker thread with its
+        // own connection/transaction (runContinuousSeriesRebuild). The IBKR
+        // raw-data write above already commits/rolls back on its own,
+        // tightly scoped around just that write.
         logger.error(`[populate][${taskId}] Error for ${symbol} (${timeframe}, ${fetchPhase}): ${err.message}`);
         throw err; // Re-throw the error for the task processor
     } finally {
@@ -1392,103 +1387,96 @@ async function _buildAndStoreContinuousSeries(client, futuresSettingId, timefram
         return;
     }
 
-    // Group bars by contract month
-    const barsByContractMonth = new Map();
+    const { timezone: exchangeTimezone, opening_hours: openingHours } = exchangeInfo;
+
+    // Daily per-contract volumes, aggregated in SQL rather than by summing
+    // every raw bar in JS. This used to require grouping the entire raw
+    // dataset by contract month first (barsByContractMonth) just to run this
+    // one reduction — a full second copy of a 10M+-row dataset held
+    // alongside barsByTimestamp below, which is what was pushing this past
+    // the heap limit. Postgres can produce the same per-day sums directly
+    // without ever materializing per-bar JS objects for this part at all.
+    // `(time AT TIME ZONE $3)::date` converts each bar's timestamptz to the
+    // exchange's local calendar date, matching what
+    // DateTime.fromJSDate(bar.time, { zone: exchangeTimezone }).toISODate()
+    // computed before, bar by bar.
+    const { rows: dailyVolumeRows } = await client.query(
+        `SELECT (time AT TIME ZONE $3)::date AS day, contract_month, SUM(COALESCE(volume, 0))::bigint AS volume
+         FROM historical_data
+         WHERE futures_setting_id = $1 AND timeframe = $2 AND is_continuous = FALSE AND source = 'IBKR' AND contract_month IS NOT NULL
+         GROUP BY day, contract_month`,
+        [futuresSettingId, timeframe, exchangeTimezone]
+    );
+
+    const dailyContractVolumes = new Map();
+    for (const row of dailyVolumeRows) {
+        const dateISO = row.day.toISOString().slice(0, 10);
+        if (!dailyContractVolumes.has(dateISO)) dailyContractVolumes.set(dateISO, new Map());
+        dailyContractVolumes.get(dateISO).set(row.contract_month, Number(row.volume));
+    }
+
+    const dailyWinnerContract = new Map();
+    for (const [date, contractVolumes] of dailyContractVolumes.entries()) {
+        let winnerContract = null;
+        let maxVolume = -1;
+        for (const [contractMonth, volume] of contractVolumes.entries()) {
+            if (volume > maxVolume) {
+                maxVolume = volume;
+                winnerContract = contractMonth;
+            }
+        }
+        if (winnerContract) {
+            dailyWinnerContract.set(date, winnerContract);
+        }
+    }
+
+    // Every contract that has any row in the raw data appears in at least
+    // one (day, contract) group above, so this set is exactly the same
+    // sortedContracts the old barsByContractMonth.keys() produced.
+    const sortedContracts = Array.from(new Set(dailyVolumeRows.map(r => r.contract_month))).sort();
+
+    // Group bars by (normalized) timestamp directly from the raw rows, in a
+    // single pass — building barsByContractMonth first, only to immediately
+    // regroup the exact same bars by timestamp, meant holding both
+    // groupings (each the size of the whole dataset) alive at once for no
+    // real reason once the daily-volume computation above no longer needs
+    // the by-contract grouping either.
+    const barsByTimestamp = new Map();
     for (let i = 0; i < rawHistoricalData.length; i++) {
         if (i > 0 && i % YIELD_EVERY_N_ITEMS === 0) await yieldToEventLoop();
         const row = rawHistoricalData[i];
-        const cm = row.contract_month;
-        if (!barsByContractMonth.has(cm)) {
-            barsByContractMonth.set(cm, []);
+        const barTime = row.time;
+        let dt = DateTime.fromJSDate(barTime).setZone(exchangeTimezone);
+        let normalizedTimeMillis;
+        switch (timeframe) {
+            case '1W': normalizedTimeMillis = dt.startOf('week').toMillis(); break;
+            case '1D': normalizedTimeMillis = dt.startOf('day').toMillis(); break;
+            case '4H': const hour4H = dt.hour - (dt.hour % 4); normalizedTimeMillis = dt.set({ hour: hour4H, minute: 0, second: 0, millisecond: 0 }).toMillis(); break;
+            case '1H': normalizedTimeMillis = dt.startOf('hour').toMillis(); break;
+            case '15M': const minute15M = dt.minute - (dt.minute % 15); normalizedTimeMillis = dt.set({ minute: minute15M, second: 0, millisecond: 0 }).toMillis(); break;
+            case '5M': const minute5M = dt.minute - (dt.minute % 5); normalizedTimeMillis = dt.set({ minute: minute5M, second: 0, millisecond: 0 }).toMillis(); break;
+            case '1M': normalizedTimeMillis = dt.set({ second: 0, millisecond: 0 }).toMillis(); break;
+            default: normalizedTimeMillis = dt.toMillis(); break;
         }
-        barsByContractMonth.get(cm).push({
-            time: row.time,
+        if (!barsByTimestamp.has(normalizedTimeMillis)) {
+            barsByTimestamp.set(normalizedTimeMillis, []);
+        }
+        barsByTimestamp.get(normalizedTimeMillis).push({
+            time: barTime,
             open: parseFloat(row.open),
             high: parseFloat(row.high),
             low: parseFloat(row.low),
             close: parseFloat(row.close),
             volume: parseInt(row.volume, 10),
-            source: row.source
+            source: row.source,
+            contractMonth: row.contract_month,
+            timeMillis: dt.toMillis(),
         });
     }
-    // Release the raw query result now that everything needed from it has
-    // been extracted into barsByContractMonth — for a 1-minute symbol with
-    // millions of rows, holding both alive at once (on top of the further
-    // groupings built below) is what was pushing this past the heap limit.
+    // Release the raw query result now that every bar has been copied into
+    // barsByTimestamp — same reasoning as before, just now only ever one
+    // grouped structure needs to coexist with it, not two.
     rawHistoricalData = null;
-
-    const { timezone: exchangeTimezone, opening_hours: openingHours } = exchangeInfo;
-    const filteredBarsByContractMonth = barsByContractMonth;
-
-    // Calculate daily volumes and winners
-    const dailyContractVolumes = new Map();
-    const dailyWinnerContract = new Map();
-    const sortedContracts = Array.from(barsByContractMonth.keys()).filter(cm => cm !== null).sort();
-
-    if (sortedContracts.length > 0) {
-        let volumeLoopCounter = 0;
-        for (const [contractMonth, bars] of filteredBarsByContractMonth.entries()) {
-            if (contractMonth === null) continue;
-            for (const bar of bars) {
-                volumeLoopCounter++;
-                if (volumeLoopCounter % YIELD_EVERY_N_ITEMS === 0) await yieldToEventLoop();
-                const barDateISO = DateTime.fromJSDate(bar.time, { zone: exchangeTimezone }).toISODate();
-                if (!dailyContractVolumes.has(barDateISO)) {
-                    dailyContractVolumes.set(barDateISO, new Map());
-                }
-                const dailyVolumes = dailyContractVolumes.get(barDateISO);
-                const currentVolume = dailyVolumes.get(contractMonth) || 0;
-                dailyVolumes.set(contractMonth, currentVolume + (bar.volume || 0));
-            }
-        }
-
-        for (const [date, contractVolumes] of dailyContractVolumes.entries()) {
-            let winnerContract = null;
-            let maxVolume = -1;
-            for (const [contractMonth, volume] of contractVolumes.entries()) {
-                if (volume > maxVolume) {
-                    maxVolume = volume;
-                    winnerContract = contractMonth;
-                }
-            }
-            if (winnerContract) {
-                dailyWinnerContract.set(date, winnerContract);
-            }
-        }
-    }
-
-    // Group bars by timestamp
-    const barsByTimestamp = new Map();
-    let timestampLoopCounter = 0;
-    for (const [contractMonth, bars] of filteredBarsByContractMonth.entries()) {
-        for (const bar of bars) {
-            timestampLoopCounter++;
-            if (timestampLoopCounter % YIELD_EVERY_N_ITEMS === 0) await yieldToEventLoop();
-            let dt = DateTime.fromJSDate(bar.time).setZone(exchangeTimezone);
-            let normalizedTimeMillis;
-            switch (timeframe) {
-                case '1W': normalizedTimeMillis = dt.startOf('week').toMillis(); break;
-                case '1D': normalizedTimeMillis = dt.startOf('day').toMillis(); break;
-                case '4H': const hour4H = dt.hour - (dt.hour % 4); normalizedTimeMillis = dt.set({ hour: hour4H, minute: 0, second: 0, millisecond: 0 }).toMillis(); break;
-                case '1H': normalizedTimeMillis = dt.startOf('hour').toMillis(); break;
-                case '15M': const minute15M = dt.minute - (dt.minute % 15); normalizedTimeMillis = dt.set({ minute: minute15M, second: 0, millisecond: 0 }).toMillis(); break;
-                case '5M': const minute5M = dt.minute - (dt.minute % 5); normalizedTimeMillis = dt.set({ minute: minute5M, second: 0, millisecond: 0 }).toMillis(); break;
-                case '1M': normalizedTimeMillis = dt.set({ second: 0, millisecond: 0 }).toMillis(); break;
-                default: normalizedTimeMillis = dt.toMillis(); break;
-            }
-            if (!barsByTimestamp.has(normalizedTimeMillis)) {
-                barsByTimestamp.set(normalizedTimeMillis, []);
-            }
-            // Mutate in place and reuse the same object rather than spreading
-            // into a new one — barsByContractMonth isn't read again after this
-            // loop, and for a large (1-minute-scale) dataset, allocating a
-            // second full copy of every bar here is exactly what was blowing
-            // the heap (see rawHistoricalData note above).
-            bar.contractMonth = contractMonth;
-            bar.timeMillis = dt.toMillis();
-            barsByTimestamp.get(normalizedTimeMillis).push(bar);
-        }
-    }
 
     const continuousSeries = [];
     const sortedTimestamps = Array.from(barsByTimestamp.keys()).sort();
@@ -1735,6 +1723,35 @@ async function _buildAndStoreContinuousSeries(client, futuresSettingId, timefram
         ]
     );
     logger.info(`${logPrefix} Successfully stored ${finalSeriesToStore.length} bars for the continuous series.`);
+}
+
+// Runs _buildAndStoreContinuousSeries in a worker thread (see
+// continuous-series-worker.js) instead of inline on the main thread, so a
+// long rebuild (minutes, for a high-frequency/high-history symbol) can't
+// block every other request the app is handling. The worker gets its own
+// DB connection and manages its own transaction — callers no longer wrap
+// this in BEGIN/COMMIT themselves (see the two call sites below).
+function runContinuousSeriesRebuild(futuresSettingId, timeframe, rolloverMonths, exchangeInfo, invalidationTimestamp = null) {
+    return new Promise((resolve, reject) => {
+        const worker = new Worker(path.join(__dirname, 'continuous-series-worker.js'), {
+            workerData: {
+                databaseUrl: db.getPool().options.connectionString,
+                futuresSettingId,
+                timeframe,
+                rolloverMonths,
+                exchangeInfo,
+                invalidationTimestampISO: invalidationTimestamp ? invalidationTimestamp.toISO() : null,
+            },
+        });
+        worker.on('message', (msg) => {
+            if (msg.success) resolve();
+            else reject(new Error(msg.error));
+        });
+        worker.on('error', reject);
+        worker.on('exit', (code) => {
+            if (code !== 0) reject(new Error(`continuous-series-worker exited with code ${code}`));
+        });
+    });
 }
 
 async function fetchYahooHistoricalData(symbol, timeframe, requestId, timezone, startDate, endDate, type = 'STK', broadcastStatus, retries = 3, completionCheckTime) {
@@ -2026,7 +2043,13 @@ async function rebuildContinuousSeriesForSymbol(symbol, type) {
         return;
     }
 
+    // Only needed for the lookup below — each timeframe's actual rebuild now
+    // runs in its own worker thread with its own connection (see
+    // runContinuousSeriesRebuild), so there's no reason to hold a pooled
+    // connection checked out for the whole multi-timeframe rebuild anymore
+    // (previously minutes, for a high-volume symbol).
     const client = await db.getPool().connect();
+    let futuresSettingId, rollover_months, exchangeInfo;
     try {
         const { rows: fsRows } = await client.query(
             'SELECT id, exchange, rollover_months FROM futures_settings WHERE symbol = $1 AND type = $2',
@@ -2035,31 +2058,26 @@ async function rebuildContinuousSeriesForSymbol(symbol, type) {
         if (fsRows.length === 0) {
             throw new Error(`No futures settings found for ${symbol} (${type})`);
         }
-        const { id: futuresSettingId, exchange, rollover_months } = fsRows[0];
-        const exchangeInfo = await getExchangeInfo(exchange);
+        ({ id: futuresSettingId, rollover_months } = fsRows[0]);
+        exchangeInfo = await getExchangeInfo(fsRows[0].exchange);
+    } finally {
+        client.release();
+    }
 
-        // One transaction per timeframe, not one for the whole symbol — for a
-        // high-volume symbol this loop can run for many minutes per timeframe
-        // (see the memory/duplication fixes on _buildAndStoreContinuousSeries),
-        // so wrapping all 7 in a single transaction meant a failure on, say,
-        // 15M would roll back the 1M and 5M work that had already succeeded.
+    try {
+        // One worker (and one transaction) per timeframe, not one for the
+        // whole symbol — for a high-volume symbol this can run for many
+        // minutes per timeframe, so treating all 7 as one unit meant a
+        // failure on, say, 15M would roll back the 1M and 5M work that had
+        // already succeeded.
         for (const timeframe of VALID_TIMEFRAMES) {
             logger.info(`[rebuildContinuousSeriesForSymbol] Rebuilding ${timeframe} for ${symbol}...`);
-            await client.query('BEGIN');
-            try {
-                await _buildAndStoreContinuousSeries(client, futuresSettingId, timeframe, rollover_months, exchangeInfo, null);
-                await client.query('COMMIT');
-            } catch (err) {
-                await client.query('ROLLBACK').catch(() => {});
-                throw err;
-            }
+            await runContinuousSeriesRebuild(futuresSettingId, timeframe, rollover_months, exchangeInfo, null);
         }
         logger.info(`[rebuildContinuousSeriesForSymbol] Successfully rebuilt all timeframes for ${symbol}.`);
     } catch (err) {
         logger.error(`[rebuildContinuousSeriesForSymbol] Error during rebuild for ${symbol}: ${err.message}`);
         throw err; // Re-throw to be handled by the caller
-    } finally {
-        client.release();
     }
 }
 
@@ -2232,4 +2250,10 @@ module.exports = {
     getYahooMaxLookbackDays,
     getIbkrDataBound,
     getActiveChunkProgress,
+    // Exported only so modules/continuous-series-worker.js can call it with
+    // its own connection — not meant to be used directly anywhere else. It
+    // has no dependency on this module's other state (db/ibkr/yahoo/caches),
+    // only on the client/params passed to it, which is what makes running it
+    // in a separate worker thread (with its own DB connection) safe.
+    _buildAndStoreContinuousSeries,
 };
