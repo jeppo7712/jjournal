@@ -654,8 +654,10 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
                             if (cancellationSignal.aborted) throw new Error(`Task ${taskId} cancelled before processing IBKR fetch for contract ${contractDetails.conId}.`);
                             logger.debug(`[populate][${taskId}] Processing IBKR fetch for contract ${contractDetails.lastTradeDateOrContractMonth || 'N/A'} (conId: ${contractDetails.conId})...`);
                             // Each task will return the result from fetchAndStoreIBKRContractData
+                            // (it acquires its own DB connection internally now —
+                            // see the function definition — rather than sharing
+                            // this task-level client across concurrent contracts)
                             return await fetchAndStoreIBKRContractData(
-                                client,
                                 futuresSettingId,
                                 contractDetails,
                                 timeframe,
@@ -1107,7 +1109,24 @@ async function recordIbkrDataBound(client, futuresSettingId, contractMonth, time
  * @param {function} broadcastStatus - Function to send status updates.
  * @returns {Promise<{upsertedCount: number, earliestTime: DateTime|null}>} - The number of bars successfully upserted and the earliest timestamp.
  */
-async function fetchAndStoreIBKRContractData(client, futuresSettingId, validatedContract, timeframe, exchangeTimezone, cancellationSignal, broadcastStatus, taskId, completionCheckTime, requiredConfig) {
+// Each concurrent contract fetch (see the executePromisesWithConcurrency
+// call site) used to share one client passed down from the caller. A pg
+// client only ever runs one query at a time; overlapping calls from
+// multiple concurrently-running contracts landed on that same client and
+// only "worked" via pg's own internal query queueing — which is deprecated
+// and going away in pg@9 (surfaced as a DeprecationWarning in the logs).
+// Each contract's fetch now gets its own connection, genuinely independent
+// of the others running alongside it.
+async function fetchAndStoreIBKRContractData(futuresSettingId, validatedContract, timeframe, exchangeTimezone, cancellationSignal, broadcastStatus, taskId, completionCheckTime, requiredConfig) {
+    const client = await db.getPool().connect();
+    try {
+        return await fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId, validatedContract, timeframe, exchangeTimezone, cancellationSignal, broadcastStatus, taskId, completionCheckTime, requiredConfig);
+    } finally {
+        client.release();
+    }
+}
+
+async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId, validatedContract, timeframe, exchangeTimezone, cancellationSignal, broadcastStatus, taskId, completionCheckTime, requiredConfig) {
     const specificContractMonth = validatedContract.lastTradeDateOrContractMonth?.substring(0, 6) || null;
     const contractDesc = `${validatedContract.symbol} (${timeframe}, contract: ${specificContractMonth || 'N/A'}, conId: ${validatedContract.conId})`;
 
