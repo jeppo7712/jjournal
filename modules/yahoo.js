@@ -1,6 +1,26 @@
 const YahooFinance = require('yahoo-finance2').default;
+// yahoo-finance2's constructor unconditionally warns once if the running
+// Node version is below what it now recommends (its own MIN_SUPPORTED_RUNTIMES
+// policy, currently 22.x) — this app runs fine on the Node 20 LTS the
+// Dockerfiles pin, and this warning isn't from anything actually breaking,
+// just noise on every process start. Rather than silence ALL of the
+// library's own warnings (which could hide something real later), pass a
+// logger that only filters this one specific message through to console.warn
+// as normal, matching yahoo-finance2's own default logger shape otherwise
+// (see node_modules/yahoo-finance2/.../lib/options/logger.js — info/warn/
+// error/dir/debug are all required).
+const yahooLoggerOptions = {
+    info: (...args) => console.log(...args),
+    warn: (...args) => {
+        if (typeof args[0] === 'string' && args[0].includes('Unsupported environment')) return;
+        console.warn(...args);
+    },
+    error: (...args) => console.error(...args),
+    dir: (...args) => console.dir(...args),
+    debug: () => {},
+};
 // Create a client instance when library requires it (v3+).
-const yfClient = (typeof YahooFinance === 'function') ? new YahooFinance() : YahooFinance;
+const yfClient = (typeof YahooFinance === 'function') ? new YahooFinance({ logger: yahooLoggerOptions }) : YahooFinance;
 const { Agent } = require('undici');
 
 // Yahoo's cert chain has been problematic in this environment, so TLS
