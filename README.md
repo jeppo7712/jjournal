@@ -44,7 +44,7 @@ Then open `http://localhost:3999`, go to **Settings**, and paste in a PostgreSQL
 ## Requirements
 
 - A reachable PostgreSQL database (the app only needs an empty database + a user with create-table privileges; it manages its own schema)
-- Node.js 20+ if running outside Docker
+- Node.js 22+ if running outside Docker
 - **Optional**: IBKR TWS or IB Gateway running with the API enabled, if you want IBKR-quality historical data and Flex Web Service imports. Without it, the app still works fully off Yahoo Finance data.
 
 ## Data & persistence

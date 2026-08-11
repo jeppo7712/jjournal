@@ -36,7 +36,7 @@ docker run -d \
 
 ### Option B — Manual / local dev
 
-Requires Node.js 20+.
+Requires Node.js 22+.
 
 ```bash
 npm install
