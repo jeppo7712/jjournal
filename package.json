@@ -42,7 +42,7 @@
     "yahoo-finance2": "3.13.1"
   },
   "engines": {
-    "node": ">=20.0.0"
+    "node": ">=22.0.0"
   },
   "author": "Jay P",
   "license": "SEE LICENSE IN LICENSE",

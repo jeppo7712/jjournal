@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:22-alpine
 ENV NODE_ENV=production
 ENV REACT_APP_API_URL=
 WORKDIR /app
