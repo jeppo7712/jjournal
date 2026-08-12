@@ -94,13 +94,27 @@ function matchLotsFIFO(trade, tickMultiplier) {
         fee: Number(action.fee || 0),
       });
     } else if (action.type === closingType) {
-      let closeQty = Number(action.quantity || 0);
+      // Fixed at the fill's own total so the exit-fee split doesn't shrink as
+      // this fill eats into successive lots (see bug writeup below).
+      const totalCloseQty = Number(action.quantity || 0);
+      let closeQty = totalCloseQty;
       while (closeQty > 0 && openLots.length > 0) {
         const lot = openLots[0];
         const qtyToClose = Math.min(lot.quantity, closeQty);
+        // Proportion of this lot's entry fee attributable to the quantity being
+        // closed right now, based on whatever quantity/fee the lot has left.
+        const entryFeeSlice = lot.fee * (qtyToClose / lot.quantity);
+        const exitFeeSlice = Number(action.fee || 0) * (qtyToClose / totalCloseQty);
         realisedPnL += (Number(action.price) - lot.price) * sign * qtyToClose * tickMultiplier
-          - (lot.fee * (qtyToClose / lot.quantity))
-          - (Number(action.fee || 0) * (qtyToClose / closeQty));
+          - entryFeeSlice
+          - exitFeeSlice;
+        // Reduce the lot's remaining fee by the slice just realised, in lockstep
+        // with quantity, so a lot closed via multiple separate fills only ever
+        // has its entry fee attributed once in total (previously `lot.fee` stayed
+        // at its original value while `lot.quantity` shrank, so each subsequent
+        // partial close over-attributed fee against a shrinking denominator, and
+        // any fee left on a still-open lot double-counted what closes already took).
+        lot.fee -= entryFeeSlice;
         lot.quantity -= qtyToClose;
         closeQty -= qtyToClose;
         if (lot.quantity <= 0) openLots.shift();
