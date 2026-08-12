@@ -1812,9 +1812,9 @@ useEffect(() => {
               margin: 0
             }}
           >
-            <div className={styles.headerRow} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 26px 16px 26px' }}>
+            <div className={`${styles.headerRow} ${styles.chartHeaderRow}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 26px 16px 26px' }}>
               <span className={styles.title}>{trade.symbol}</span>
-              <div style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
+              <div className={styles.chartControlsGroup} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
                 <button
                   onClick={() => setShowAvgStopLines(prev => !prev)}
                   style={{

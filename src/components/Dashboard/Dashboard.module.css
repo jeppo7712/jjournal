@@ -65,6 +65,10 @@
   border-color: #3B82F6;
   border-right: none;
   color: #fff;
+  /* A 1px border color change was easy to miss at a glance (the original
+     complaint) — a glow around the whole button reads as "this filter is
+     on" without having to notice a thin outline specifically. */
+  box-shadow: 0 0 0 1px #3B82F6, 0 0 12px 2px rgba(59, 130, 246, 0.55);
 }
 
 .timeFilterMenu {
@@ -130,6 +134,7 @@
   background: #262B39;
   border-color: #3B82F6;
   color: #fff;
+  box-shadow: 0 0 0 1px #3B82F6, 0 0 12px 2px rgba(59, 130, 246, 0.55);
 }
 
 .bullseyeButton {
@@ -156,6 +161,7 @@
   background: #262B39;
   border-color: #EF4444;
   border-left: none;
+  box-shadow: 0 0 0 1px #EF4444, 0 0 12px 2px rgba(239, 68, 68, 0.55);
 }
 
 .bullseyeButton.disabled {
@@ -390,11 +396,13 @@
 .statBox.active {
   background: #262B39;
   border: 1px solid #3B82F6 !important;
+  box-shadow: 0 0 0 1px #3B82F6, 0 0 12px 2px rgba(59, 130, 246, 0.55);
 }
 
 .statBox.excluded {
   background: #262B39;
   border: 1px solid #EF4444 !important;
+  box-shadow: 0 0 0 1px #EF4444, 0 0 12px 2px rgba(239, 68, 68, 0.55);
 }
 
 .statLabel {
@@ -479,12 +487,14 @@
   background: #262B39;
   border-color: #3B82F6;
   color: #fff;
+  box-shadow: 0 0 0 1px #3B82F6, 0 0 12px 2px rgba(59, 130, 246, 0.55);
 }
 
 .toggleButton.excluded {
   background: #262B39;
   border-color: #EF4444;
   color: #fff;
+  box-shadow: 0 0 0 1px #EF4444, 0 0 12px 2px rgba(239, 68, 68, 0.55);
 }
 
 .openTradesButton {
@@ -495,12 +505,14 @@
   background: #262B39;
   border-color: #3B82F6;
   color: #fff;
+  box-shadow: 0 0 0 1px #3B82F6, 0 0 12px 2px rgba(59, 130, 246, 0.55);
 }
 
 .openTradesButton.excluded {
   background: #262B39;
   border-color: #EF4444;
   color: #fff;
+  box-shadow: 0 0 0 1px #EF4444, 0 0 12px 2px rgba(239, 68, 68, 0.55);
 }
 
 .symbolFilterContainer {
@@ -744,12 +756,14 @@
     background: #262B39;
     border-color: #3B82F6;
     color: #fff;
+    box-shadow: 0 0 0 1px #3B82F6, 0 0 12px 2px rgba(59, 130, 246, 0.55);
   }
 
   .openTradesButton.excluded {
     background: #262B39;
     border-color: #EF4444;
     color: #fff;
+    box-shadow: 0 0 0 1px #EF4444, 0 0 12px 2px rgba(239, 68, 68, 0.55);
   }
 
   .toggleButton::before {
@@ -819,11 +833,13 @@
   .statBox.active {
     background: #262B39;
     border: 1px solid #3B82F6 !important;
+    box-shadow: 0 0 0 1px #3B82F6, 0 0 12px 2px rgba(59, 130, 246, 0.55);
   }
 
   .statBox.excluded {
     background: #262B39;
     border: 1px solid #EF4444 !important;
+    box-shadow: 0 0 0 1px #EF4444, 0 0 12px 2px rgba(239, 68, 68, 0.55);
   }
 
   .statLabel {
