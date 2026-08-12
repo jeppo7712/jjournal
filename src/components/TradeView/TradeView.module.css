@@ -817,6 +817,24 @@
     gap: 16px;
   }
 
+  /* The chart modal's header packs a title, a controls group (Levels /
+     Continuous / timezone), and the close button into one space-between
+     row. On narrow screens the controls group's natural width pushes the
+     close button off the right edge of the viewport. Forcing the controls
+     group onto its own full-width line (via order + flex-basis) keeps the
+     title and close button together on the first line, where
+     justify-content: space-between always fits them within the viewport. */
+  .chartHeaderRow {
+    flex-wrap: wrap;
+    row-gap: 10px;
+  }
+
+  .chartControlsGroup {
+    order: 3;
+    flex-basis: 100%;
+    flex-wrap: wrap;
+  }
+
   .tabContent {
     padding: 0 10px;
     overflow-y: auto;
