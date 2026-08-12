@@ -196,6 +196,11 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
         while (closeQty > 0 && openLots.length > 0) {
           let lot = openLots[0];
           const qtyToClose = Math.min(lot.quantity, closeQty);
+          // Prorate the lot's remaining fee down as it's closed, same fix as
+          // matchLotsFIFO in TradeContext.js, so the fee left on a still-open
+          // lot here (used below for openFee) doesn't double-count fee already
+          // attributed to an earlier partial close of this same lot.
+          lot.fee -= lot.fee * (qtyToClose / lot.quantity);
           lot.quantity -= qtyToClose;
           closeQty -= qtyToClose;
           if (lot.quantity <= 0) openLots.shift();

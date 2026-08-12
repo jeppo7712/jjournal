@@ -1,5 +1,5 @@
 import React, { useContext, useState, useEffect, useRef } from 'react';
-import { TradeContext, getRealisedPnL } from '../../context/TradeContext';
+import { TradeContext, getRealisedPnL, getTickMultiplier } from '../../context/TradeContext';
 import { useStatus } from '../../context/StatusContext';
 import styles from './Navigation.module.css';
 
@@ -152,15 +152,21 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
           typeof trade.position === 'number' &&
           typeof trade.currentPrice === 'number'
         )
-        .reduce((sum, trade) => sum + trade.position * trade.currentPrice, 0)
+        // FUT contracts aren't worth their raw quoted price per unit (e.g. an ES
+        // point isn't a dollar) — scale by the same tick multiplier every PnL
+        // formula in this file uses. STK keeps multiplier 1, so unaffected.
+        .reduce((sum, trade) => sum + trade.position * trade.currentPrice * getTickMultiplier(trade), 0)
     : 0;
 
+  // Realised (closed trades' return, plus open trades' realised-so-far) *and*
+  // unrealised (open trades' live mark-to-market) so this actually is a total,
+  // matching Dashboard's R P&L + U P&L combined rather than realised P&L alone.
   const totalPnl = Array.isArray(trades)
     ? trades.reduce((sum, trade) => {
         if (trade.status === 'WIN' || trade.status === 'LOSS' || trade.status === 'WASH') {
           return sum + (trade.return || 0); //
         } else if (trade.status === 'OPEN' && (trade.type === 'STK' || trade.type === 'FUT')) {
-          return sum + getRealisedPnL(trade); //
+          return sum + getRealisedPnL(trade) + (trade.currentReturn || 0); //
         }
         return sum; //
       }, 0) //
