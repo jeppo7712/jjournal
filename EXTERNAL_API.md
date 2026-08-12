@@ -17,7 +17,7 @@ If this server is ever reachable outside a network you trust, put it behind a re
 - All responses are JSON.
 - All timestamps are ISO 8601 in UTC (e.g. `2026-03-14T13:45:00.000Z`).
 - Money fields are plain numbers (no currency symbol), in account currency.
-- List endpoints return an object with a `total` count and the array under a named key (`trades`, `accounts`, etc.), not a bare array — so pagination metadata can sit alongside it.
+- Paginated list endpoints (`trades`, `daynotes`) return an object with a `total` count, `limit`, `offset`, and the array under a named key, not a bare array. Non-paginated list endpoints (`accounts`, `symbols`) return just the named key — no `total` field, since there's nothing to paginate.
 - Errors are `{ "error": "message" }` with a non-2xx status code.
 - `GET /api/external/v1/` returns a small discovery document listing every endpoint.
 
@@ -127,7 +127,8 @@ Field notes:
 - `journal` is `null` if the trade has no journal entry at all yet.
 - `attachments[].url` is a relative path — fetch it against the same host as this API (see [GET /attachments/:id](#get-attachmentsid)).
 - `position` is non-null only while `status` is `OPEN` (remaining open quantity). `quantity` is non-null only once closed (the round-trip size).
-- `return`, `entry_total`, `exit_total` etc. are `null` for a still-`OPEN` trade — the app computes live unrealised PnL client-side from a live quote, which this API doesn't do; use [GET /quote/:symbol](#get-quotesymbol) yourself if you need it for open positions.
+- For a still-`OPEN` trade: `return`, `return_percentage`, and `exit_total` are `null` (there's no exit yet to compute them from). `entry_total`, `avg_buy_price`/`avg_sell_price`, and `position` are **not** null — they describe the cost basis and size of what's currently held, and are exactly what you need alongside a live quote to compute unrealised PnL yourself (this API doesn't do that math for you).
+- To compute unrealised PnL for an `OPEN` trade: `(quote_price - avg_buy_price) * position` for `LONG`, `(avg_sell_price - quote_price) * position` for `SHORT`. **For `type: "FUT"`, multiply the result by `tick_value / tick_size`** — a futures quote is a raw point price, not a dollar amount, so skipping this multiplier under/overstates the P&L by that ratio (e.g. MNQ's is 0.5/0.25 = 2x). `type: "STK"` needs no multiplier (equivalent to 1).
 - `r_multiple` is `null` if the trade has no `stop_loss` set, or isn't closed yet.
 
 ---
