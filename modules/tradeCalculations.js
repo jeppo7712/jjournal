@@ -20,7 +20,17 @@ function getTickMultiplier(trade) {
 
 function parseActionDate(dateTimeValue) {
     if (!dateTimeValue) return null;
-    const dt = DateTime.fromISO(String(dateTimeValue), { zone: 'utc' });
+    // pg returns `timestamptz` columns as native JS Date objects, not ISO
+    // strings — String(dateObj) gives a locale-formatted string ("Mon May 12
+    // 2025 13:00:00 GMT+0400 (...)") that DateTime.fromISO can't parse, which
+    // silently failed date parsing for every action on every trade (this
+    // function only runs server-side, on raw DB rows, before any JSON
+    // serialization would have converted the Date to an ISO string for us).
+    // That made every trade's buy/sell quantities stay 0 and status get
+    // stuck on its 'OPEN' default, regardless of actual position size.
+    const dt = dateTimeValue instanceof Date
+        ? DateTime.fromJSDate(dateTimeValue, { zone: 'utc' })
+        : DateTime.fromISO(String(dateTimeValue), { zone: 'utc' });
     return dt.isValid ? dt : null;
 }
 
