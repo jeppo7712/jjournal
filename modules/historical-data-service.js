@@ -520,7 +520,7 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
 
                     const query = `
                         INSERT INTO historical_data (futures_setting_id, contract_month, time, open, high, low, close, volume, timeframe, source, is_continuous)
-                        SELECT $1, $2, unnest($3::timestamptz[]), unnest($4::numeric[]), unnest($5::numeric[]), unnest($6::numeric[]), unnest($7::numeric[]), unnest($8::integer[]), $9, 'Yahoo', FALSE
+                        SELECT $1, $2, unnest($3::timestamptz[]), unnest($4::numeric[]), unnest($5::numeric[]), unnest($6::numeric[]), unnest($7::numeric[]), unnest($8::bigint[]), $9, 'Yahoo', FALSE
                         ON CONFLICT (futures_setting_id, (COALESCE(contract_month, '')), time, timeframe, is_continuous) DO NOTHING
                     `;
                     const params = [futuresSettingId, contractMonth, times, opens, highs, lows, closes, volumes, timeframe];
@@ -1043,7 +1043,7 @@ async function storeHistoricalData(client, futuresSettingId, contractMonth, time
             unnest($5::numeric[]),                  -- high
             unnest($6::numeric[]),                  -- low
             unnest($7::numeric[]),                  -- close
-            unnest($8::integer[]),                  -- volume
+            unnest($8::bigint[]),                   -- volume
             $9,                                     -- timeframe
             'IBKR',                                 -- source
             FALSE                                   -- is_continuous
@@ -1721,7 +1721,7 @@ async function _buildAndStoreContinuousSeries(client, futuresSettingId, timefram
     // pattern already used for Yahoo/IBKR contract writes elsewhere in this file.
     await client.query(
         `INSERT INTO historical_data (futures_setting_id, contract_month, time, open, high, low, close, volume, timeframe, source, is_continuous, is_rollover, rollover_type)
-         SELECT $1, unnest($2::varchar[]), unnest($3::timestamptz[]), unnest($4::numeric[]), unnest($5::numeric[]), unnest($6::numeric[]), unnest($7::numeric[]), unnest($8::integer[]), $9, unnest($10::varchar[]), TRUE, unnest($11::boolean[]), unnest($12::varchar[])
+         SELECT $1, unnest($2::varchar[]), unnest($3::timestamptz[]), unnest($4::numeric[]), unnest($5::numeric[]), unnest($6::numeric[]), unnest($7::numeric[]), unnest($8::bigint[]), $9, unnest($10::varchar[]), TRUE, unnest($11::boolean[]), unnest($12::varchar[])
          ON CONFLICT (futures_setting_id, (COALESCE(contract_month, '')), time, timeframe, is_continuous)
          DO UPDATE SET
             open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low, close = EXCLUDED.close,

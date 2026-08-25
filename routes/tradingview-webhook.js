@@ -69,7 +69,7 @@ module.exports = (db, configManager, broadcastStatus, uuidv4, wss, WebSocket) =>
                  ON CONFLICT (futures_setting_id, (COALESCE(contract_month, '')), time, timeframe, is_continuous)
                  DO UPDATE SET open = EXCLUDED.open, high = EXCLUDED.high, low = EXCLUDED.low,
                                close = EXCLUDED.close, volume = EXCLUDED.volume, source = 'TradingView'`,
-                // volume is an integer column — Math.round guards against a
+                // volume is a bigint column — Math.round guards against a
                 // fractional value (e.g. from an instrument type where
                 // TradingView reports volume with decimals), which Postgres
                 // would otherwise reject outright rather than coerce.
