@@ -311,7 +311,7 @@ UNIQUE (symbol, type)
         high NUMERIC NOT NULL,
         low NUMERIC NOT NULL,
         close NUMERIC NOT NULL,
-        volume INTEGER NOT NULL,
+        volume BIGINT NOT NULL,
         timeframe TEXT NOT NULL,
         source VARCHAR NOT NULL DEFAULT 'IBKR',
         is_continuous BOOLEAN DEFAULT FALSE,
@@ -324,6 +324,16 @@ UNIQUE (symbol, type)
       );
     `);
     logger.debug('Historical_data table created successfully');
+
+    // volume used to be INTEGER (max ~2.147 billion). Some Yahoo-reported
+    // volume figures for certain futures exceed that, which made the whole
+    // batch INSERT ... unnest() for that fetch fail on the single oversized
+    // row (Postgres rejects the out-of-range parameter before any row is
+    // written), silently dropping every other bar in the same batch too.
+    // Widen to BIGINT (max ~9.2 quintillion) so any real-world volume value
+    // Yahoo/IBKR returns fits. Existing installs get this via ALTER; fresh
+    // ones already get BIGINT from the CREATE TABLE above.
+    await client.query(`ALTER TABLE historical_data ALTER COLUMN volume TYPE BIGINT`);
 
 
     logger.debug('Creating historical_data_unique_idx...');
