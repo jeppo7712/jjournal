@@ -1162,15 +1162,22 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
         return { upsertedCount: 0, earliestTime: null };
     }
 
-    // Query for existing IBKR data range for *this specific contract*
-    const { rows: existingSpecificContractData } = await client.query(
-        `SELECT time FROM historical_data
-         WHERE futures_setting_id = $1 AND (contract_month = $2 OR ($2 IS NULL AND contract_month IS NULL)) AND timeframe = $3 AND source = 'IBKR' AND is_continuous = FALSE ORDER BY time ASC`,
+    // Query for existing IBKR data range for *this specific contract*. Only
+    // the oldest/latest timestamp is needed, but this used to SELECT every
+    // matching row (ORDER BY time ASC, no LIMIT) just to read row[0] and
+    // row[length-1] in JS — for a well-backfilled contract that's tens of
+    // thousands of rows fetched and materialized for nothing. With up to
+    // IBKR_CONCURRENCY_LIMIT contracts of the same symbol/timeframe running
+    // this concurrently, that's several large result sets in flight at once.
+    // A plain min()/max() aggregate answers the same question in one row.
+    const { rows: [contractRange] } = await client.query(
+        `SELECT min(time) AS oldest, max(time) AS latest FROM historical_data
+         WHERE futures_setting_id = $1 AND (contract_month = $2 OR ($2 IS NULL AND contract_month IS NULL)) AND timeframe = $3 AND source = 'IBKR' AND is_continuous = FALSE`,
         [futuresSettingId, specificContractMonth, timeframe]
     );
 
-    const oldestSpecificIBKRLuxon = existingSpecificContractData.length > 0 ? DateTime.fromJSDate(existingSpecificContractData[0].time, { zone: 'utc' }).setZone(exchangeTimezone) : null;
-    const latestSpecificIBKRLuxon = existingSpecificContractData.length > 0 ? DateTime.fromJSDate(existingSpecificContractData[existingSpecificContractData.length - 1].time, { zone: 'utc' }).setZone(exchangeTimezone) : null;
+    const oldestSpecificIBKRLuxon = contractRange.oldest ? DateTime.fromJSDate(contractRange.oldest, { zone: 'utc' }).setZone(exchangeTimezone) : null;
+    const latestSpecificIBKRLuxon = contractRange.latest ? DateTime.fromJSDate(contractRange.latest, { zone: 'utc' }).setZone(exchangeTimezone) : null;
 
     let totalUpserted = 0;
     let earliestFetchTime = null;
