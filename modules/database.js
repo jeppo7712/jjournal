@@ -35,19 +35,22 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     const { rows: userRows } = await client.query('SELECT current_user');
     logger.info(`Current database user: ${userRows[0].current_user}`);
 
-    // Create symbol_type enum, catching error if it already exists
+    // Create symbol_type enum. Postgres has no `CREATE TYPE IF NOT EXISTS`,
+    // so on every startup after the very first one this used to just try the
+    // CREATE and catch the resulting 42710 (duplicate_object) error — handled
+    // fine application-side, but Postgres still logs the raw ERROR itself
+    // before the app ever gets a chance to catch it, showing up in the DB's
+    // own log on every single restart. Checking pg_type first avoids ever
+    // issuing the doomed CREATE, so nothing gets logged as an error at all.
     logger.debug('Creating symbol_type...');
-    try {
-      await client.query(`
-        CREATE TYPE symbol_type AS ENUM ('STK', 'FUT');
-      `);
+    const { rows: symbolTypeExists } = await client.query(
+      `SELECT 1 FROM pg_type WHERE typname = 'symbol_type'`
+    );
+    if (symbolTypeExists.length === 0) {
+      await client.query(`CREATE TYPE symbol_type AS ENUM ('STK', 'FUT');`);
       logger.debug('Symbol_type created successfully');
-    } catch (err) {
-      if (err.code === '42710') {
-        logger.debug('Symbol_type already exists, proceeding...');
-      } else {
-        throw err; // Rethrow unexpected errors
-      }
+    } else {
+      logger.debug('Symbol_type already exists, proceeding...');
     }
 
     // Create accounts table
