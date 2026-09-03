@@ -1147,6 +1147,19 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
     let fetchLowerBound = DateTime.max(globalRequiredStartDate, contractLifeStartDate);
     const fetchUpperBound = DateTime.min(contractExpiryDate, nowInExchangeTimezone);
 
+    // --- DEFINE CHUNK LIMITS --- (hoisted above its original spot further
+    // down so the stale-bound reverification logic below can use it too.)
+    // IBKR cannot handle large requests for small bars. We chunk the request.
+    const MAX_CHUNK_DURATION_MAP = {
+        '1M': { amount: 1, unit: 'weeks' },   // 1 Week limit for 1M bars
+        '5M': { amount: 1, unit: 'months' }, // 1 Month limit for 5M bars
+        '15M': { amount: 1, unit: 'months' }, // 1 Month limit for 15M bars
+        '1H': { amount: 6, unit: 'months' },  // 6 Months limit for 1H bars
+        '4H': { amount: 1, unit: 'years' },   // 1 Year limit for 4H bars
+        'default': { amount: 1, unit: 'years' }
+    };
+    const chunkLimit = MAX_CHUNK_DURATION_MAP[timeframe] || MAX_CHUNK_DURATION_MAP['default'];
+
     // If we've already confirmed (recently — see IBKR_BOUND_RECHECK_DAYS) that
     // IBKR has no data before some point, don't bother asking again — this is
     // what stops cron from endlessly re-requesting a range that's already
@@ -1179,6 +1192,30 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
     const oldestSpecificIBKRLuxon = contractRange.oldest ? DateTime.fromJSDate(contractRange.oldest, { zone: 'utc' }).setZone(exchangeTimezone) : null;
     const latestSpecificIBKRLuxon = contractRange.latest ? DateTime.fromJSDate(contractRange.latest, { zone: 'utc' }).setZone(exchangeTimezone) : null;
 
+    // knownBound above comes back null both when a boundary was never
+    // recorded AND when one was recorded but is now stale (>30 days —
+    // IBKR_BOUND_RECHECK_DAYS). In the stale case fetchLowerBound just fell
+    // back to the ~100-year MAX_LOOKBACK_DURATION default, and if we already
+    // have real stored data, the "backfill gap" check below would treat the
+    // entire span between that 100-year floor and our actual earliest bar as
+    // an unconfirmed gap needing a fresh walk — turning a routine
+    // 30-day re-verification into a blind chunk-by-chunk crawl through
+    // however much history IBKR keeps saying "empty" for. Confirmed: for a
+    // stock like TSLA (real data starts 2010) this walked all the way back
+    // into the 1950s before anyone noticed. Cap the re-verification probe to
+    // one chunk immediately before the earliest data we've already
+    // confirmed — enough to notice a provider genuinely adding more history,
+    // without re-walking decades we already have solid, recent evidence
+    // about. A genuinely brand-new contract (oldestSpecificIBKRLuxon null)
+    // is unaffected and still gets the full walk it needs.
+    if (!knownBound && oldestSpecificIBKRLuxon && fetchLowerBound < oldestSpecificIBKRLuxon) {
+        const reverifyProbeStart = oldestSpecificIBKRLuxon.minus({ [chunkLimit.unit]: chunkLimit.amount });
+        if (reverifyProbeStart > fetchLowerBound) {
+            logger.debug(`[populate][${taskId}] Cached IBKR boundary for ${contractDesc} is stale/unrecorded but we have data back to ${oldestSpecificIBKRLuxon.toISO()} already — capping re-verification probe to ${reverifyProbeStart.toISO()} instead of the full ${fetchLowerBound.toISO()} floor.`);
+            fetchLowerBound = reverifyProbeStart;
+        }
+    }
+
     let totalUpserted = 0;
     let earliestFetchTime = null;
 
@@ -1208,18 +1245,6 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
         return { upsertedCount: 0, earliestTime: null };
     }
 
-    // --- DEFINE CHUNK LIMITS ---
-    // IBKR cannot handle large requests for small bars. We chunk the request.
-    const MAX_CHUNK_DURATION_MAP = {
-        '1M': { amount: 1, unit: 'weeks' },   // 1 Week limit for 1M bars
-        '5M': { amount: 1, unit: 'months' }, // 1 Month limit for 5M bars
-        '15M': { amount: 1, unit: 'months' }, // 1 Month limit for 15M bars
-        '1H': { amount: 6, unit: 'months' },  // 6 Months limit for 1H bars
-        '4H': { amount: 1, unit: 'years' },   // 1 Year limit for 4H bars
-        'default': { amount: 1, unit: 'years' }
-    };
-    const chunkLimit = MAX_CHUNK_DURATION_MAP[timeframe] || MAX_CHUNK_DURATION_MAP['default'];
-
     // Only trust an empty chunk as "IBKR's real limit" once we've already
     // seen at least one non-empty chunk for THIS contract in this walk.
     // Without this, the very first chunk attempted for an already-expired
@@ -1229,7 +1254,16 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
     // "no history exists"), and would otherwise get permanently recorded as
     // the contract's boundary, silently discarding a full year of real,
     // perfectly fetchable history earlier in that contract's life.
-    let hasFetchedAnyBarsForThisContract = false;
+    //
+    // That caution only applies to a contract we don't already trust — if
+    // oldestSpecificIBKRLuxon exists, we already have substantial confirmed
+    // history for it (that's the whole reason we're doing a capped
+    // re-verification probe just before it, not a full walk). Seed this as
+    // already-satisfied in that case so an empty reverify probe gets
+    // correctly recorded (refreshing checked_at for another
+    // IBKR_BOUND_RECHECK_DAYS) instead of silently expiring every 30 days
+    // and re-running the same never-confirmed probe forever.
+    let hasFetchedAnyBarsForThisContract = !!oldestSpecificIBKRLuxon;
 
     for (const range of rangesToFetch) {
         try {
