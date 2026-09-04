@@ -1030,13 +1030,32 @@ export const TradeProvider = ({ children }) => {
       const processedTrades = Array.isArray(tradesData) ? await Promise.all(tradesData.map(async trade => {
         const actions = Array.isArray(trade.actions) ? trade.actions.map(a => ({ ...a, dateTime: a.date_time || a.dateTime })) : [];
         const meta = await computeTradeMeta({ ...trade, actions }, futuresSettings);
+
+        // meta.buySum/sellSum accumulate price*quantity across EVERY fill on
+        // that side ever recorded on this trade — correct as "entry total"
+        // for a CLOSED trade (the round trip is the whole history, no
+        // ambiguity), but for a still-OPEN trade it means every additional
+        // buy (even one that nets against an equal sell elsewhere, leaving
+        // position size unchanged) makes "Ent Tot" climb forever, decoupled
+        // from what's actually still held. Reuse the same FIFO open-lot cost
+        // basis unrealised PnL already computes for exactly this reason
+        // (see matchLotsFIFO/updateTradePriceData) so "Ent Tot" for an open
+        // trade reflects the cost of the position still open, not lifetime
+        // buy volume.
+        let openEntryTotal = null;
+        if (meta.status === 'OPEN' && (meta.side === 'LONG' || meta.side === 'SHORT')) {
+          const tickMultiplier = getTickMultiplier(trade);
+          const { openLots } = matchLotsFIFO({ ...trade, side: meta.side, actions }, tickMultiplier);
+          openEntryTotal = openLots.reduce((sum, lot) => sum + lot.price * lot.quantity, 0);
+        }
+
         return {
           ...trade, actions, ...meta,
           quantity: meta.status === 'OPEN' ? null : meta.side === 'LONG' ? meta.sellSum / meta.avgSell : meta.buySum / meta.avgBuy,
           position: meta.status === 'OPEN' ? Math.abs(meta.buyQty - meta.sellQty) : null,
           entry: meta.side === 'LONG' ? meta.avgBuy : meta.avgSell,
           exit: meta.status === 'OPEN' ? null : meta.side === 'LONG' ? meta.avgSell : meta.avgBuy,
-          entryTotal: meta.side === 'LONG' ? meta.buySum : meta.sellSum,
+          entryTotal: meta.status === 'OPEN' ? openEntryTotal : (meta.side === 'LONG' ? meta.buySum : meta.sellSum),
           exitTotal: meta.status === 'OPEN' ? null : meta.side === 'LONG' ? meta.sellSum : meta.buySum,
           stop_loss: trade.stop_loss !== undefined ? trade.stop_loss : trade.stopLoss,
           firstActionDate: meta.firstActionDate.toLocal(),
