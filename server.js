@@ -87,6 +87,14 @@ async function triggerTaskProcessor() {
         taskToRun.status = taskManager.TASK_STATUS.COMPLETED;
         logger.info(`[TaskManager] Completed task: ${taskToRun.id} (${taskToRun.symbol} ${taskToRun.timeframe} ${taskToRun.phase})`);
         taskManager.recordTaskOutcome({ ...outcomeBase, status: 'completed' });
+        // Recorded for every task regardless of priority — this is what lets
+        // the cron sweep's CRON_RECHECK_THROTTLE_MINUTES skip re-queuing a
+        // coarse timeframe (4H/1D/1W) that was just checked, no matter which
+        // priority tier actually did the checking.
+        taskManager.getRecentCompletions().set(
+          `${taskToRun.symbol}-${taskToRun.timeframe}-${taskToRun.contractMonth || 'cont'}-${taskToRun.type}-any_completion`,
+          Date.now()
+        );
         if (taskToRun.priority === taskManager.PRIORITY.USER_FOREGROUND_YAHOO || taskToRun.priority === taskManager.PRIORITY.USER_FOREGROUND_IBKR) {
           taskManager.getRecentCompletions().set(`${taskToRun.symbol}-${taskToRun.timeframe}-user_initiated_fg`, Date.now());
           logger.debug(`[TaskManager] Updated foreground completion time for ${taskToRun.symbol}-${taskToRun.timeframe}.`);
@@ -398,6 +406,22 @@ function logCronOutcome(requestId, status, message) {
   cronLogger.info(`${status}: ${message} (requestId: ${requestId})`);
 }
 
+// The cron sweep below queues every enabled timeframe for every symbol every
+// single cycle, regardless of whether that timeframe could possibly have a
+// new bar since last time — a 1W bar only closes once a week, so checking it
+// every 30 minutes is ~99% wasted round-trips that only ever confirm "still
+// nothing new," while still costing a full task slot each time (DB queries,
+// an IBKR/Yahoo request, queue bookkeeping) and contributing to the queue
+// depth some other symbol's genuinely-due task is waiting behind. Only the
+// coarse timeframes need throttling — 1M/5M/15M/1H bars can each plausibly
+// have new data within a single 30-min cron window, so they're deliberately
+// left unthrottled here (absent from the map = no throttle).
+const CRON_RECHECK_THROTTLE_MINUTES = {
+  '4H': 120,  // new bar every 4h — checking every 2h is already generous
+  '1D': 240,  // new bar once a day — checking every 4h is already generous
+  '1W': 720,  // new bar once a week — checking twice a day is already generous
+};
+
 cron.schedule('*/30 * * * *', async () => {
   const cronRunId = uuidv4();
   logger.info(`[Cron:${cronRunId}] Background data fetch triggered.`);
@@ -412,6 +436,7 @@ cron.schedule('*/30 * * * *', async () => {
     }
 
     logger.info(`[Cron:${cronRunId}] Adding tasks for ${allSymbols.length} symbols.`);
+    let queuedCount = 0, throttledCount = 0;
     for (const { symbol, type, exchange, timeframe_settings } of allSymbols) {
       let contractMonthsToProcess = [null]; // Default for STK and continuous FUT
       if (type === 'FUT') {
@@ -425,14 +450,24 @@ cron.schedule('*/30 * * * *', async () => {
       const enabledTimeframes = getEnabledTimeframes(timeframe_settings);
       for (const contractMonth of contractMonthsToProcess) {
         for (const timeframe of enabledTimeframes) {
+          const throttleMinutes = CRON_RECHECK_THROTTLE_MINUTES[timeframe];
+          if (throttleMinutes) {
+            const completionKey = `${symbol}-${timeframe}-${contractMonth || 'cont'}-${type}-any_completion`;
+            const lastCompleted = taskManager.getRecentCompletions().get(completionKey);
+            if (lastCompleted && (Date.now() - lastCompleted) < throttleMinutes * 60 * 1000) {
+              throttledCount++;
+              continue; // Checked recently enough for how often this timeframe can change.
+            }
+          }
           const taskDesc = `${symbol} (${timeframe}, contract: ${contractMonth || 'cont.'}, type: ${type})`;
           // Cron tasks get a 'full' phase and lower priority
-          taskManager.addTask(symbol, timeframe, 'full', taskManager.PRIORITY.CRON_FULL_POPULATION, `cron_${taskDesc}`, contractMonth, type);
+          const added = taskManager.addTask(symbol, timeframe, 'full', taskManager.PRIORITY.CRON_FULL_POPULATION, `cron_${taskDesc}`, contractMonth, type);
+          if (added) queuedCount++;
         }
       }
     }
-    logger.info(`[Cron:${cronRunId}] All daily tasks added to queue.`);
-    logCronOutcome(cronRunId, 'tasks_queued', `Added full population tasks for ${allSymbols.length} symbols.`);
+    logger.info(`[Cron:${cronRunId}] All daily tasks added to queue (${queuedCount} queued, ${throttledCount} skipped as recently-checked coarse timeframes).`);
+    logCronOutcome(cronRunId, 'tasks_queued', `Queued ${queuedCount} tasks across ${allSymbols.length} symbols (${throttledCount} skipped, recently checked).`);
   } catch (err) {
     logger.error(`[Cron:${cronRunId}] Error during daily data fetch setup: ${err.message}`);
     logCronOutcome(cronRunId, 'error', `Error setting up tasks: ${err.message}`);
