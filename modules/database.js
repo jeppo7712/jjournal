@@ -60,7 +60,7 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
         id SERIAL PRIMARY KEY,
         name VARCHAR NOT NULL UNIQUE,
         parent_account_id INTEGER REFERENCES accounts(id),
-        default_is_virtual BOOLEAN NOT NULL DEFAULT FALSE,
+        is_virtual BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
@@ -71,13 +71,33 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     // allocated from a larger pool (e.g. a "Main Capital" account with
     // several trading accounts as children) without inventing a separate
     // hierarchy concept — it's still just accounts, one optional link.
-    // default_is_virtual: the CURRENT default for new cash_transactions on
-    // this account (paper vs real) — not a permanent label. Individual
-    // cash_transactions carry their own is_virtual, so flipping this later
-    // (a paper account graduating to live trading) only affects what NEW
-    // transactions default to, never rewrites the account's paper history.
+    // is_virtual: paper vs real, for the WHOLE account, permanently — not a
+    // per-transaction choice. A real IBKR paper-trading account is a
+    // genuinely different account from a live one (different account
+    // number entirely), so a paper journal account graduating to live
+    // trading means switching to a different (already-separate) account,
+    // not flipping a flag mid-stream on one account. Originally designed
+    // as a per-transaction override with an account-level "default" — that
+    // flexibility was never wanted and was actively causing mislabeled
+    // data (an account's own default not being set correctly meant
+    // auto-settled trades silently landed on the wrong side), so it's
+    // simplified to one account-level source of truth. See
+    // docs/CAPITAL_TRACKING_DESIGN.md.
     await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS parent_account_id INTEGER REFERENCES accounts(id)`);
     await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS default_is_virtual BOOLEAN NOT NULL DEFAULT FALSE`);
+    // Rename from the original per-transaction-default design to the
+    // simplified account-level meaning. IF NOT EXISTS-style guard: only
+    // rename if the old name is still there (idempotent across restarts).
+    await client.query(`
+      DO $$
+      BEGIN
+        IF EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='accounts' AND column_name='default_is_virtual')
+           AND NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_name='accounts' AND column_name='is_virtual')
+        THEN
+          ALTER TABLE accounts RENAME COLUMN default_is_virtual TO is_virtual;
+        END IF;
+      END $$;
+    `);
     logger.debug('accounts hierarchy/virtual columns ready');
 
     logger.debug('Creating account_filters table...');
@@ -260,7 +280,13 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
                                 -- | EXCHANGE_IN | EXCHANGE_OUT
         amount NUMERIC NOT NULL, -- signed: positive = cash in, negative = cash out
         currency VARCHAR NOT NULL DEFAULT 'USD',
-        is_virtual BOOLEAN NOT NULL DEFAULT FALSE,
+        -- No is_virtual here — paper-vs-real is an ACCOUNT-level property
+        -- (accounts.is_virtual), not per-transaction. Originally this table
+        -- had its own is_virtual with the account's as just a "default,"
+        -- which meant an account's own setting not being configured
+        -- correctly silently mislabeled every transaction created under
+        -- it. Simplified: every transaction is whatever its account is,
+        -- always, derived via JOIN rather than duplicated per row.
         linked_trade_id INTEGER REFERENCES trades(id) ON DELETE CASCADE,
         linked_holding_id INTEGER REFERENCES holdings(id) ON DELETE CASCADE,
         -- Links a TRANSFER_OUT row to its matching TRANSFER_IN row in the
@@ -283,6 +309,13 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
       );
     `);
     logger.debug('Cash_transactions table created successfully');
+
+    // Existing installs from before is_virtual was simplified to
+    // account-level still have this column — drop it, now that it's been
+    // verified redundant with (and previously drifted from) the account's
+    // own flag.
+    await client.query(`ALTER TABLE cash_transactions DROP COLUMN IF EXISTS is_virtual`);
+    logger.debug('cash_transactions.is_virtual removed (account-level now)');
 
     // Existing installs from before EXCHANGE_IN/EXCHANGE_OUT existed have the
     // narrower constraint from the original CREATE TABLE (which IF NOT
