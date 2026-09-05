@@ -398,6 +398,47 @@ async function computeTradeMeta(trade, futuresSettings) {
   };
 }
 
+// Turns raw /api/trades rows into the same computed shape (position, entry/
+// exit, entryTotal/exitTotal, etc.) refreshTrades puts into the `trades`
+// context state — factored out so anything needing another account's trades
+// processed the same way (e.g. Navigation's cross-account Total Portfolio
+// roll-up) can reuse this exactly, rather than re-deriving these numbers ad
+// hoc and risking them drifting out of sync with what Dashboard/TradeList
+// actually show. Does NOT fetch live price data — currentReturn/currentPrice
+// come back null here; see updateTradePriceData for that (separate because
+// it's async-per-symbol and the two are composed differently by different
+// callers).
+async function processRawTradesArray(tradesData, futuresSettings) {
+  if (!Array.isArray(tradesData)) return [];
+  return Promise.all(tradesData.map(async trade => {
+    const actions = Array.isArray(trade.actions) ? trade.actions.map(a => ({ ...a, dateTime: a.date_time || a.dateTime })) : [];
+    const meta = await computeTradeMeta({ ...trade, actions }, futuresSettings);
+
+    let openEntryTotal = null;
+    if (meta.status === 'OPEN' && (meta.side === 'LONG' || meta.side === 'SHORT')) {
+      const tickMultiplier = getTickMultiplier(trade);
+      const { openLots } = matchLotsFIFO({ ...trade, side: meta.side, actions }, tickMultiplier);
+      openEntryTotal = openLots.reduce((sum, lot) => sum + lot.price * lot.quantity, 0);
+    }
+
+    return {
+      ...trade, actions, ...meta,
+      quantity: meta.status === 'OPEN' ? null : meta.side === 'LONG' ? meta.sellSum / meta.avgSell : meta.buySum / meta.avgBuy,
+      position: meta.status === 'OPEN' ? Math.abs(meta.buyQty - meta.sellQty) : null,
+      entry: meta.side === 'LONG' ? meta.avgBuy : meta.avgSell,
+      exit: meta.status === 'OPEN' ? null : meta.side === 'LONG' ? meta.avgSell : meta.avgBuy,
+      entryTotal: meta.status === 'OPEN' ? openEntryTotal : (meta.side === 'LONG' ? meta.buySum : meta.sellSum),
+      exitTotal: meta.status === 'OPEN' ? null : meta.side === 'LONG' ? meta.sellSum : meta.buySum,
+      stop_loss: trade.stop_loss !== undefined ? trade.stop_loss : trade.stopLoss,
+      firstActionDate: meta.firstActionDate.toLocal(),
+      lastActionDate: meta.lastActionDate ? meta.lastActionDate.toLocal() : null,
+      currentReturn: null,
+      currentReturnPercentage: null,
+      currentPrice: null,
+    };
+  }));
+}
+
 async function fetchCurrentPrice(symbol, type) {
   try {
     const yahooSymbol = symbol + (type === 'FUT' ? '=F' : '');
@@ -678,6 +719,7 @@ export const TradeProvider = ({ children }) => {
   const [sortField, setSortField] = useState('openDate');
   const [sortDirection, setSortDirection] = useState('desc');
   const [accounts, setAccounts] = useState([]);
+  const [holdings, setHoldings] = useState([]);
   const [currentAccountId, setCurrentAccountId] = useState(localStorage.getItem('currentAccountId') || null);
   const [showTrades, setShowTrades] = useState(true);
   const [showDayNotes, setShowDayNotes] = useState(true);
@@ -1009,6 +1051,44 @@ export const TradeProvider = ({ children }) => {
 
 
 
+  // Includes each account's rolled-up cash_balances (see routes/accounts.js)
+  // — exposed so anything that changes cash (Capital.jsx's deposit/withdraw/
+  // transfer/exchange/holdings, or a trade's auto-settlement) can trigger a
+  // re-fetch instead of Navigation's Cash/Total Portfolio silently going
+  // stale until a full page reload.
+  const refreshAccounts = useCallback(async () => {
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/accounts`, {
+        headers: { 'X-Account-ID': currentAccountId || '1' },
+      });
+      const data = await res.json();
+      setAccounts(data);
+      return Array.isArray(data) ? data : [];
+    } catch (err) {
+      console.error('Failed to fetch accounts:', err);
+      return [];
+    }
+  }, [currentAccountId]);
+
+  // Every holding for the current account (all statuses) — shared here
+  // rather than fetched separately by both Capital.jsx and Navigation.jsx
+  // (which used to each pull /api/holdings independently, going stale
+  // whenever the other one changed something).
+  const refreshHoldings = useCallback(async () => {
+    if (!currentAccountId) { setHoldings([]); return []; }
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/holdings`, { headers: { 'X-Account-ID': currentAccountId } });
+      const data = res.ok ? await res.json() : [];
+      const list = Array.isArray(data) ? data : [];
+      setHoldings(list);
+      return list;
+    } catch (err) {
+      console.error('Failed to fetch holdings:', err);
+      setHoldings([]);
+      return [];
+    }
+  }, [currentAccountId]);
+
   const refreshTrades = useCallback(async () => {
     if (!currentAccountId || !futuresSettings) return;
     const requestSeq = ++refreshSeqRef.current;
@@ -1027,44 +1107,7 @@ export const TradeProvider = ({ children }) => {
       const tradesData = await tradesResponse.json();
       const dayNotesData = await dayNotesResponse.json();
 
-      const processedTrades = Array.isArray(tradesData) ? await Promise.all(tradesData.map(async trade => {
-        const actions = Array.isArray(trade.actions) ? trade.actions.map(a => ({ ...a, dateTime: a.date_time || a.dateTime })) : [];
-        const meta = await computeTradeMeta({ ...trade, actions }, futuresSettings);
-
-        // meta.buySum/sellSum accumulate price*quantity across EVERY fill on
-        // that side ever recorded on this trade — correct as "entry total"
-        // for a CLOSED trade (the round trip is the whole history, no
-        // ambiguity), but for a still-OPEN trade it means every additional
-        // buy (even one that nets against an equal sell elsewhere, leaving
-        // position size unchanged) makes "Ent Tot" climb forever, decoupled
-        // from what's actually still held. Reuse the same FIFO open-lot cost
-        // basis unrealised PnL already computes for exactly this reason
-        // (see matchLotsFIFO/updateTradePriceData) so "Ent Tot" for an open
-        // trade reflects the cost of the position still open, not lifetime
-        // buy volume.
-        let openEntryTotal = null;
-        if (meta.status === 'OPEN' && (meta.side === 'LONG' || meta.side === 'SHORT')) {
-          const tickMultiplier = getTickMultiplier(trade);
-          const { openLots } = matchLotsFIFO({ ...trade, side: meta.side, actions }, tickMultiplier);
-          openEntryTotal = openLots.reduce((sum, lot) => sum + lot.price * lot.quantity, 0);
-        }
-
-        return {
-          ...trade, actions, ...meta,
-          quantity: meta.status === 'OPEN' ? null : meta.side === 'LONG' ? meta.sellSum / meta.avgSell : meta.buySum / meta.avgBuy,
-          position: meta.status === 'OPEN' ? Math.abs(meta.buyQty - meta.sellQty) : null,
-          entry: meta.side === 'LONG' ? meta.avgBuy : meta.avgSell,
-          exit: meta.status === 'OPEN' ? null : meta.side === 'LONG' ? meta.avgSell : meta.avgBuy,
-          entryTotal: meta.status === 'OPEN' ? openEntryTotal : (meta.side === 'LONG' ? meta.buySum : meta.sellSum),
-          exitTotal: meta.status === 'OPEN' ? null : meta.side === 'LONG' ? meta.sellSum : meta.buySum,
-          stop_loss: trade.stop_loss !== undefined ? trade.stop_loss : trade.stopLoss,
-          firstActionDate: meta.firstActionDate.toLocal(),
-          lastActionDate: meta.lastActionDate ? meta.lastActionDate.toLocal() : null,
-          currentReturn: null,
-          currentReturnPercentage: null,
-          currentPrice: null,
-        };
-      })) : [];
+      const processedTrades = await processRawTradesArray(tradesData, futuresSettings);
 
       const finalDayNotes = Array.isArray(dayNotesData) ? dayNotesData.map(note => ({
         ...note,
@@ -1080,6 +1123,12 @@ export const TradeProvider = ({ children }) => {
       setTrades(processedTrades);
       setDayNotes(finalDayNotes);
       setIsFetching(false); // UI is now responsive
+
+      // A saved/edited/deleted trade auto-settles cash server-side (see
+      // routes/trades.js), so whenever trades refresh, cash balances may
+      // have changed too — re-fetch accounts so Navigation's Cash/Total
+      // Portfolio don't go stale until a page reload.
+      refreshAccounts();
 
       loadAttachmentsInBackground(processedTrades, finalDayNotes);
         
@@ -1109,7 +1158,35 @@ export const TradeProvider = ({ children }) => {
         setIsFetching(false);
       }
     }
-  }, [currentAccountId, futuresSettings, updateTradePriceData, loadAttachmentsInBackground]);
+  }, [currentAccountId, futuresSettings, updateTradePriceData, loadAttachmentsInBackground, refreshAccounts]);
+
+  // For a specific OTHER account's trades, fully processed (including live
+  // price data) the same way `trades` is for the currently selected account
+  // — but returned directly rather than written into `trades` state, since
+  // the caller isn't switching accounts. Built for Navigation's Total
+  // Portfolio, which rolls up STK market value / FUT unrealized P&L across
+  // an account and its descendants (see docs/CAPITAL_TRACKING_DESIGN.md) —
+  // reuses the exact same pipeline refreshTrades uses so these numbers can't
+  // drift from what Dashboard/TradeList show for that account.
+  const fetchProcessedTradesForAccount = useCallback(async (accountId) => {
+    if (!accountId || !futuresSettings) return [];
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/trades`, { headers: { 'X-Account-ID': accountId } });
+      if (!res.ok) return [];
+      const tradesData = await res.json();
+      const processedTrades = await processRawTradesArray(tradesData, futuresSettings);
+
+      const openTrades = processedTrades.filter(t => t.status === 'OPEN' && ['STK', 'FUT'].includes(t.type) && t.symbol);
+      if (openTrades.length === 0) return processedTrades;
+
+      const priceDataResults = await Promise.all(openTrades.map(trade => updateTradePriceData(trade, futuresSettings)));
+      const priceDataById = new Map(openTrades.map((t, i) => [t.id, priceDataResults[i]]));
+      return processedTrades.map(t => priceDataById.has(t.id) && priceDataById.get(t.id) ? { ...t, ...priceDataById.get(t.id) } : t);
+    } catch (err) {
+      console.error(`Failed to fetch processed trades for account ${accountId}:`, err);
+      return [];
+    }
+  }, [futuresSettings, updateTradePriceData]);
 
   const refreshFuturesSettings = useCallback(async () => {
     try {
@@ -1123,22 +1200,17 @@ export const TradeProvider = ({ children }) => {
   }, []);
 
   useEffect(() => {
-    fetch(`${process.env.REACT_APP_API_URL}/api/accounts`, {
-        headers: { 'X-Account-ID': currentAccountId || '1' },
-    })
-      .then(res => res.json())
-      .then(data => {
-        setAccounts(data);
-        if (!currentAccountId && data.length > 0) {
-          const newAccountId = data[0].id;
-          setCurrentAccountId(newAccountId);
-          localStorage.setItem('currentAccountId', newAccountId);
-        }
-      })
-      .catch(err => console.error('Failed to fetch accounts:', err));
-
+    refreshAccounts().then(data => {
+      if (!currentAccountId && data.length > 0) {
+        const newAccountId = data[0].id;
+        setCurrentAccountId(newAccountId);
+        localStorage.setItem('currentAccountId', newAccountId);
+      }
+    });
     refreshFuturesSettings();
-  }, [currentAccountId, refreshFuturesSettings]);
+  }, [currentAccountId, refreshFuturesSettings, refreshAccounts]);
+
+  useEffect(() => { refreshHoldings(); }, [refreshHoldings]);
 
   useEffect(() => {
     if (currentAccountId && futuresSettings.length > 0) {
@@ -1237,6 +1309,7 @@ export const TradeProvider = ({ children }) => {
         stats,
         toggleFilter,
         refreshTrades,
+        fetchProcessedTradesForAccount,
         setSort,
         sortField,
         sortDirection,
@@ -1250,6 +1323,9 @@ export const TradeProvider = ({ children }) => {
         setCustomEndDate,
         accounts,
         setAccounts,
+        refreshAccounts,
+        holdings,
+        refreshHoldings,
         currentAccountId,
         setCurrentAccountId,
         showTrades,
@@ -1272,8 +1348,8 @@ export const TradeProvider = ({ children }) => {
         hiddenColumns,
         toggleColumnVisibility,
   }), [
-        trades, dayNotes, filteredItems, stats, toggleFilter, refreshTrades, setSort, sortField, sortDirection,
-        timeFilter, filter, customStartDate, customEndDate, accounts, currentAccountId, showTrades, showDayNotes,
+        trades, dayNotes, filteredItems, stats, toggleFilter, refreshTrades, fetchProcessedTradesForAccount, setSort, sortField, sortDirection,
+        timeFilter, filter, customStartDate, customEndDate, accounts, refreshAccounts, holdings, refreshHoldings, currentAccountId, showTrades, showDayNotes,
         toggleShowTrades, toggleShowDayNotes, futuresSettings, refreshFuturesSettings, getAllTradeData,
         symbolFilter, restrictToActionsInRange, isFetching, tradesPerPage, currentPage, hiddenColumns, toggleColumnVisibility
   ]);

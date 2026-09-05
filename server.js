@@ -20,6 +20,7 @@ const taskManager = require('./modules/task-manager.js');
 const configManager = require('./modules/config.js');
 const historicalDataService = require('./modules/historical-data-service.js');
 const yahoo = require('./modules/yahoo.js');
+const { processHoldingsAccrual } = require('./modules/holdingsAccrual.js');
 
 const { getEnabledTimeframes } = historicalDataService;
 
@@ -160,7 +161,7 @@ async function startServer(newPort) {
     const accountsRouter = require('./routes/accounts.js')(db.getPool(), broadcastStatus, uuidv4);
     const settingsRouter = require('./routes/settings.js')(db.getPool(), broadcastStatus, uuidv4);
     const historicalRouter = require('./routes/historical.js')(db, taskManager, historicalDataService, broadcastStatus, uuidv4, triggerTaskProcessor);
-    const ibkrRouter = require('./routes/ibkr.js')(ibkr, broadcastStatus, uuidv4);
+    const ibkrRouter = require('./routes/ibkr.js')(ibkr, broadcastStatus, uuidv4, db.getPool());
     const capitalRouter = require('./routes/capital.js')(db.getPool(), broadcastStatus, uuidv4);
 
     apiRouter.use('/', tradesRouter);
@@ -287,9 +288,15 @@ apiRouter.get('/config/status', async (req, res) => {
       ibkrAddresses: config.ibkrAddresses || [{ host: '', port: 7497 }, { host: '', port: 7497 }],
       ibkrConnected: ibkr.isIbkrConnected(),
       status: db.getIsConnected() ? 'Connected' : config.databaseUrl ? 'Connection failed' : 'Not configured',
-      ibkrFlexQueryIdActivity: config.ibkrFlexQueryIdActivity || '',
-      ibkrFlexQueryIdTradeConf: config.ibkrFlexQueryIdTradeConf || '',
-      ibkrFlexTokenSet: !!config.ibkrFlexToken
+      // Paper and real accounts use separate Flex credentials — see
+      // modules/config.js. Token values themselves are never sent to the
+      // client, only whether one is set.
+      ibkrFlexQueryIdActivityReal: config.ibkrFlexQueryIdActivityReal || '',
+      ibkrFlexQueryIdTradeConfReal: config.ibkrFlexQueryIdTradeConfReal || '',
+      ibkrFlexTokenRealSet: !!config.ibkrFlexTokenReal,
+      ibkrFlexQueryIdActivityPaper: config.ibkrFlexQueryIdActivityPaper || '',
+      ibkrFlexQueryIdTradeConfPaper: config.ibkrFlexQueryIdTradeConfPaper || '',
+      ibkrFlexTokenPaperSet: !!config.ibkrFlexTokenPaper
     });
   } catch (err) {
     broadcastStatus(uuidv4(), `Error fetching config status: ${err.message}`, 'error');
@@ -333,7 +340,12 @@ apiRouter.get('/config/logs', async (req, res) => {
 });
 
 apiRouter.post('/config', async (req, res) => {
-  const { databaseUrl, port, ibkrAddresses, ibkrFlexToken, ibkrFlexQueryIdActivity, ibkrFlexQueryIdTradeConf, tradingViewWebhookSecret } = req.body;
+  const {
+    databaseUrl, port, ibkrAddresses,
+    ibkrFlexTokenReal, ibkrFlexQueryIdActivityReal, ibkrFlexQueryIdTradeConfReal,
+    ibkrFlexTokenPaper, ibkrFlexQueryIdActivityPaper, ibkrFlexQueryIdTradeConfPaper,
+    tradingViewWebhookSecret,
+  } = req.body;
 
   try {
     const config = await configManager.loadConfig();
@@ -365,9 +377,12 @@ apiRouter.post('/config', async (req, res) => {
 
     // Other settings that don't require a restart
     if (ibkrAddresses) config.ibkrAddresses = ibkrAddresses;
-    if (ibkrFlexToken !== undefined) config.ibkrFlexToken = ibkrFlexToken;
-    if (ibkrFlexQueryIdActivity !== undefined) config.ibkrFlexQueryIdActivity = ibkrFlexQueryIdActivity;
-    if (ibkrFlexQueryIdTradeConf !== undefined) config.ibkrFlexQueryIdTradeConf = ibkrFlexQueryIdTradeConf;
+    if (ibkrFlexTokenReal !== undefined) config.ibkrFlexTokenReal = ibkrFlexTokenReal;
+    if (ibkrFlexQueryIdActivityReal !== undefined) config.ibkrFlexQueryIdActivityReal = ibkrFlexQueryIdActivityReal;
+    if (ibkrFlexQueryIdTradeConfReal !== undefined) config.ibkrFlexQueryIdTradeConfReal = ibkrFlexQueryIdTradeConfReal;
+    if (ibkrFlexTokenPaper !== undefined) config.ibkrFlexTokenPaper = ibkrFlexTokenPaper;
+    if (ibkrFlexQueryIdActivityPaper !== undefined) config.ibkrFlexQueryIdActivityPaper = ibkrFlexQueryIdActivityPaper;
+    if (ibkrFlexQueryIdTradeConfPaper !== undefined) config.ibkrFlexQueryIdTradeConfPaper = ibkrFlexQueryIdTradeConfPaper;
     // No restart needed — the webhook route reads this fresh via
     // configManager.loadConfig() on every request, not a cached value.
     if (tradingViewWebhookSecret !== undefined) config.tradingViewWebhookSecret = tradingViewWebhookSecret;
@@ -478,6 +493,27 @@ cron.schedule('*/30 * * * *', async () => {
 });
 
 logger.info('[YahooCron] Scheduled background data fetch for stocks and futures every 30 minutes');
+
+// Auto-posts BOND coupon payments as they come due and auto-redeems any
+// holding (T-bill, bond, or other) past its maturity_date at face value —
+// see modules/holdingsAccrual.js. Runs every 6 hours: maturity/coupon dates
+// are day-granularity, not minute-granularity, so this doesn't need the same
+// 30-min cadence as the price-data cron above; running a few times a day is
+// just resilience against the process being down at any single check.
+cron.schedule('0 */6 * * *', async () => {
+  const cronRunId = uuidv4();
+  logger.info(`[Cron:${cronRunId}] Holdings coupon/maturity check triggered.`);
+  try {
+    const { couponsPosted, maturedCount } = await processHoldingsAccrual(db.getPool(), broadcastStatus, uuidv4);
+    logger.info(`[Cron:${cronRunId}] Holdings check complete: ${couponsPosted} coupon(s) posted, ${maturedCount} holding(s) matured.`);
+    logCronOutcome(cronRunId, 'completed', `${couponsPosted} coupon(s) posted, ${maturedCount} matured.`);
+  } catch (err) {
+    logger.error(`[Cron:${cronRunId}] Error during holdings accrual check: ${err.message}`);
+    logCronOutcome(cronRunId, 'error', err.message);
+  }
+});
+
+logger.info('[HoldingsCron] Scheduled coupon/maturity check every 6 hours');
 
 // Serve static files and handle frontend routes in production
 if (process.env.NODE_ENV === 'production') {

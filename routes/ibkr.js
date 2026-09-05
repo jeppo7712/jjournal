@@ -7,7 +7,7 @@ const { logger } = require('../modules/logger.js');
 const { fetchFlexExecutions } = require('./ibkrFlex.js');
 const { loadConfig } = require('../modules/config.js');
 
-module.exports = (ibkr, broadcastStatus, uuidv4) => {
+module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
 
   // ─── SHARED HELPERS ──────────────────────────────────────────────────────────
 
@@ -431,12 +431,33 @@ module.exports = (ibkr, broadcastStatus, uuidv4) => {
     if (!['STK', 'FUT'].includes(effectiveType))
       return res.status(400).json({ error: 'Invalid type. Must be STK or FUT.' });
 
+    // Paper and real IBKR accounts have their own Flex Query (different
+    // account, different Web Service credentials), so which set to use
+    // depends on which journal account this request is for — req.accountId
+    // comes from the X-Account-ID header (optional for /ibkr routes in
+    // general, but required here since there's no other way to pick).
+    if (!req.accountId) {
+      return res.status(400).json({ error: 'No account selected — select an account first so the correct Flex Query (paper vs. real) can be used.' });
+    }
+    let account;
+    try {
+      const { rows } = await pool.query('SELECT is_virtual FROM accounts WHERE id = $1', [req.accountId]);
+      if (rows.length === 0) return res.status(404).json({ error: 'Account not found' });
+      account = rows[0];
+    } catch (err) {
+      logger.error(`[/trade-groups-flex] account lookup failed: ${err.message}`);
+      return res.status(500).json({ error: 'Failed to look up account' });
+    }
+
     const config = await loadConfig();
-    const flexToken = config.ibkrFlexToken;
-    const flexQueryIds = [config.ibkrFlexQueryIdActivity, config.ibkrFlexQueryIdTradeConf].filter(Boolean);
+    const suffix = account.is_virtual ? 'Paper' : 'Real';
+    const flexToken = config[`ibkrFlexToken${suffix}`];
+    const flexQueryIdActivity = config[`ibkrFlexQueryIdActivity${suffix}`];
+    const flexQueryIdTradeConf = config[`ibkrFlexQueryIdTradeConf${suffix}`];
+    const flexQueryIds = [flexQueryIdActivity, flexQueryIdTradeConf].filter(Boolean);
     if (!flexToken || flexQueryIds.length === 0) {
       return res.status(500).json({
-        error: 'Flex Web Service is not configured. Set your Flex token and at least one Query ID in Settings → TWS.',
+        error: `Flex Web Service is not configured for ${account.is_virtual ? 'paper' : 'real'} accounts. Set the ${account.is_virtual ? 'paper' : 'real'} Flex token and at least one Query ID in Settings → TWS.`,
       });
     }
 
@@ -447,7 +468,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4) => {
         fetchFlexExecutions(flexToken, flexQueryIds, symbol, effectiveType, { forceRefresh: refresh === 'true' }),
         timeout(90000, `Flex fetch for ${symbol} timed out`),
       ]);
-      logger.debug(`[/trade-groups-flex] ${executions.length} flex executions for ${symbol} (fromCache=${fromCache})`);
+      logger.debug(`[/trade-groups-flex] ${executions.length} flex executions for ${symbol} (fromCache=${fromCache}, ${suffix.toLowerCase()} account)`);
 
       // Flex trade confirmations carry no bracket order linkage, so this
       // always falls through to the position-based grouping fallback below.
@@ -458,8 +479,8 @@ module.exports = (ibkr, broadcastStatus, uuidv4) => {
       // Label which query type failed, if any, so the UI can say something
       // more useful than just "0 trades found".
       const queryLabels = {
-        [config.ibkrFlexQueryIdActivity]: 'Activity (historical)',
-        [config.ibkrFlexQueryIdTradeConf]: 'Trade Confirmation (today)',
+        [flexQueryIdActivity]: 'Activity (historical)',
+        [flexQueryIdTradeConf]: 'Trade Confirmation (today)',
       };
       const warning = (failedQueryIds && failedQueryIds.length > 0)
         ? `Could not reach the ${failedQueryIds.map(id => queryLabels[id] || id).join(' and ')} Flex quer${failedQueryIds.length !== 1 ? 'ies' : 'y'} — results below may be incomplete. Try again in a minute.`
