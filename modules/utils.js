@@ -286,7 +286,7 @@ async function validateContract(contract, taskId, cancellationSignal = null, bro
 // contract-chain generation for no benefit.
 const CONTRACT_CHAIN_MAX_LOOKBACK_YEARS = 30;
 
-async function generateContractChain(symbol, exchange, requiredStartDate, taskId, broadcastStatus, cancellationSignal, rolloverMonths) {
+async function generateContractChain(symbol, exchange, requiredStartDate, taskId, broadcastStatus, cancellationSignal, rolloverMonths, currency = 'USD') {
     const searchFloor = DateTime.max(requiredStartDate, DateTime.now().minus({ years: CONTRACT_CHAIN_MAX_LOOKBACK_YEARS }));
     logger.debug(`[populate][${taskId}] Starting contract chain generation for ${symbol} from ${searchFloor.toISODate()} with rollover months: [${rolloverMonths.join(', ')}]`);
 
@@ -317,7 +317,7 @@ async function generateContractChain(symbol, exchange, requiredStartDate, taskId
                     secType: 'FUT',
                     exchange: exchange.toUpperCase(),
                     lastTradeDateOrContractMonth: contractMonthStr,
-                    currency: 'USD',
+                    currency,
                     includeExpired: true
                 }, taskId, cancellationSignal, broadcastStatus));
             }
@@ -335,7 +335,7 @@ async function generateContractChain(symbol, exchange, requiredStartDate, taskId
                     secType: 'FUT',
                     exchange: exchange.toUpperCase(),
                     lastTradeDateOrContractMonth: contractMonthStr,
-                    currency: 'USD',
+                    currency,
                 }, taskId, cancellationSignal, broadcastStatus));
             }
             forwardDate = forwardDate.plus({ months: 1 });

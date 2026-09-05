@@ -322,8 +322,11 @@ export default function Settings() {
   const [apiBaseUrl, setApiBaseUrl] = useState(process.env.REACT_APP_API_URL);
   const [showFuturesModal, setShowFuturesModal] = useState(false);
   const [showExchangeModal, setShowExchangeModal] = useState(false);
+  const [showAccountModal, setShowAccountModal] = useState(false);
   const [editingSetting, setEditingSetting] = useState(null);
   const [editingExchange, setEditingExchange] = useState(null);
+  const [editingAccountId, setEditingAccountId] = useState(null);
+  const [accountForm, setAccountForm] = useState({ name: '', parent_account_id: '', default_is_virtual: false });
   const [form, setForm] = useState({
     symbol: '',
     type: 'FUT',
@@ -331,6 +334,7 @@ export default function Settings() {
     tickValue: '',
     fee: '',
     exchange: '',
+    currency: 'USD',
     rolloverMonths: '',
     initialMargin: '',
     timeframeSettings: DEFAULT_TIMEFRAME_SETTINGS,
@@ -548,66 +552,56 @@ export default function Settings() {
     }
   };
 
-  const handleAddAccount = async () => {
-    const name = prompt('Enter account name:');
-    if (name) {
-      try {
-        // Step 1: POST to create the new account
-        const createRes = await fetch(`${apiBaseUrl}/api/accounts`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
-          body: JSON.stringify({ name }),
-        });
-        if (!createRes.ok) {
-          const error = await createRes.json();
-          throw new Error(error.error || 'Failed to create account');
-        }
-
-        // Step 2: GET the refreshed list of all accounts
-        const refreshRes = await fetch(`${apiBaseUrl}/api/accounts`, {
-          headers: { 'X-Account-ID': currentAccountId },
-        });
-        if (!refreshRes.ok) {
-          throw new Error('Failed to refresh accounts list after adding.');
-        }
-        const refreshedAccounts = await refreshRes.json();
-        setAccounts(refreshedAccounts);
-
-      } catch (err) {
-        alert('Error creating account: ' + err.message);
-      }
-    }
+  const refreshAccountsList = async () => {
+    const refreshRes = await fetch(`${apiBaseUrl}/api/accounts`, {
+      headers: { 'X-Account-ID': currentAccountId },
+    });
+    if (!refreshRes.ok) throw new Error('Failed to refresh accounts list.');
+    setAccounts(await refreshRes.json());
   };
 
-  const handleEditAccount = async (id) => {
-    const account = accounts.find(acc => acc.id === id);
-    const newName = prompt('Enter new account name:', account.name);
-    if (newName && newName !== account.name) {
-      try {
-        // Step 1: PUT to update the account
-        const updateRes = await fetch(`${apiBaseUrl}/api/accounts/${id}`, {
-          method: 'PUT',
-          headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
-          body: JSON.stringify({ name: newName }),
-        });
-        if (!updateRes.ok) {
-          const error = await updateRes.json();
-          throw new Error(error.error || 'Failed to update account');
-        }
+  // parent_account_id lets an account's capital be represented as allocated
+  // from a larger pool (e.g. a "Main Capital" account with several trading
+  // accounts as children) instead of every account being an isolated
+  // island — see docs/CAPITAL_TRACKING_DESIGN.md. default_is_virtual is the
+  // CURRENT default for new cash transactions on this account (paper vs
+  // real), not a permanent label — flipping it later (a paper account
+  // graduating to live trading) never rewrites its paper history.
+  const openAccountModal = (account = null) => {
+    setEditingAccountId(account ? account.id : null);
+    setAccountForm({
+      name: account ? account.name : '',
+      parent_account_id: account && account.parent_account_id ? String(account.parent_account_id) : '',
+      default_is_virtual: account ? !!account.default_is_virtual : false,
+    });
+    setShowAccountModal(true);
+  };
 
-        // Step 2: GET the refreshed list
-        const refreshRes = await fetch(`${apiBaseUrl}/api/accounts`, {
-          headers: { 'X-Account-ID': currentAccountId },
-        });
-        if (!refreshRes.ok) {
-          throw new Error('Failed to refresh accounts list after editing.');
-        }
-        const refreshedAccounts = await refreshRes.json();
-        setAccounts(refreshedAccounts);
-
-      } catch (err) {
-        alert('Error updating account: ' + err.message);
+  const saveAccountForm = async () => {
+    if (!accountForm.name.trim()) {
+      alert('Account name is required.');
+      return;
+    }
+    try {
+      const method = editingAccountId ? 'PUT' : 'POST';
+      const url = editingAccountId ? `${apiBaseUrl}/api/accounts/${editingAccountId}` : `${apiBaseUrl}/api/accounts`;
+      const res = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
+        body: JSON.stringify({
+          name: accountForm.name.trim(),
+          parent_account_id: accountForm.parent_account_id || null,
+          default_is_virtual: accountForm.default_is_virtual,
+        }),
+      });
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || 'Failed to save account');
       }
+      await refreshAccountsList();
+      setShowAccountModal(false);
+    } catch (err) {
+      alert('Error saving account: ' + err.message);
     }
   };
 
@@ -654,6 +648,7 @@ export default function Settings() {
       tickValue: setting && setting.tick_value != null ? setting.tick_value.toString() : '',
       fee: setting && setting.fee != null ? setting.fee.toString() : '',
       exchange: setting && setting.exchange != null ? setting.exchange : '',
+      currency: setting && setting.currency ? setting.currency : 'USD',
       rolloverMonths: setting && setting.rollover_months ? setting.rollover_months.join(',') : '',
       initialMargin: setting && setting.initial_margin != null ? setting.initial_margin.toString() : '',
       timeframeSettings: setting && setting.timeframe_settings ? setting.timeframe_settings : DEFAULT_TIMEFRAME_SETTINGS,
@@ -695,7 +690,7 @@ export default function Settings() {
 
   const handleFuturesFormChange = (e) => {
     const { name, value } = e.target;
-    if (name === 'symbol') {
+    if (name === 'symbol' || name === 'currency') {
       setForm(prev => ({ ...prev, [name]: value.toUpperCase() }));
     } else if (['tickSize', 'tickValue', 'fee', 'initialMargin'].includes(name)) {
       if (value === '' || /^\d*\.?\d*$/.test(value)) {
@@ -829,7 +824,7 @@ export default function Settings() {
   }, [isDragging]);
 
   const saveFuturesSetting = async () => {
-    const { symbol, type, tickSize, tickValue, fee, exchange, rolloverMonths, initialMargin, timeframeSettings } = form;
+    const { symbol, type, tickSize, tickValue, fee, exchange, currency, rolloverMonths, initialMargin, timeframeSettings } = form;
 
     if (!symbol || !type || !fee) {
       alert('Symbol, type, and fee are required.');
@@ -880,6 +875,7 @@ export default function Settings() {
         tick_value: type === 'STK' ? 0.01 : parseFloat(tickValue),
         fee: parseFloat(fee),
         exchange: exchange || null,
+        currency: currency || 'USD',
         rollover_months: rolloverMonthsArray,
         initial_margin: type === 'FUT' ? parseFloat(initialMargin) : null,
         timeframe_settings: normalizedTimeframeSettings,
@@ -907,6 +903,7 @@ export default function Settings() {
         tickValue: '',
         fee: '',
         exchange: '',
+        currency: 'USD',
         rolloverMonths: '',
         initialMargin: '',
         timeframeSettings: DEFAULT_TIMEFRAME_SETTINGS,
@@ -1630,7 +1627,7 @@ export default function Settings() {
         {activeTab === 'accounts' && dbStatus?.isConnected && (
           <div className={styles.accountsTab}>
             <div style={{marginBottom: '16px', display: 'flex', justifyContent: 'flex-start'}}>
-              <BubbleButton onClick={handleAddAccount}>Add New Account</BubbleButton>
+              <BubbleButton onClick={() => openAccountModal(null)}>Add New Account</BubbleButton>
             </div>
             <h3>Accounts</h3>
             <div style={{overflowX: 'auto'}}>
@@ -1638,6 +1635,8 @@ export default function Settings() {
                 <thead>
                   <tr style={{background: '#353943'}}>
                     <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Name</th>
+                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Parent</th>
+                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Mode</th>
                     <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Status</th>
                     <th style={{padding: '12px', textAlign: 'center', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Actions</th>
                   </tr>
@@ -1646,20 +1645,87 @@ export default function Settings() {
                   {[...accounts].sort((a, b) => a.name.localeCompare(b.name)).map((acc, index) => (
                     <tr key={acc.id} style={{background: index % 2 === 0 ? '#232837' : '#2a2f3a', borderBottom: '1px solid #32384a'}}>
                       <td style={{padding: '12px', color: '#00ebff', fontWeight: '500'}}>{acc.name}</td>
+                      <td style={{padding: '12px', color: '#e0e2e6'}}>
+                        {acc.parent_account_id ? (accounts.find(a => a.id === acc.parent_account_id)?.name || '—') : '—'}
+                      </td>
+                      <td style={{padding: '12px', color: acc.default_is_virtual ? '#F59E0B' : '#22C55E'}}>
+                        {acc.default_is_virtual ? 'Paper' : 'Real'}
+                      </td>
                       <td style={{padding: '12px', color: '#e0e2e6'}}>{acc.id === parseInt(currentAccountId) ? 'Current' : ''}</td>
                       <td style={{padding: '12px', textAlign: 'center'}}>
-                        <button className={styles.actionBtn} onClick={() => handleEditAccount(acc.id)} style={{marginRight: '8px'}}>Edit</button>
+                        <button className={styles.actionBtn} onClick={() => openAccountModal(acc)} style={{marginRight: '8px'}}>Edit</button>
                         <button className={styles.actionBtn} onClick={() => handleDeleteAccount(acc.id)}>Delete</button>
                       </td>
                     </tr>
                   ))}
                   {accounts.length === 0 && (
                     <tr>
-                      <td colSpan="3" style={{padding: '12px', textAlign: 'center', color: '#e0e2e6'}}>No accounts configured</td>
+                      <td colSpan="5" style={{padding: '12px', textAlign: 'center', color: '#e0e2e6'}}>No accounts configured</td>
                     </tr>
                   )}
                 </tbody>
               </table>
+            </div>
+          </div>
+        )}
+        {showAccountModal && (
+          <div
+            style={{
+              position: 'fixed',
+              inset: 0,
+              background: 'rgba(0,0,0,0.5)',
+              zIndex: 2000,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center'
+            }}
+          >
+            <div className={styles.modal}>
+              <div className={styles.header}>
+                <span className={styles.title}>{editingAccountId ? 'Edit Account' : 'Add Account'}</span>
+                <button className={styles.closeBtn} onClick={() => setShowAccountModal(false)}>×</button>
+              </div>
+              <div className={styles.formGrid}>
+                <div className={styles.formField}>
+                  <label htmlFor="accountName">Name</label>
+                  <input
+                    id="accountName"
+                    value={accountForm.name}
+                    onChange={e => setAccountForm(prev => ({ ...prev, name: e.target.value }))}
+                    className={styles.inputBubble}
+                    autoComplete="off"
+                  />
+                </div>
+                <div className={styles.formField}>
+                  <label htmlFor="accountParent">Parent account</label>
+                  <select
+                    id="accountParent"
+                    value={accountForm.parent_account_id}
+                    onChange={e => setAccountForm(prev => ({ ...prev, parent_account_id: e.target.value }))}
+                    className={styles.inputBubble}
+                  >
+                    <option value="">None (top-level)</option>
+                    {accounts.filter(a => a.id !== editingAccountId).map(a => (
+                      <option key={a.id} value={a.id}>{a.name}</option>
+                    ))}
+                  </select>
+                </div>
+                <div className={styles.formField}>
+                  <label htmlFor="accountVirtual" title="The current default for new cash transactions on this account — flip it when a paper account starts trading real money. Past transactions keep whatever they were recorded as.">
+                    <input
+                      id="accountVirtual"
+                      type="checkbox"
+                      checked={accountForm.default_is_virtual}
+                      onChange={e => setAccountForm(prev => ({ ...prev, default_is_virtual: e.target.checked }))}
+                      style={{ marginRight: '8px' }}
+                    />
+                    Paper / virtual account (not real money)
+                  </label>
+                </div>
+              </div>
+              <div className={styles.footerRow}>
+                <BubbleButton onClick={saveAccountForm} color="#3B82F6">Save</BubbleButton>
+              </div>
             </div>
           </div>
         )}
@@ -2247,6 +2313,20 @@ export default function Settings() {
                     </option>
                   ))}
                 </select>
+              </div>
+              <div className={styles.formField}>
+                <label htmlFor="currency">Currency</label>
+                <input
+                  id="currency"
+                  name="currency"
+                  value={form.currency}
+                  onChange={handleFuturesFormChange}
+                  className={styles.inputBubble}
+                  autoComplete="off"
+                  maxLength={3}
+                  placeholder="USD"
+                  title="ISO currency code this symbol is priced/traded in (e.g. USD, EUR, AED) — used for cash settlement and IBKR contract lookups, not just display."
+                />
               </div>
             </div>
             <hr style={{ margin: '1.5rem 0 1rem' }} />

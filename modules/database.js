@@ -59,11 +59,26 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
       CREATE TABLE IF NOT EXISTS accounts (
         id SERIAL PRIMARY KEY,
         name VARCHAR NOT NULL UNIQUE,
+        parent_account_id INTEGER REFERENCES accounts(id),
+        default_is_virtual BOOLEAN NOT NULL DEFAULT FALSE,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
     `);
     logger.debug('Accounts table created successfully');
+
+    // parent_account_id: lets an account's capital be represented as
+    // allocated from a larger pool (e.g. a "Main Capital" account with
+    // several trading accounts as children) without inventing a separate
+    // hierarchy concept — it's still just accounts, one optional link.
+    // default_is_virtual: the CURRENT default for new cash_transactions on
+    // this account (paper vs real) — not a permanent label. Individual
+    // cash_transactions carry their own is_virtual, so flipping this later
+    // (a paper account graduating to live trading) only affects what NEW
+    // transactions default to, never rewrites the account's paper history.
+    await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS parent_account_id INTEGER REFERENCES accounts(id)`);
+    await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS default_is_virtual BOOLEAN NOT NULL DEFAULT FALSE`);
+    logger.debug('accounts hierarchy/virtual columns ready');
 
     logger.debug('Creating account_filters table...');
     await client.query(`
@@ -203,6 +218,69 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     `);
     logger.debug('Trade_attachments table created successfully');
 
+    // --- Capital tracking: holdings (T-bills/bonds/other non-trade assets)
+    // and cash_transactions (the ledger). See docs/CAPITAL_TRACKING_DESIGN.md
+    // for the full design and rationale. holdings is created first since
+    // cash_transactions references it.
+    logger.debug('Creating holdings table...');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS holdings (
+        id SERIAL PRIMARY KEY,
+        account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        type VARCHAR NOT NULL, -- TBILL | BOND | OTHER
+        name VARCHAR NOT NULL,
+        currency VARCHAR NOT NULL DEFAULT 'USD',
+        face_value NUMERIC NOT NULL,
+        purchase_price NUMERIC NOT NULL,
+        purchase_date DATE NOT NULL,
+        maturity_date DATE,
+        -- Optional detail: NULL means "just track principal in/out at
+        -- purchase/maturity," no accrual modeling. Set both to compute
+        -- accrued value between coupon dates for display.
+        coupon_rate NUMERIC,
+        coupon_frequency VARCHAR, -- e.g. 'ANNUAL', 'SEMI_ANNUAL', 'QUARTERLY'
+        status VARCHAR NOT NULL DEFAULT 'ACTIVE', -- ACTIVE | MATURED | SOLD
+        notes TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        CONSTRAINT check_holding_type CHECK (type IN ('TBILL', 'BOND', 'OTHER')),
+        CONSTRAINT check_holding_status CHECK (status IN ('ACTIVE', 'MATURED', 'SOLD'))
+      );
+    `);
+    logger.debug('Holdings table created successfully');
+
+    logger.debug('Creating cash_transactions table...');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS cash_transactions (
+        id SERIAL PRIMARY KEY,
+        account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        date_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        type VARCHAR NOT NULL, -- DEPOSIT | WITHDRAWAL | TRANSFER_IN | TRANSFER_OUT
+                                -- | TRADE_SETTLEMENT | INTEREST | OTHER
+        amount NUMERIC NOT NULL, -- signed: positive = cash in, negative = cash out
+        currency VARCHAR NOT NULL DEFAULT 'USD',
+        is_virtual BOOLEAN NOT NULL DEFAULT FALSE,
+        linked_trade_id INTEGER REFERENCES trades(id) ON DELETE CASCADE,
+        linked_holding_id INTEGER REFERENCES holdings(id) ON DELETE CASCADE,
+        -- Links a TRANSFER_OUT row to its matching TRANSFER_IN row in the
+        -- other account (and vice versa), so a transfer is always a
+        -- traceable, balanced pair rather than two independent entries.
+        transfer_pair_id INTEGER REFERENCES cash_transactions(id),
+        note TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        CONSTRAINT check_cash_transaction_type CHECK (type IN (
+          'DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT',
+          'TRADE_SETTLEMENT', 'INTEREST', 'OTHER'
+        ))
+      );
+    `);
+    logger.debug('Cash_transactions table created successfully');
+
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_cash_transactions_account ON cash_transactions (account_id, date_time)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_cash_transactions_trade ON cash_transactions (linked_trade_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_holdings_account ON holdings (account_id)`);
+    logger.debug('Capital tracking indexes ready');
+
     logger.debug('Creating futures_settings table...');
     await client.query(`
 CREATE TABLE IF NOT EXISTS futures_settings (
@@ -216,10 +294,19 @@ exchange VARCHAR,
 rollover_months integer[],
         initial_margin NUMERIC,
         maintenance_margin NUMERIC,
+        currency VARCHAR NOT NULL DEFAULT 'USD',
 UNIQUE (symbol, type)
 );
 `);
     logger.debug('Futures_settings table created successfully');
+
+    // Every price/PnL calculation in this app implicitly assumed USD (IBKR
+    // contract lookups even hardcoded currency:'USD'). Defaulting existing
+    // and new rows to USD preserves that behavior for symbols nobody
+    // touches; a non-USD symbol (e.g. a EUR- or AED-denominated listing)
+    // just needs this set explicitly once, in Settings.
+    await client.query(`ALTER TABLE futures_settings ADD COLUMN IF NOT EXISTS currency VARCHAR NOT NULL DEFAULT 'USD'`);
+    logger.debug('futures_settings.currency ready');
 
     // Set default rollover_months for existing FUT rows
     await client.query(`
