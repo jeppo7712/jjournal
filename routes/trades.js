@@ -30,9 +30,8 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
     async function settleTradeActionsToCash(client, tradeId, accountId, type, symbol, actions, tickSize, tickValue) {
         if (!actions || actions.length === 0) return;
 
-        const { rows: accRows } = await client.query('SELECT default_is_virtual FROM accounts WHERE id=$1', [accountId]);
-        const isVirtual = accRows.length > 0 ? accRows[0].default_is_virtual : false;
-
+        // Paper-vs-real is derived from the account, not stored per
+        // transaction — see docs/CAPITAL_TRACKING_DESIGN.md.
         const { rows: fsRows } = await client.query('SELECT currency FROM futures_settings WHERE symbol=$1 AND type=$2', [symbol, type]);
         const currency = fsRows.length > 0 ? fsRows[0].currency : 'USD';
 
@@ -60,9 +59,9 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
 
         const lastActionDate = sorted[sorted.length - 1].dateTime;
         await client.query(
-            `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, is_virtual, linked_trade_id, note)
-             VALUES ($1, $2, 'TRADE_SETTLEMENT', $3, $4, $5, $6, $7)`,
-            [accountId, lastActionDate, totalAmount, currency, isVirtual, tradeId, `${symbol} trade settlement`]
+            `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, linked_trade_id, note)
+             VALUES ($1, $2, 'TRADE_SETTLEMENT', $3, $4, $5, $6)`,
+            [accountId, lastActionDate, totalAmount, currency, tradeId, `${symbol} trade settlement`]
         );
     }
 

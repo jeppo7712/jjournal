@@ -326,7 +326,7 @@ export default function Settings() {
   const [editingSetting, setEditingSetting] = useState(null);
   const [editingExchange, setEditingExchange] = useState(null);
   const [editingAccountId, setEditingAccountId] = useState(null);
-  const [accountForm, setAccountForm] = useState({ name: '', parent_account_id: '', default_is_virtual: false });
+  const [accountForm, setAccountForm] = useState({ name: '', parent_account_id: '', is_virtual: false });
   const [form, setForm] = useState({
     symbol: '',
     type: 'FUT',
@@ -563,16 +563,18 @@ export default function Settings() {
   // parent_account_id lets an account's capital be represented as allocated
   // from a larger pool (e.g. a "Main Capital" account with several trading
   // accounts as children) instead of every account being an isolated
-  // island — see docs/CAPITAL_TRACKING_DESIGN.md. default_is_virtual is the
-  // CURRENT default for new cash transactions on this account (paper vs
-  // real), not a permanent label — flipping it later (a paper account
-  // graduating to live trading) never rewrites its paper history.
+  // island — see docs/CAPITAL_TRACKING_DESIGN.md. is_virtual is paper vs
+  // real for the WHOLE account, permanently — not a per-transaction
+  // choice. A real paper-trading account is a genuinely different account
+  // at the broker (different account number entirely), so "graduating" to
+  // live trading means switching to a separate real account, not flipping
+  // this flag on an existing one.
   const openAccountModal = (account = null) => {
     setEditingAccountId(account ? account.id : null);
     setAccountForm({
       name: account ? account.name : '',
       parent_account_id: account && account.parent_account_id ? String(account.parent_account_id) : '',
-      default_is_virtual: account ? !!account.default_is_virtual : false,
+      is_virtual: account ? !!account.is_virtual : false,
     });
     setShowAccountModal(true);
   };
@@ -591,7 +593,7 @@ export default function Settings() {
         body: JSON.stringify({
           name: accountForm.name.trim(),
           parent_account_id: accountForm.parent_account_id || null,
-          default_is_virtual: accountForm.default_is_virtual,
+          is_virtual: accountForm.is_virtual,
         }),
       });
       if (!res.ok) {
@@ -1648,8 +1650,8 @@ export default function Settings() {
                       <td style={{padding: '12px', color: '#e0e2e6'}}>
                         {acc.parent_account_id ? (accounts.find(a => a.id === acc.parent_account_id)?.name || '—') : '—'}
                       </td>
-                      <td style={{padding: '12px', color: acc.default_is_virtual ? '#F59E0B' : '#22C55E'}}>
-                        {acc.default_is_virtual ? 'Paper' : 'Real'}
+                      <td style={{padding: '12px', color: acc.is_virtual ? '#F59E0B' : '#22C55E'}}>
+                        {acc.is_virtual ? 'Paper' : 'Real'}
                       </td>
                       <td style={{padding: '12px', color: '#e0e2e6'}}>{acc.id === parseInt(currentAccountId) ? 'Current' : ''}</td>
                       <td style={{padding: '12px', textAlign: 'center'}}>
@@ -1711,15 +1713,15 @@ export default function Settings() {
                   </select>
                 </div>
                 <div className={styles.formField}>
-                  <label htmlFor="accountVirtual" title="The current default for new cash transactions on this account — flip it when a paper account starts trading real money. Past transactions keep whatever they were recorded as.">
+                  <label htmlFor="accountVirtual" title="Every trade and cash transaction in this account is treated as paper/simulated — not a per-transaction choice. If this account graduates to real trading, use a separate real account instead of flipping this later.">
                     <input
                       id="accountVirtual"
                       type="checkbox"
-                      checked={accountForm.default_is_virtual}
-                      onChange={e => setAccountForm(prev => ({ ...prev, default_is_virtual: e.target.checked }))}
+                      checked={accountForm.is_virtual}
+                      onChange={e => setAccountForm(prev => ({ ...prev, is_virtual: e.target.checked }))}
                       style={{ marginRight: '8px' }}
                     />
-                    Paper / virtual account (not real money)
+                    Paper / virtual account (all trades and cash here are simulated)
                   </label>
                 </div>
               </div>

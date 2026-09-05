@@ -8,6 +8,10 @@ const { logger } = require('../modules/logger.js');
 // Endpoints here are scoped to req.accountId (the X-Account-ID header, same
 // convention as routes/trades.js) EXCEPT the transfer endpoint, which
 // necessarily involves two accounts at once.
+//
+// Paper-vs-real (is_virtual) lives entirely on accounts, not on individual
+// cash_transactions/holdings — every transaction under an account is
+// whatever that account is, permanently, not a per-transaction choice.
 module.exports = (pool, broadcastStatus, uuidv4) => {
 
     // --- Cash transactions ---
@@ -30,7 +34,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
     // Not for transfers (see /cash-transactions/transfer) or trade
     // settlements (created automatically by routes/trades.js).
     router.post('/cash-transactions', async (req, res) => {
-        const { type, amount, currency, date_time, is_virtual, note } = req.body;
+        const { type, amount, currency, date_time, note } = req.body;
         const allowedTypes = ['DEPOSIT', 'WITHDRAWAL', 'INTEREST', 'OTHER'];
         if (!allowedTypes.includes(type)) {
             return res.status(400).json({ error: `type must be one of: ${allowedTypes.join(', ')}` });
@@ -44,9 +48,9 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         const signedAmount = (type === 'WITHDRAWAL') ? -Math.abs(amount) : Math.abs(amount);
         try {
             const { rows } = await pool.query(
-                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, is_virtual, note)
-                 VALUES ($1, $2, $3, $4, $5, $6, $7) RETURNING id`,
-                [req.accountId, date_time || new Date().toISOString(), type, signedAmount, currency || 'USD', !!is_virtual, note || null]
+                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, note)
+                 VALUES ($1, $2, $3, $4, $5, $6) RETURNING id`,
+                [req.accountId, date_time || new Date().toISOString(), type, signedAmount, currency || 'USD', note || null]
             );
             broadcastStatus(uuidv4(), `${type} of ${signedAmount} ${currency || 'USD'} recorded`, 'success');
             res.json({ success: true, id: rows[0].id });
@@ -61,7 +65,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
     // TRANSFER_IN pair, linked via transfer_pair_id, so a transfer is always
     // a traceable, balanced two-sided entry rather than one free-floating row.
     router.post('/cash-transactions/transfer', async (req, res) => {
-        const { to_account_id, amount, currency, date_time, is_virtual, note } = req.body;
+        const { to_account_id, amount, currency, date_time, note } = req.body;
         if (!to_account_id) {
             return res.status(400).json({ error: 'to_account_id is required' });
         }
@@ -76,17 +80,16 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
             await client.query('BEGIN');
             const dt = date_time || new Date().toISOString();
             const cur = currency || 'USD';
-            const virtual = !!is_virtual;
 
             const { rows: outRows } = await client.query(
-                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, is_virtual, note)
-                 VALUES ($1, $2, 'TRANSFER_OUT', $3, $4, $5, $6) RETURNING id`,
-                [req.accountId, dt, -Math.abs(amount), cur, virtual, note || null]
+                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, note)
+                 VALUES ($1, $2, 'TRANSFER_OUT', $3, $4, $5) RETURNING id`,
+                [req.accountId, dt, -Math.abs(amount), cur, note || null]
             );
             const { rows: inRows } = await client.query(
-                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, is_virtual, note, transfer_pair_id)
-                 VALUES ($1, $2, 'TRANSFER_IN', $3, $4, $5, $6, $7) RETURNING id`,
-                [to_account_id, dt, Math.abs(amount), cur, virtual, note || null, outRows[0].id]
+                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, note, transfer_pair_id)
+                 VALUES ($1, $2, 'TRANSFER_IN', $3, $4, $5, $6) RETURNING id`,
+                [to_account_id, dt, Math.abs(amount), cur, note || null, outRows[0].id]
             );
             await client.query(
                 `UPDATE cash_transactions SET transfer_pair_id = $1 WHERE id = $2`,
@@ -112,7 +115,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
     // to_amount is whatever you actually received, not computed from a rate
     // — the implied rate is just to_amount/from_amount, no rate lookup needed.
     router.post('/cash-transactions/exchange', async (req, res) => {
-        const { from_amount, from_currency, to_amount, to_currency, date_time, is_virtual, note } = req.body;
+        const { from_amount, from_currency, to_amount, to_currency, date_time, note } = req.body;
         if (typeof from_amount !== 'number' || from_amount <= 0 || typeof to_amount !== 'number' || to_amount <= 0) {
             return res.status(400).json({ error: 'from_amount and to_amount (positive numbers) are required' });
         }
@@ -126,19 +129,18 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         try {
             await client.query('BEGIN');
             const dt = date_time || new Date().toISOString();
-            const virtual = !!is_virtual;
             const fromCur = from_currency.toUpperCase();
             const toCur = to_currency.toUpperCase();
 
             const { rows: outRows } = await client.query(
-                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, is_virtual, note)
-                 VALUES ($1, $2, 'EXCHANGE_OUT', $3, $4, $5, $6) RETURNING id`,
-                [req.accountId, dt, -Math.abs(from_amount), fromCur, virtual, note || `Exchanged for ${toCur}`]
+                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, note)
+                 VALUES ($1, $2, 'EXCHANGE_OUT', $3, $4, $5) RETURNING id`,
+                [req.accountId, dt, -Math.abs(from_amount), fromCur, note || `Exchanged for ${toCur}`]
             );
             const { rows: inRows } = await client.query(
-                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, is_virtual, note, transfer_pair_id)
-                 VALUES ($1, $2, 'EXCHANGE_IN', $3, $4, $5, $6, $7) RETURNING id`,
-                [req.accountId, dt, Math.abs(to_amount), toCur, virtual, note || `Exchanged from ${fromCur}`, outRows[0].id]
+                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, note, transfer_pair_id)
+                 VALUES ($1, $2, 'EXCHANGE_IN', $3, $4, $5, $6) RETURNING id`,
+                [req.accountId, dt, Math.abs(to_amount), toCur, note || `Exchanged from ${fromCur}`, outRows[0].id]
             );
             await client.query(
                 `UPDATE cash_transactions SET transfer_pair_id = $1 WHERE id = $2`,
@@ -205,7 +207,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
     router.post('/holdings', async (req, res) => {
         const {
             type, name, currency, face_value, purchase_price, purchase_date,
-            maturity_date, coupon_rate, coupon_frequency, notes, is_virtual,
+            maturity_date, coupon_rate, coupon_frequency, notes,
         } = req.body;
         const allowedTypes = ['TBILL', 'BOND', 'OTHER'];
         if (!allowedTypes.includes(type)) {
@@ -224,9 +226,9 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
             );
             const holdingId = rows[0].id;
             await client.query(
-                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, is_virtual, linked_holding_id, note)
-                 VALUES ($1, $2, 'OTHER', $3, $4, $5, $6, $7)`,
-                [req.accountId, purchase_date, -Math.abs(purchase_price), currency || 'USD', !!is_virtual, holdingId, `Purchased ${name}`]
+                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, linked_holding_id, note)
+                 VALUES ($1, $2, 'OTHER', $3, $4, $5, $6)`,
+                [req.accountId, purchase_date, -Math.abs(purchase_price), currency || 'USD', holdingId, `Purchased ${name}`]
             );
             await client.query('COMMIT');
             broadcastStatus(uuidv4(), `Purchased holding: ${name}`, 'success');
@@ -270,7 +272,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
     // price, or a final coupon added on top of face value).
     router.post('/holdings/:id/redeem', async (req, res) => {
         const { id } = req.params;
-        const { amount, date_time, is_virtual, status } = req.body;
+        const { amount, date_time, status } = req.body;
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
@@ -291,9 +293,9 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
                 [status || 'MATURED', id]
             );
             await client.query(
-                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, is_virtual, linked_holding_id, note)
-                 VALUES ($1, $2, 'OTHER', $3, $4, $5, $6, $7)`,
-                [req.accountId, redemptionDate, Math.abs(redemptionAmount), holding.currency, !!is_virtual, id, `Redeemed ${holding.name}`]
+                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, linked_holding_id, note)
+                 VALUES ($1, $2, 'OTHER', $3, $4, $5, $6)`,
+                [req.accountId, redemptionDate, Math.abs(redemptionAmount), holding.currency, id, `Redeemed ${holding.name}`]
             );
             await client.query('COMMIT');
             broadcastStatus(uuidv4(), `Redeemed holding: ${holding.name}`, 'success');

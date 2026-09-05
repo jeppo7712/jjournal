@@ -42,9 +42,6 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     clearSymbolFilter,
     setRestrictToActionsInRange,
     restrictToActionsInRange,
-    currentAccountId,
-    trades,
-    accounts,
   } = useContext(TradeContext);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimeFilterMenu, setShowTimeFilterMenu] = useState(false);
@@ -684,78 +681,6 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     return closedPnL + openPnL;
   }, [filteredItems]);
 
-  // Cash / Total Portfolio — snapshots of current account state, so
-  // deliberately use the full unfiltered `trades` (not `filteredItems`,
-  // which narrows to whatever time/status filter is currently applied for
-  // browsing) — the same convention Market Value used before it lived here.
-  const [activeHoldings, setActiveHoldings] = useState([]);
-  useEffect(() => {
-    if (!currentAccountId) { setActiveHoldings([]); return; }
-    fetch(`${process.env.REACT_APP_API_URL}/api/holdings`, { headers: { 'X-Account-ID': currentAccountId } })
-      .then(res => res.ok ? res.json() : [])
-      .then(data => setActiveHoldings(Array.isArray(data) ? data.filter(h => h.status === 'ACTIVE') : []))
-      .catch(() => setActiveHoldings([]));
-  }, [currentAccountId]);
-
-  const currentAccountCashBalances = (Array.isArray(accounts)
-    ? accounts.find(a => String(a.id) === String(currentAccountId))?.cash_balances
-    : null) || [];
-  const usdCashBalance = currentAccountCashBalances
-    .filter(b => (b.currency || 'USD').toUpperCase() === 'USD')
-    .reduce((sum, b) => sum + Number(b.balance || 0), 0);
-  const otherCurrencyCashBalances = currentAccountCashBalances.filter(b => (b.currency || 'USD').toUpperCase() !== 'USD');
-
-  // purchase_price as "current value" for active holdings — conservative,
-  // doesn't assume the discount-to-face gain until it's actually realised.
-  const usdHoldingsValue = activeHoldings
-    .filter(h => (h.currency || 'USD').toUpperCase() === 'USD')
-    .reduce((sum, h) => sum + Number(h.purchase_price || 0), 0);
-  const otherCurrencyHoldingsValues = activeHoldings
-    .filter(h => (h.currency || 'USD').toUpperCase() !== 'USD')
-    .reduce((acc, h) => {
-      const cur = h.currency.toUpperCase();
-      acc[cur] = (acc[cur] || 0) + Number(h.purchase_price || 0);
-      return acc;
-    }, {});
-
-  // Stocks and futures don't mean the same thing here: a stock's
-  // position*price genuinely IS money you have (roughly what you'd get by
-  // selling right now). A futures contract's position*price*tickMultiplier
-  // is its NOTIONAL EXPOSURE, not money you possess — margin isn't tracked
-  // as a cash event in this app, so summing that notional into "what am I
-  // worth" would badly overstate a leveraged futures trader's real net
-  // worth (potentially by 10-50x). What a futures position actually
-  // contributes to net worth, on top of whatever cash is already sitting in
-  // the account, is its unrealised PnL — same reasoning as why the
-  // Ent Tot/Ext Tot columns don't apply to futures in the trade list.
-  const openTrades = (Array.isArray(trades) ? trades : []).filter(t => t.status === 'OPEN' && (t.type === 'STK' || t.type === 'FUT'));
-  const stkMarketValue = openTrades
-    .filter(t => t.type === 'STK' && typeof t.position === 'number' && typeof t.currentPrice === 'number')
-    .reduce((sum, t) => sum + t.position * t.currentPrice, 0);
-  const futUnrealisedPnl = openTrades
-    .filter(t => t.type === 'FUT')
-    .reduce((sum, t) => sum + (t.currentReturn || 0), 0);
-  const totalMarketValueForPortfolio = stkMarketValue + futUnrealisedPnl;
-  const totalPortfolioUsd = totalMarketValueForPortfolio + usdCashBalance + usdHoldingsValue;
-  const otherCurrencyPortfolioNote = (() => {
-    const parts = [
-      ...otherCurrencyCashBalances.map(b => `${Number(b.balance).toFixed(2)} ${b.currency} cash`),
-      ...Object.entries(otherCurrencyHoldingsValues).map(([cur, val]) => `${val.toFixed(2)} ${cur} holdings`),
-    ];
-    return parts.join(' · ');
-  })();
-
-  const cashStat = {
-    label: 'Cash',
-    value: '$' + Math.abs(usdCashBalance).toFixed(2),
-    color: usdCashBalance >= 0 ? '#22C55E' : '#EF4444',
-  };
-  const totalPortfolioStat = {
-    label: 'Total Portfolio',
-    value: '$' + Math.abs(totalPortfolioUsd).toFixed(2),
-    color: totalPortfolioUsd >= 0 ? '#22C55E' : '#EF4444',
-  };
-
   const realisedPnlStat = {
     label: 'R P&L',
     value: '$' + Math.abs(totalRealisedPnl).toFixed(2),
@@ -1031,33 +956,6 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
                 <div className={styles.statLabel}>{unrealisedPnlStat.label}</div>
                 <div className={styles.statValue} style={{ color: unrealisedPnlStat.color }}>{unrealisedPnlStat.value}</div>
               </div>
-            </div>
-          </div>
-          {/* Deliberately its own row, not crammed into the topRow stats
-              grid above — that grid is a fixed-height, fixed-row-count
-              layout tuned for exactly WINS/LOSSES/OPEN/WASH/AVG W/AVG L/R
-              P&L/U P&L; adding more boxes into it overflowed past its
-              container and covered the filter controls below. */}
-          <div className={styles.portfolioSummaryRow}>
-            <div className={styles.portfolioPill} style={{ color: cashStat.color }}>
-              <span className={styles.portfolioPillLabel}>{cashStat.label}</span>
-              <span className={styles.portfolioPillValue} style={{ color: cashStat.color }}>{cashStat.value}</span>
-              {otherCurrencyCashBalances.length > 0 && (
-                <span className={styles.portfolioPillNote}>
-                  + {otherCurrencyCashBalances.map(b => `${Number(b.balance).toFixed(2)} ${b.currency}`).join(' · ')}
-                </span>
-              )}
-            </div>
-            <div
-              className={styles.portfolioPill}
-              style={{ color: totalPortfolioStat.color }}
-              title="Stock market value + futures unrealised P&L (not futures notional exposure) + cash + active holdings"
-            >
-              <span className={styles.portfolioPillLabel}>{totalPortfolioStat.label}</span>
-              <span className={styles.portfolioPillValue} style={{ color: totalPortfolioStat.color }}>{totalPortfolioStat.value}</span>
-              {otherCurrencyPortfolioNote && (
-                <span className={styles.portfolioPillNote}>+ {otherCurrencyPortfolioNote}</span>
-              )}
             </div>
           </div>
           <div className={styles.filterSections}>
