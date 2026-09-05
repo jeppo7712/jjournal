@@ -1,0 +1,110 @@
+.page {
+  padding: 24px;
+  max-width: 1100px;
+  margin: 0 auto;
+  color: #e0e2e6;
+}
+
+.section {
+  background: #232837;
+  border: 1px solid #32384a;
+  border-radius: 7px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.sectionTitle {
+  margin: 0 0 12px;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.balanceGrid {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.balanceCard {
+  background: #2a2f3a;
+  border: 1px solid #32384a;
+  border-radius: 7px;
+  padding: 12px 16px;
+  min-width: 140px;
+}
+
+.balanceAmount {
+  font-size: 1.3rem;
+  font-weight: 700;
+}
+
+.balanceMeta {
+  font-size: 0.75rem;
+  opacity: 0.7;
+  margin-top: 2px;
+}
+
+.formRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-items: flex-end;
+  margin-bottom: 12px;
+}
+
+.formField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.8rem;
+}
+
+.formField input,
+.formField select {
+  background: #1a1e29;
+  border: 1px solid #32384a;
+  border-radius: 5px;
+  color: #e0e2e6;
+  padding: 6px 8px;
+  font-size: 0.85rem;
+}
+
+.table {
+  width: 100%;
+  border-collapse: collapse;
+}
+
+.table th, .table td {
+  padding: 8px 10px;
+  text-align: left;
+  border-bottom: 1px solid #32384a;
+  font-size: 0.85rem;
+}
+
+.table th {
+  background: #353943;
+}
+
+.positive {
+  color: #22C55E;
+}
+
+.negative {
+  color: #EF4444;
+}
+
+.virtualBadge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 4px;
+  font-size: 0.7rem;
+  background: rgba(245, 158, 11, 0.15);
+  color: #F59E0B;
+  margin-left: 6px;
+}
+
+.emptyRow {
+  text-align: center;
+  opacity: 0.6;
+  padding: 16px;
+}

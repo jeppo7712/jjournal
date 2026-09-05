@@ -6,6 +6,7 @@ import TradeView from './components/TradeView/TradeView';
 import DayNote from './components/DayNote/DayNote';
 import Settings from './components/Settings/Settings';
 import Stats from './components/Stats/Stats';
+import Capital from './components/Capital/Capital';
 import LoadingIndicator from './components/LoadingIndicator';
 import { TradeProvider } from './context/TradeContext';
 import { StatusProvider } from './context/StatusContext';
@@ -130,6 +131,9 @@ function App() {
                 setCustomFilterDate={setCustomFilterDate}
                 setCustomFilterWeek={setCustomFilterWeek}
               />
+            )}
+            {currentView === 'capital' && (
+              <Capital />
             )}
           </main>
           {showTradeModal && (

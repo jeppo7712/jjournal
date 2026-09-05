@@ -6,9 +6,31 @@ const { logger } = require('../modules/logger.js');
 module.exports = (pool, broadcastStatus, uuidv4) => {
 
     // GET /accounts
+    // Includes parent_account_id/default_is_virtual (account hierarchy +
+    // current paper-vs-real mode) and a per-currency/per-virtual-flag cash
+    // balance breakdown — deliberately NOT collapsed into one number, since
+    // summing different currencies without FX conversion would be
+    // meaningless (see docs/CAPITAL_TRACKING_DESIGN.md).
     router.get('/', async (req, res) => {
         try {
-            const { rows } = await pool.query('SELECT * FROM accounts ORDER BY name');
+            const { rows } = await pool.query(`
+                SELECT a.*,
+                    (
+                        SELECT COALESCE(json_agg(json_build_object(
+                            'currency', b.currency,
+                            'is_virtual', b.is_virtual,
+                            'balance', b.balance
+                        )), '[]'::json)
+                        FROM (
+                            SELECT currency, is_virtual, SUM(amount) AS balance
+                            FROM cash_transactions
+                            WHERE account_id = a.id
+                            GROUP BY currency, is_virtual
+                        ) b
+                    ) AS cash_balances
+                FROM accounts a
+                ORDER BY a.name
+            `);
             res.json(rows);
         } catch (err) {
             broadcastStatus(uuidv4(), `Error fetching accounts: ${err.message}`, 'error');
@@ -19,15 +41,15 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
 
     // POST /accounts
     router.post('/', async (req, res) => {
-        const { name } = req.body;
+        const { name, parent_account_id, default_is_virtual } = req.body;
         if (!name) {
             broadcastStatus(uuidv4(), 'Account name is required', 'error');
             return res.status(400).json({ error: 'Name is required' });
         }
         try {
             const { rows } = await pool.query(
-                'INSERT INTO accounts (name) VALUES ($1) RETURNING id',
-                [name]
+                'INSERT INTO accounts (name, parent_account_id, default_is_virtual) VALUES ($1, $2, $3) RETURNING id',
+                [name, parent_account_id || null, !!default_is_virtual]
             );
             broadcastStatus(uuidv4(), `Created account: ${name}`, 'success');
             res.json({ success: true, id: rows[0].id });
@@ -44,17 +66,27 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
     });
 
     // PUT /accounts/:id
+    // Sets parent_account_id/default_is_virtual directly (not COALESCE) —
+    // the settings form always submits the full account state, including
+    // explicitly clearing parent_account_id back to top-level.
     router.put('/:id', async (req, res) => {
         const { id } = req.params;
-        const { name } = req.body;
+        const { name, parent_account_id, default_is_virtual } = req.body;
         if (!name) {
             broadcastStatus(uuidv4(), 'Account name is required for update', 'error');
             return res.status(400).json({ error: 'Name is required' });
         }
+        if (parent_account_id && parseInt(parent_account_id, 10) === parseInt(id, 10)) {
+            return res.status(400).json({ error: 'An account cannot be its own parent' });
+        }
         try {
             const { rowCount } = await pool.query(
-                'UPDATE accounts SET name=$1, updated_at=NOW() WHERE id=$2',
-                [name, id]
+                `UPDATE accounts SET name=$1,
+                    parent_account_id = $2,
+                    default_is_virtual = $3,
+                    updated_at=NOW()
+                 WHERE id=$4`,
+                [name, parent_account_id || null, !!default_is_virtual, id]
             );
             if (rowCount === 0) {
                 broadcastStatus(uuidv4(), `Account ID ${id} not found`, 'error');
