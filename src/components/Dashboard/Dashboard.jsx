@@ -1031,26 +1031,33 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
                 <div className={styles.statLabel}>{unrealisedPnlStat.label}</div>
                 <div className={styles.statValue} style={{ color: unrealisedPnlStat.color }}>{unrealisedPnlStat.value}</div>
               </div>
-              <div className={styles.statBox} style={{ borderColor: '#32384a', color: cashStat.color }}>
-                <div className={styles.statLabel}>{cashStat.label}</div>
-                <div className={styles.statValue} style={{ color: cashStat.color }}>{cashStat.value}</div>
-                {otherCurrencyCashBalances.length > 0 && (
-                  <div style={{ fontSize: '0.65rem', opacity: 0.7 }}>
-                    + {otherCurrencyCashBalances.map(b => `${Number(b.balance).toFixed(2)} ${b.currency}`).join(' · ')}
-                  </div>
-                )}
-              </div>
-              <div
-                className={styles.statBox}
-                style={{ borderColor: '#32384a', color: totalPortfolioStat.color }}
-                title="Stock market value + futures unrealised P&L (not futures notional exposure) + cash + active holdings"
-              >
-                <div className={styles.statLabel}>{totalPortfolioStat.label}</div>
-                <div className={styles.statValue} style={{ color: totalPortfolioStat.color }}>{totalPortfolioStat.value}</div>
-                {otherCurrencyPortfolioNote && (
-                  <div style={{ fontSize: '0.65rem', opacity: 0.7 }}>+ {otherCurrencyPortfolioNote}</div>
-                )}
-              </div>
+            </div>
+          </div>
+          {/* Deliberately its own row, not crammed into the topRow stats
+              grid above — that grid is a fixed-height, fixed-row-count
+              layout tuned for exactly WINS/LOSSES/OPEN/WASH/AVG W/AVG L/R
+              P&L/U P&L; adding more boxes into it overflowed past its
+              container and covered the filter controls below. */}
+          <div className={styles.portfolioSummaryRow}>
+            <div className={styles.portfolioPill} style={{ color: cashStat.color }}>
+              <span className={styles.portfolioPillLabel}>{cashStat.label}</span>
+              <span className={styles.portfolioPillValue} style={{ color: cashStat.color }}>{cashStat.value}</span>
+              {otherCurrencyCashBalances.length > 0 && (
+                <span className={styles.portfolioPillNote}>
+                  + {otherCurrencyCashBalances.map(b => `${Number(b.balance).toFixed(2)} ${b.currency}`).join(' · ')}
+                </span>
+              )}
+            </div>
+            <div
+              className={styles.portfolioPill}
+              style={{ color: totalPortfolioStat.color }}
+              title="Stock market value + futures unrealised P&L (not futures notional exposure) + cash + active holdings"
+            >
+              <span className={styles.portfolioPillLabel}>{totalPortfolioStat.label}</span>
+              <span className={styles.portfolioPillValue} style={{ color: totalPortfolioStat.color }}>{totalPortfolioStat.value}</span>
+              {otherCurrencyPortfolioNote && (
+                <span className={styles.portfolioPillNote}>+ {otherCurrencyPortfolioNote}</span>
+              )}
             </div>
           </div>
           <div className={styles.filterSections}>
