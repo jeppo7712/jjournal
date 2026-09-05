@@ -43,6 +43,8 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     setRestrictToActionsInRange,
     restrictToActionsInRange,
     currentAccountId,
+    trades,
+    accounts,
   } = useContext(TradeContext);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimeFilterMenu, setShowTimeFilterMenu] = useState(false);
@@ -50,37 +52,6 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
   const [showGraphPopup, setShowGraphPopup] = useState(false);
   const [isGraphHidden, setIsGraphHidden] = useState(false);
   const [pnlChartType, setPnlChartType] = useState('realised'); // 'realised' or 'unrealised'
-
-  // Optional "Cash Balance" overlay line on the realised P&L graph — off by
-  // default, persisted like other display preferences. Deliberately a
-  // SEPARATE line rather than folded into the P&L line's own values: less
-  // risk of subtly changing what the existing line means, and clearer to
-  // read (an equity-curve-style chart showing P&L and cash as distinct
-  // lines is more standard than a blended one). Only USD cash is plotted —
-  // see docs/CAPITAL_TRACKING_DESIGN.md on why other currencies aren't
-  // summed in without FX conversion. Scoped to the realised chart for now;
-  // the unrealised chart's own daily series isn't augmented yet.
-  const [includeCashInGraph, setIncludeCashInGraph] = useState(localStorage.getItem('dashboardIncludeCashInGraph') === 'true');
-  useEffect(() => {
-    localStorage.setItem('dashboardIncludeCashInGraph', includeCashInGraph);
-  }, [includeCashInGraph]);
-
-  const [cashTransactions, setCashTransactions] = useState([]);
-  useEffect(() => {
-    if (!currentAccountId) { setCashTransactions([]); return; }
-    fetch(`${process.env.REACT_APP_API_URL}/api/cash-transactions`, { headers: { 'X-Account-ID': currentAccountId } })
-      .then(res => res.ok ? res.json() : [])
-      .then(setCashTransactions)
-      .catch(() => setCashTransactions([]));
-  }, [currentAccountId]);
-
-  const cumulativeUsdCashAt = (dateInput) => {
-    if (!dateInput) return 0;
-    const asOf = new Date(dateInput).getTime();
-    return cashTransactions
-      .filter(tx => (tx.currency || 'USD').toUpperCase() === 'USD' && new Date(tx.date_time).getTime() <= asOf)
-      .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
-  };
   const timeFilterRef = useRef(null);
   const menuRef = useRef(null);
   const datePickerRef = useRef(null);
@@ -189,16 +160,6 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
         pointRadius: 0,
         pointHoverRadius: 0,
       },
-      ...(includeCashInGraph ? [{
-        label: 'Cash Balance (USD)',
-        data: sortedTrades.map(trade => cumulativeUsdCashAt(trade.relevantDate)),
-        borderColor: '#F59E0B',
-        backgroundColor: 'rgba(245, 158, 11, 0.1)',
-        tension: 0.3,
-        fill: false,
-        pointRadius: 0,
-        pointHoverRadius: 0,
-      }] : []),
     ],
   };
 
@@ -552,13 +513,8 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       },
     },
     plugins: {
-      // Only shown when the cash overlay is on — with a single line the
-      // custom vertical-line hover callout (below) already labels it, no
-      // legend needed; with two lines a legend is the simplest way to tell
-      // them apart (that callout only ever labels the first dataset).
       legend: {
-        display: includeCashInGraph,
-        labels: { color: '#9CA3AF', boxWidth: 12, font: { size: 11 } },
+        display: false
       },
       tooltip: {
         enabled: false
@@ -728,6 +684,78 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     return closedPnL + openPnL;
   }, [filteredItems]);
 
+  // Cash / Total Portfolio — snapshots of current account state, so
+  // deliberately use the full unfiltered `trades` (not `filteredItems`,
+  // which narrows to whatever time/status filter is currently applied for
+  // browsing) — the same convention Market Value used before it lived here.
+  const [activeHoldings, setActiveHoldings] = useState([]);
+  useEffect(() => {
+    if (!currentAccountId) { setActiveHoldings([]); return; }
+    fetch(`${process.env.REACT_APP_API_URL}/api/holdings`, { headers: { 'X-Account-ID': currentAccountId } })
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setActiveHoldings(Array.isArray(data) ? data.filter(h => h.status === 'ACTIVE') : []))
+      .catch(() => setActiveHoldings([]));
+  }, [currentAccountId]);
+
+  const currentAccountCashBalances = (Array.isArray(accounts)
+    ? accounts.find(a => String(a.id) === String(currentAccountId))?.cash_balances
+    : null) || [];
+  const usdCashBalance = currentAccountCashBalances
+    .filter(b => (b.currency || 'USD').toUpperCase() === 'USD')
+    .reduce((sum, b) => sum + Number(b.balance || 0), 0);
+  const otherCurrencyCashBalances = currentAccountCashBalances.filter(b => (b.currency || 'USD').toUpperCase() !== 'USD');
+
+  // purchase_price as "current value" for active holdings — conservative,
+  // doesn't assume the discount-to-face gain until it's actually realised.
+  const usdHoldingsValue = activeHoldings
+    .filter(h => (h.currency || 'USD').toUpperCase() === 'USD')
+    .reduce((sum, h) => sum + Number(h.purchase_price || 0), 0);
+  const otherCurrencyHoldingsValues = activeHoldings
+    .filter(h => (h.currency || 'USD').toUpperCase() !== 'USD')
+    .reduce((acc, h) => {
+      const cur = h.currency.toUpperCase();
+      acc[cur] = (acc[cur] || 0) + Number(h.purchase_price || 0);
+      return acc;
+    }, {});
+
+  // Stocks and futures don't mean the same thing here: a stock's
+  // position*price genuinely IS money you have (roughly what you'd get by
+  // selling right now). A futures contract's position*price*tickMultiplier
+  // is its NOTIONAL EXPOSURE, not money you possess — margin isn't tracked
+  // as a cash event in this app, so summing that notional into "what am I
+  // worth" would badly overstate a leveraged futures trader's real net
+  // worth (potentially by 10-50x). What a futures position actually
+  // contributes to net worth, on top of whatever cash is already sitting in
+  // the account, is its unrealised PnL — same reasoning as why the
+  // Ent Tot/Ext Tot columns don't apply to futures in the trade list.
+  const openTrades = (Array.isArray(trades) ? trades : []).filter(t => t.status === 'OPEN' && (t.type === 'STK' || t.type === 'FUT'));
+  const stkMarketValue = openTrades
+    .filter(t => t.type === 'STK' && typeof t.position === 'number' && typeof t.currentPrice === 'number')
+    .reduce((sum, t) => sum + t.position * t.currentPrice, 0);
+  const futUnrealisedPnl = openTrades
+    .filter(t => t.type === 'FUT')
+    .reduce((sum, t) => sum + (t.currentReturn || 0), 0);
+  const totalMarketValueForPortfolio = stkMarketValue + futUnrealisedPnl;
+  const totalPortfolioUsd = totalMarketValueForPortfolio + usdCashBalance + usdHoldingsValue;
+  const otherCurrencyPortfolioNote = (() => {
+    const parts = [
+      ...otherCurrencyCashBalances.map(b => `${Number(b.balance).toFixed(2)} ${b.currency} cash`),
+      ...Object.entries(otherCurrencyHoldingsValues).map(([cur, val]) => `${val.toFixed(2)} ${cur} holdings`),
+    ];
+    return parts.join(' · ');
+  })();
+
+  const cashStat = {
+    label: 'Cash',
+    value: '$' + Math.abs(usdCashBalance).toFixed(2),
+    color: usdCashBalance >= 0 ? '#22C55E' : '#EF4444',
+  };
+  const totalPortfolioStat = {
+    label: 'Total Portfolio',
+    value: '$' + Math.abs(totalPortfolioUsd).toFixed(2),
+    color: totalPortfolioUsd >= 0 ? '#22C55E' : '#EF4444',
+  };
+
   const realisedPnlStat = {
     label: 'R P&L',
     value: '$' + Math.abs(totalRealisedPnl).toFixed(2),
@@ -828,15 +856,6 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     <div className={styles.dashboard}>
       <div className={styles.topRow}>
         <div className={styles.graphBubble}>
-          {pnlChartType === 'realised' && (
-            <label
-              title="Overlay this account's USD cash balance over time as a second line"
-              style={{ position: 'absolute', top: '6px', right: '10px', zIndex: 2, fontSize: '0.7rem', color: '#9CA3AF', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
-            >
-              <input type="checkbox" checked={includeCashInGraph} onChange={e => setIncludeCashInGraph(e.target.checked)} />
-              Show cash balance
-            </label>
-          )}
           <div className={styles.graphArea}>
             <div className={styles.graphArea}>
               {pnlChartType === 'unrealised' && isFetching && <div>Loading unrealised P&L data...</div>}
@@ -1011,6 +1030,26 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
               >
                 <div className={styles.statLabel}>{unrealisedPnlStat.label}</div>
                 <div className={styles.statValue} style={{ color: unrealisedPnlStat.color }}>{unrealisedPnlStat.value}</div>
+              </div>
+              <div className={styles.statBox} style={{ borderColor: '#32384a', color: cashStat.color }}>
+                <div className={styles.statLabel}>{cashStat.label}</div>
+                <div className={styles.statValue} style={{ color: cashStat.color }}>{cashStat.value}</div>
+                {otherCurrencyCashBalances.length > 0 && (
+                  <div style={{ fontSize: '0.65rem', opacity: 0.7 }}>
+                    + {otherCurrencyCashBalances.map(b => `${Number(b.balance).toFixed(2)} ${b.currency}`).join(' · ')}
+                  </div>
+                )}
+              </div>
+              <div
+                className={styles.statBox}
+                style={{ borderColor: '#32384a', color: totalPortfolioStat.color }}
+                title="Stock market value + futures unrealised P&L (not futures notional exposure) + cash + active holdings"
+              >
+                <div className={styles.statLabel}>{totalPortfolioStat.label}</div>
+                <div className={styles.statValue} style={{ color: totalPortfolioStat.color }}>{totalPortfolioStat.value}</div>
+                {otherCurrencyPortfolioNote && (
+                  <div style={{ fontSize: '0.65rem', opacity: 0.7 }}>+ {otherCurrencyPortfolioNote}</div>
+                )}
               </div>
             </div>
           </div>
