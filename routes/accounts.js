@@ -12,9 +12,28 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
     // balance breakdown — deliberately NOT collapsed into one number, since
     // summing different currencies without FX conversion would be
     // meaningless.
+    //
+    // cash_balances is a ROLL-UP: an account's balance includes its own
+    // cash_transactions PLUS every descendant account's, recursively. This
+    // is for the "same real broker account, split into several journal
+    // accounts by instrument type, sharing one cash pool" case (e.g. a
+    // combined stocks+futures IBKR account tracked as two accounts here) —
+    // parent_account_id says which accounts share real money. Trades are
+    // NOT rolled up this way (Dashboard/TradeList/Stats stay scoped to
+    // exactly the selected account, on purpose — that per-instrument-type
+    // separation is the whole reason to split them into accounts to begin
+    // with). For an account with no children this is identical to its own
+    // balance, so nothing changes for the common case.
     router.get('/', async (req, res) => {
         try {
             const { rows } = await pool.query(`
+                WITH RECURSIVE descendants AS (
+                    SELECT id AS ancestor_id, id AS descendant_id FROM accounts
+                    UNION ALL
+                    SELECT d.ancestor_id, a.id
+                    FROM accounts a
+                    JOIN descendants d ON a.parent_account_id = d.descendant_id
+                )
                 SELECT a.*,
                     (
                         SELECT COALESCE(json_agg(json_build_object(
@@ -22,10 +41,10 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
                             'balance', b.balance
                         )), '[]'::json)
                         FROM (
-                            SELECT currency, SUM(amount) AS balance
-                            FROM cash_transactions
-                            WHERE account_id = a.id
-                            GROUP BY currency
+                            SELECT ct.currency, SUM(ct.amount) AS balance
+                            FROM cash_transactions ct
+                            WHERE ct.account_id IN (SELECT descendant_id FROM descendants WHERE ancestor_id = a.id)
+                            GROUP BY ct.currency
                         ) b
                     ) AS cash_balances
                 FROM accounts a
