@@ -5,6 +5,45 @@ const { logger } = require('../modules/logger.js');
 
 module.exports = (pool, upload, broadcastStatus, uuidv4) => {
 
+    // Auto-settles trade actions to the cash ledger. STK actions move the
+    // full notional value (price*qty) plus fee — that's genuinely what
+    // buying/selling a stock does to cash. FUT actions only settle the fee:
+    // opening/closing a futures position doesn't move notional cash (only
+    // margin, which isn't a "transaction" in this ledger's sense), and this
+    // does NOT attempt to auto-compute realized P&L settlement for futures
+    // — that needs the same incremental FIFO matching TradeContext.js does
+    // client-side for unrealized/realized PnL, not duplicated here (yet —
+    // see docs/CAPITAL_TRACKING_DESIGN.md). Record a futures trade's P&L in
+    // cash manually (a plain OTHER cash_transaction) until that's built.
+    async function settleTradeActionsToCash(client, tradeId, accountId, type, symbol, actions) {
+        if (!actions || actions.length === 0) return;
+
+        const { rows: accRows } = await client.query('SELECT default_is_virtual FROM accounts WHERE id=$1', [accountId]);
+        const isVirtual = accRows.length > 0 ? accRows[0].default_is_virtual : false;
+
+        const { rows: fsRows } = await client.query('SELECT currency FROM futures_settings WHERE symbol=$1 AND type=$2', [symbol, type]);
+        const currency = fsRows.length > 0 ? fsRows[0].currency : 'USD';
+
+        const values = [];
+        const placeholders = [];
+        actions.forEach((a, i) => {
+            const qty = Number(a.quantity || 0);
+            const price = Number(a.price || 0);
+            const fee = Number(a.fee || 0);
+            const amount = type === 'STK'
+                ? (a.type === 'BUY' ? -1 : 1) * qty * price - fee
+                : -fee; // FUT: fee only — see function comment above
+            const baseIndex = i * 7;
+            placeholders.push(`($${baseIndex + 1}, $${baseIndex + 2}, 'TRADE_SETTLEMENT', $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7})`);
+            values.push(accountId, a.dateTime, amount, currency, isVirtual, tradeId, `${a.type} ${qty} ${symbol}`);
+        });
+
+        await client.query(
+            `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, is_virtual, linked_trade_id, note) VALUES ${placeholders.join(',')}`,
+            values
+        );
+    }
+
     // --- Trades Endpoints ---
 
     // Optimized GET /trades: single query with JSON aggregation, no image data included
@@ -121,6 +160,8 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
           VALUES ${placeholders.join(',')}
         `;
                 await client.query(insertActionsQuery, actionValues);
+
+                await settleTradeActionsToCash(client, tradeId, accountId, type, symbol, actions);
             }
 
             // Insert journal if present
@@ -212,6 +253,11 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
 
             // Re-insert trade_actions (delete existing, then bulk insert new)
             await client.query(`DELETE FROM trade_actions WHERE trade_id=$1`, [id]);
+            // Cash settlement is re-derived from scratch alongside trade_actions
+            // (same delete-then-recreate pattern) rather than trying to diff
+            // old vs. new actions — much simpler, and correct either way since
+            // nothing else ever links to a specific settlement row by id.
+            await client.query(`DELETE FROM cash_transactions WHERE linked_trade_id=$1`, [id]);
             if (actions && actions.length > 0) {
                 const actionValues = [];
                 const placeholders = [];
@@ -225,6 +271,8 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
           VALUES ${placeholders.join(',')}
         `;
                 await client.query(insertActionsQuery, actionValues);
+
+                await settleTradeActionsToCash(client, id, accountId, type, symbol, actions);
             }
 
             // Re-insert journal (delete existing, then insert new if present)
@@ -295,6 +343,7 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
             await client.query(`DELETE FROM trade_attachments WHERE trade_id=$1 AND account_id=$2`, [id, req.accountId]);
             await client.query(`DELETE FROM trade_journals WHERE trade_id=$1`, [id]);
             await client.query(`DELETE FROM trade_actions WHERE trade_id=$1`, [id]);
+            await client.query(`DELETE FROM cash_transactions WHERE linked_trade_id=$1`, [id]);
             await client.query(`DELETE FROM trades WHERE id=$1 AND account_id=$2`, [id, req.accountId]);
             await client.query('COMMIT');
             broadcastStatus(uuidv4(), `Deleted trade ID ${id}`, 'success');

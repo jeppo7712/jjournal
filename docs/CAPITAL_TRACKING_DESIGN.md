@@ -1,8 +1,41 @@
 # Capital & Cash Tracking — Design
 
-Status: **approved design, not yet implemented.** Written 2026-09-05 after a
-planning discussion; captures the decisions made so a future session can
-pick this up directly instead of re-deriving it.
+Status: **phases 1-3 implemented** (cash ledger, hierarchical accounts,
+real/virtual tracking, trade auto-settlement, holdings). Phase 4 (external
+API exposure) is not yet done. Written 2026-09-05 after a planning
+discussion; captures the decisions made so a future session can pick up
+Phase 4 directly instead of re-deriving the rest.
+
+## Implementation notes (added once built)
+
+- **FUT auto-settlement is fee-only, not full P&L.** A futures BUY/SELL
+  doesn't move notional cash the way a stock trade does (only margin is
+  posted; realized P&L settles separately) — auto-computing that correctly
+  needs the same incremental FIFO matching TradeContext.js already does
+  client-side for realized/unrealized PnL, not yet duplicated server-side.
+  STK trades settle their full notional + fee automatically; FUT trades
+  only settle fees automatically. Record a futures trade's P&L as a manual
+  `OTHER` cash transaction for now.
+- `accounts.default_is_virtual` was added beyond the original schema sketch
+  below — it's the current default for *new* cash_transactions on that
+  account (paper vs. real), needed so trade auto-settlement and the
+  deposit/withdrawal form know what to stamp without asking every time.
+  Existing transactions never get rewritten when this is flipped.
+- New endpoints: `GET/POST /api/cash-transactions`, `POST
+  /api/cash-transactions/transfer`, `DELETE /api/cash-transactions/:id`,
+  `GET/POST/PUT /api/holdings`, `POST /api/holdings/:id/redeem`, `DELETE
+  /api/holdings/:id` — all scoped to the `X-Account-ID` header like
+  `/trades`, except transfer which takes an explicit `to_account_id`.
+  `GET /api/accounts` now also returns `parent_account_id`,
+  `default_is_virtual`, and `cash_balances` (an array of
+  `{currency, is_virtual, balance}` — deliberately not collapsed into one
+  number, per the FX section below).
+- Frontend: new Capital view (`src/components/Capital/`) reachable from
+  the nav bar; account hierarchy/virtual-mode editable via a proper modal
+  in Settings (replacing the old `prompt()`-based rename flow); symbols
+  gained a `currency` field in Settings that also fixed the previously
+  hardcoded `currency: 'USD'` in IBKR contract lookups
+  (`modules/utils.js`/`modules/historical-data-service.js`).
 
 ## Motivation
 

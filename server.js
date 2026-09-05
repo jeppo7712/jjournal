@@ -161,12 +161,14 @@ async function startServer(newPort) {
     const settingsRouter = require('./routes/settings.js')(db.getPool(), broadcastStatus, uuidv4);
     const historicalRouter = require('./routes/historical.js')(db, taskManager, historicalDataService, broadcastStatus, uuidv4, triggerTaskProcessor);
     const ibkrRouter = require('./routes/ibkr.js')(ibkr, broadcastStatus, uuidv4);
+    const capitalRouter = require('./routes/capital.js')(db.getPool(), broadcastStatus, uuidv4);
 
     apiRouter.use('/', tradesRouter);
     apiRouter.use('/accounts', accountsRouter);
     apiRouter.use('/', settingsRouter);
     apiRouter.use('/', historicalRouter);
     apiRouter.use('/ibkr', ibkrRouter);
+    apiRouter.use('/', capitalRouter);
 
     await startServer(PORT); // Start the HTTP server
 

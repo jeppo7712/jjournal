@@ -271,7 +271,7 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
         if (cancellationSignal.aborted) throw new Error(`Task ${taskId} cancelled at setup stage.`);
 
         const { rows: futuresSettings } = await db.getPool().query(
-            'SELECT id, symbol, exchange, type, rollover_months, timeframe_settings FROM futures_settings WHERE symbol = $1 AND type = $2',
+            'SELECT id, symbol, exchange, type, rollover_months, timeframe_settings, currency FROM futures_settings WHERE symbol = $1 AND type = $2',
             [symbol, type]
         );
 
@@ -279,7 +279,7 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
             logger.error(`[populate][${taskId}] No futures settings found for symbol ${symbol} with type ${type}`);
             throw new Error(`No futures settings for ${symbol} ${type}`);
         }
-        const { id: futuresSettingId, exchange, type: settingType, rollover_months, timeframe_settings: timeframeSettings } = futuresSettings[0];
+        const { id: futuresSettingId, exchange, type: settingType, rollover_months, timeframe_settings: timeframeSettings, currency: symbolCurrency } = futuresSettings[0];
 
         if (!VALID_TIMEFRAMES.includes(timeframe)) {
             logger.error(`[populate][${taskId}] Invalid timeframe: ${timeframe}`);
@@ -583,7 +583,7 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
                     logger.debug(`[populate][${taskId}] Futures (Continuous): Generating contract chain for ${symbol} from ${requiredStartDateForDuration.toISODate()}.`);
                     try {
                         // generateContractChain requires IBKR connection, so it must be called AFTER initializeIBKR
-                        contractsToFetch = await generateContractChain(symbol, exchangeName, requiredStartDateForDuration, taskId, broadcastStatus, cancellationSignal, rollover_months);
+                        contractsToFetch = await generateContractChain(symbol, exchangeName, requiredStartDateForDuration, taskId, broadcastStatus, cancellationSignal, rollover_months, symbolCurrency);
                         if (contractsToFetch.length === 0) {
                             logger.warn(`[populate][${taskId}] No relevant individual futures contracts found for ${symbol} covering the required period.`);
                             broadcastStatus(taskId, `No relevant futures contracts found for ${symbol}.`, 'warning');
@@ -614,7 +614,7 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
                         const initialContract = {
                             symbol: symbol.toUpperCase(),
                             secType: secTypeResolved,
-                            currency: 'USD', // Assuming USD, might need to be dynamic
+                            currency: symbolCurrency || 'USD',
                             exchange: exchangeName.toUpperCase(),
                             ...(type === 'FUT' && contractMonth && { lastTradeDateOrContractMonth: contractMonth }),
                         };

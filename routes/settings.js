@@ -11,7 +11,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
     router.get('/futures-settings', async (req, res) => {
         try {
             const { rows } = await pool.query(`
-SELECT fs.symbol, fs.type, fs.tick_size, fs.tick_value, fs.fee, fs.exchange,
+SELECT fs.symbol, fs.type, fs.tick_size, fs.tick_value, fs.fee, fs.exchange, fs.currency,
        fs.rollover_months, fs.initial_margin, fs.maintenance_margin, fs.timeframe_settings, e.timezone
       FROM futures_settings fs
       LEFT JOIN exchanges e ON fs.exchange = e.name
@@ -25,7 +25,7 @@ SELECT fs.symbol, fs.type, fs.tick_size, fs.tick_value, fs.fee, fs.exchange,
     });
 
     router.post('/futures-settings', async (req, res) => {
-const { symbol, type, tick_size, tick_value, fee, exchange, rollover_months, initial_margin, maintenance_margin, timeframe_settings } = req.body;
+const { symbol, type, tick_size, tick_value, fee, exchange, currency, rollover_months, initial_margin, maintenance_margin, timeframe_settings } = req.body;
 
         if (!symbol || !type || tick_size === undefined || tick_value === undefined || fee === undefined) {
             return res.status(400).json({ error: 'Symbol, type, tick size, tick value, and fee are required' });
@@ -38,8 +38,8 @@ return res.status(400).json({ error: 'Initial margin is required for futures con
 
         try {
             await pool.query(
-'INSERT INTO futures_settings (symbol, type, tick_size, tick_value, fee, exchange, rollover_months, initial_margin, maintenance_margin, timeframe_settings) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)',
-[symbol, type, tick_size, tick_value, fee, exchange || null, type === 'FUT' ? rollover_months : null, initial_margin || null, maintenance_margin || null, JSON.stringify(timeframe_settings || DEFAULT_TIMEFRAME_SETTINGS)]
+'INSERT INTO futures_settings (symbol, type, tick_size, tick_value, fee, exchange, currency, rollover_months, initial_margin, maintenance_margin, timeframe_settings) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
+[symbol, type, tick_size, tick_value, fee, exchange || null, currency || 'USD', type === 'FUT' ? rollover_months : null, initial_margin || null, maintenance_margin || null, JSON.stringify(timeframe_settings || DEFAULT_TIMEFRAME_SETTINGS)]
             );
             res.json({ success: true });
         } catch (err) {
@@ -52,7 +52,7 @@ return res.status(400).json({ error: 'Initial margin is required for futures con
     });
 
     router.put('/futures-settings', async (req, res) => {
-const { symbol, type, tick_size, tick_value, fee, exchange, rollover_months, initial_margin, maintenance_margin, timeframe_settings, originalSymbol, originalType } = req.body;
+const { symbol, type, tick_size, tick_value, fee, exchange, currency, rollover_months, initial_margin, maintenance_margin, timeframe_settings, originalSymbol, originalType } = req.body;
 
         if (!symbol || !type || tick_size === undefined || tick_value === undefined || fee === undefined) {
             return res.status(400).json({ error: 'New symbol, type, tick size, tick value, and fee are required' });
@@ -70,7 +70,7 @@ return res.status(400).json({ error: 'Initial margin is required for futures con
         try {
             await client.query('BEGIN');
             const { rows: existingSettings } = await client.query(
-                'SELECT id, exchange, timeframe_settings FROM futures_settings WHERE symbol = $1 AND type = $2',
+                'SELECT id, exchange, currency, timeframe_settings FROM futures_settings WHERE symbol = $1 AND type = $2',
                 [originalSymbol, originalType]
             );
             if (existingSettings.length === 0) {
@@ -87,14 +87,21 @@ return res.status(400).json({ error: 'Initial margin is required for futures con
             const newExchangeNormalized = exchange || null;
             const currentExchangeNormalized = currentExchangeInDb || null;
             const exchangeChanged = newExchangeNormalized !== currentExchangeNormalized;
-            if (symbolChanged || typeChanged || exchangeChanged) {
+            // Currency identifies which real-world instrument this is fetched
+            // from IBKR (contract lookups key on it), same as exchange — a
+            // change here means "this is now a different instrument," so
+            // stored historical data needs invalidating the same way.
+            const newCurrencyNormalized = (currency || 'USD').toUpperCase();
+            const currentCurrencyNormalized = (existingSettings[0].currency || 'USD').toUpperCase();
+            const currencyChanged = newCurrencyNormalized !== currentCurrencyNormalized;
+            if (symbolChanged || typeChanged || exchangeChanged || currencyChanged) {
                 logger.info(`[FuturesSettings] Key identifier changed for ${originalSymbol}/${originalType}. Deleting associated historical data (ID: ${futuresSettingId}).`);
                 await client.query('DELETE FROM historical_data WHERE futures_setting_id = $1', [futuresSettingId]);
                 broadcastStatus(uuidv4(), `Historical data for old settings of ${originalSymbol} (${originalType}) deleted due to settings change.`, 'info');
             }
             const { rowCount } = await pool.query(
-'UPDATE futures_settings SET symbol=$1, type=$2, tick_size=$3, tick_value=$4, fee=$5, exchange=$6, rollover_months=$7, initial_margin=$8, maintenance_margin=$9, timeframe_settings=$10 WHERE symbol=$11 AND type=$12',
-[symbol, type, tick_size, tick_value, fee, exchange || null, type === 'FUT' ? rollover_months : null, initial_margin || null, maintenance_margin || null, JSON.stringify(resolvedTimeframeSettings), originalSymbol, originalType]
+'UPDATE futures_settings SET symbol=$1, type=$2, tick_size=$3, tick_value=$4, fee=$5, exchange=$6, currency=$7, rollover_months=$8, initial_margin=$9, maintenance_margin=$10, timeframe_settings=$11 WHERE symbol=$12 AND type=$13',
+[symbol, type, tick_size, tick_value, fee, exchange || null, currency || 'USD', type === 'FUT' ? rollover_months : null, initial_margin || null, maintenance_margin || null, JSON.stringify(resolvedTimeframeSettings), originalSymbol, originalType]
             );
             if (rowCount === 0) {
                 await client.query('ROLLBACK');
