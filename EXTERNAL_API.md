@@ -1,6 +1,6 @@
 # External API (v1)
 
-A read/write API for external tools — an AI trade-analysis project, a script, whatever — to consume this journal's data: accounts, trades (with computed side/status/PnL/return%), day notes, attachments, symbol settings, and historic/current prices. It also has one narrow write-back endpoint so an external tool can attach its analysis to a trade.
+A read/write API for external tools — an AI trade-analysis project, a script, whatever — to consume this journal's data: accounts (including capital allocation/cash balance and paper-vs-real), trades (with computed side/status/PnL/return%), a cash ledger and non-trade holdings (T-bills/bonds), day notes, attachments, symbol settings, and historic/current prices. It also has one narrow write-back endpoint so an external tool can attach its analysis to a trade.
 
 Base URL: `http://<host>:<port>/api/external/v1`
 
@@ -17,7 +17,7 @@ If this server is ever reachable outside a network you trust, put it behind a re
 - All responses are JSON.
 - All timestamps are ISO 8601 in UTC (e.g. `2026-03-14T13:45:00.000Z`).
 - Money fields are plain numbers (no currency symbol), in account currency.
-- Paginated list endpoints (`trades`, `daynotes`) return an object with a `total` count, `limit`, `offset`, and the array under a named key, not a bare array. Non-paginated list endpoints (`accounts`, `symbols`) return just the named key — no `total` field, since there's nothing to paginate.
+- Paginated list endpoints (`trades`, `daynotes`, `accounts/:id/cash-transactions`, `holdings`) return an object with a `total` count, `limit`, `offset`, and the array under a named key, not a bare array. Non-paginated list endpoints (`accounts`, `symbols`) return just the named key — no `total` field, since there's nothing to paginate.
 - Errors are `{ "error": "message" }` with a non-2xx status code.
 - `GET /api/external/v1/` returns a small discovery document listing every endpoint.
 
@@ -30,10 +30,120 @@ List all accounts.
 ```json
 {
   "accounts": [
-    { "id": 1, "name": "Main", "created_at": "...", "updated_at": "..." }
+    {
+      "id": 1,
+      "name": "Main",
+      "parent_account_id": null,
+      "is_virtual": false,
+      "created_at": "...",
+      "updated_at": "...",
+      "cash_balances": [
+        { "currency": "USD", "balance": 8082.84 },
+        { "currency": "EUR", "balance": 165.92 }
+      ]
+    }
   ]
 }
 ```
+
+Field notes:
+- `is_virtual`: paper/simulated vs. real money, permanently, for the whole account — never per-transaction (see `GET /accounts/:id/cash-transactions` below).
+- `parent_account_id`: non-`null` when this account represents part of the same real broker account as another (e.g. a combined stocks+futures IBKR account split into two journal accounts by instrument type). Trades are **not** shared between parent/child — only cash.
+- `cash_balances`: **rolled up** — includes this account's own cash plus every descendant account's (recursively), per currency, never summed across currencies without an FX rate. For an account with no children this is just its own balance.
+
+---
+
+## GET /accounts/:id/cash-transactions
+
+The cash ledger for one account — deposits, withdrawals, transfers, currency exchanges, trade settlements, interest. Rolled up the same way `cash_balances` above is: includes `:id`'s own rows plus every descendant account's.
+
+### Query parameters
+
+| Param | Type | Description |
+|---|---|---|
+| `from` / `to` | ISO date/time | Filters on `date_time`. |
+| `limit` | int | Default 200, max 1000. |
+| `offset` | int | Default 0. |
+
+### Response
+
+```json
+{
+  "total": 3,
+  "limit": 200,
+  "offset": 0,
+  "cash_transactions": [
+    {
+      "id": 10,
+      "account_id": 7,
+      "account_name": "IB Stocks",
+      "date_time": "2026-05-01T00:00:00.000Z",
+      "type": "DEPOSIT",
+      "amount": "7582.84",
+      "currency": "USD",
+      "linked_trade_id": null,
+      "linked_holding_id": null,
+      "transfer_pair_id": null,
+      "note": "Initial deposit"
+    }
+  ]
+}
+```
+
+`type` is one of `DEPOSIT`, `WITHDRAWAL`, `TRANSFER_IN`, `TRANSFER_OUT`, `EXCHANGE_IN`, `EXCHANGE_OUT`, `TRADE_SETTLEMENT`, `INTEREST`, `OTHER`. `amount` is signed (positive = cash in). `account_name` tells you which physical account a row actually belongs to when it isn't `:id` itself (i.e. it came from a descendant). `404` if `:id` doesn't exist.
+
+---
+
+## GET /holdings
+
+Non-trade holdings — T-bills, bonds, other fixed income. Separate from `trades` since these don't have live quotes or buy/sell-fill PnL; they mature or get sold/redeemed instead.
+
+### Query parameters
+
+| Param | Type | Description |
+|---|---|---|
+| `account_id` | int | Restrict to one account (rolled up across descendants, like the ledger above). Omit for **all** accounts. |
+| `status` | string | Comma-separated: `ACTIVE,MATURED,SOLD`. |
+| `limit` | int | Default 200, max 1000. |
+| `offset` | int | Default 0. |
+
+### Response
+
+```json
+{
+  "total": 1,
+  "limit": 200,
+  "offset": 0,
+  "holdings": [
+    {
+      "id": 2,
+      "account_id": 10,
+      "account_name": "IB FUT Live 2026",
+      "type": "TBILL",
+      "name": "US T-Bill 13w",
+      "currency": "USD",
+      "face_value": "1000.00",
+      "purchase_price": "990.00",
+      "purchase_date": "2026-01-01",
+      "maturity_date": "2026-04-01",
+      "coupon_rate": null,
+      "coupon_frequency": null,
+      "status": "ACTIVE",
+      "notes": null,
+      "total_interest_earned": 0,
+      "implied_annual_yield_percent": 6.11
+    }
+  ]
+}
+```
+
+`type` is `TBILL`, `BOND`, or `OTHER`. When `coupon_rate`/`coupon_frequency` are `null`, treat `purchase_price` as the current value — no accrual is modeled until something actually posts (see below); this is the normal case for a `TBILL`, which is a discount instrument with no periodic coupon at all.
+
+"How much is this actually earning" — two computed fields, not stored columns:
+- `total_interest_earned`: realized coupon income to date (sum of this holding's `INTEREST`-type cash_transactions — see below). Excludes the maturity payout itself, which is principal (`type: "OTHER"`), not interest. Always `0` for a holding with no coupon (e.g. a `TBILL`).
+- `implied_annual_yield_percent`: only computed when `coupon_rate` is null/0 and `maturity_date` is set — the annualized yield a discount instrument like a `TBILL` is priced to return if held to maturity, `(face_value − purchase_price) / purchase_price`, annualized by actual days between `purchase_date` and `maturity_date`. `null` for a `BOND` — `coupon_rate` already answers this directly there.
+
+A background job (also triggerable via the internal `POST /holdings/process-accrual`) automatically posts `BOND` coupon payments as they come due (visible in `GET /accounts/:id/cash-transactions` as `type: "INTEREST"` rows with `linked_holding_id` set), and auto-redeems any holding at face value once `maturity_date` passes (`status` flips to `MATURED`, plus a `type: "OTHER"` credit row). A holding's `purchase_price`/`status` won't reflect this until whichever of those actually happens — there's no running "accrued but not yet posted" estimate.
 
 ---
 

@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { logger } = require('../modules/logger.js');
+const { processHoldingsAccrual } = require('../modules/holdingsAccrual.js');
 
 // Cash ledger + non-trade holdings (T-bills/bonds). See
 // docs/CAPITAL_TRACKING_DESIGN.md for the design this implements.
@@ -16,11 +17,25 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
 
     // --- Cash transactions ---
 
-    // GET /cash-transactions
+    // GET /cash-transactions — includes descendant accounts' rows too (see
+    // the rollup note on GET /accounts in routes/accounts.js: same real
+    // broker account, split into several journal accounts, sharing cash).
+    // account_name is included so the UI can label which physical account a
+    // given row actually belongs to when it isn't the one currently
+    // selected. For an account with no children this is unchanged.
     router.get('/cash-transactions', async (req, res) => {
         try {
             const { rows } = await pool.query(
-                `SELECT * FROM cash_transactions WHERE account_id = $1 ORDER BY date_time DESC, id DESC`,
+                `WITH RECURSIVE descendants AS (
+                    SELECT id FROM accounts WHERE id = $1
+                    UNION ALL
+                    SELECT a.id FROM accounts a JOIN descendants d ON a.parent_account_id = d.id
+                )
+                SELECT ct.*, a.name AS account_name
+                FROM cash_transactions ct
+                JOIN accounts a ON a.id = ct.account_id
+                WHERE ct.account_id IN (SELECT id FROM descendants)
+                ORDER BY ct.date_time DESC, ct.id DESC`,
                 [req.accountId]
             );
             res.json(rows);
@@ -187,11 +202,21 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
 
     // --- Holdings (T-bills, bonds, other non-trade assets) ---
 
-    // GET /holdings
+    // GET /holdings — rolled up across descendant accounts, same reasoning
+    // and account_name labeling as GET /cash-transactions above.
     router.get('/holdings', async (req, res) => {
         try {
             const { rows } = await pool.query(
-                `SELECT * FROM holdings WHERE account_id = $1 ORDER BY purchase_date DESC, id DESC`,
+                `WITH RECURSIVE descendants AS (
+                    SELECT id FROM accounts WHERE id = $1
+                    UNION ALL
+                    SELECT a.id FROM accounts a JOIN descendants d ON a.parent_account_id = d.id
+                )
+                SELECT h.*, a.name AS account_name
+                FROM holdings h
+                JOIN accounts a ON a.id = h.account_id
+                WHERE h.account_id IN (SELECT id FROM descendants)
+                ORDER BY h.purchase_date DESC, h.id DESC`,
                 [req.accountId]
             );
             res.json(rows);
@@ -323,6 +348,22 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
             res.json({ success: true });
         } catch (err) {
             logger.error('Error deleting holding:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // POST /holdings/process-accrual — manually runs the same coupon/maturity
+    // check the cron job (server.js) does every 6 hours, across ALL accounts
+    // (not just req.accountId — accrual is account-agnostic, X-Account-ID is
+    // only present here because it's required by apiRouter's middleware for
+    // non-exempt paths). For testing, or to not wait for the next cron tick
+    // right after entering a holding.
+    router.post('/holdings/process-accrual', async (req, res) => {
+        try {
+            const result = await processHoldingsAccrual(pool, broadcastStatus, uuidv4);
+            res.json({ success: true, ...result });
+        } catch (err) {
+            logger.error('Error processing holdings accrual:', err);
             res.status(500).json({ error: err.message });
         }
     });

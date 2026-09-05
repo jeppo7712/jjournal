@@ -35,6 +35,8 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
             documentation: 'EXTERNAL_API.md in the project repository',
             endpoints: [
                 'GET    /api/external/v1/accounts',
+                'GET    /api/external/v1/accounts/:id/cash-transactions',
+                'GET    /api/external/v1/holdings',
                 'GET    /api/external/v1/trades',
                 'GET    /api/external/v1/trades/:id',
                 'PATCH  /api/external/v1/trades/:id/ai-analysis',
@@ -49,12 +51,184 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
 
     // --- Accounts ---
 
+    // parent_account_id, is_virtual, and cash_balances (rolled up across
+    // descendant accounts) mirror the internal API (routes/accounts.js) —
+    // see docs/CAPITAL_TRACKING_DESIGN.md for why cash rolls up (several
+    // journal accounts can share one real broker account's cash pool) while
+    // trades deliberately don't. cash_balances is per-currency, never summed
+    // across currencies without an FX rate.
     router.get('/accounts', async (req, res) => {
         try {
-            const { rows } = await db.getPool().query('SELECT id, name, created_at, updated_at FROM accounts ORDER BY name');
+            const { rows } = await db.getPool().query(`
+                WITH RECURSIVE descendants AS (
+                    SELECT id AS ancestor_id, id AS descendant_id FROM accounts
+                    UNION ALL
+                    SELECT d.ancestor_id, a.id
+                    FROM accounts a
+                    JOIN descendants d ON a.parent_account_id = d.descendant_id
+                )
+                SELECT a.id, a.name, a.parent_account_id, a.is_virtual, a.created_at, a.updated_at,
+                    (
+                        SELECT COALESCE(json_agg(json_build_object(
+                            'currency', b.currency,
+                            'balance', b.balance
+                        )), '[]'::json)
+                        FROM (
+                            SELECT ct.currency, SUM(ct.amount) AS balance
+                            FROM cash_transactions ct
+                            WHERE ct.account_id IN (SELECT descendant_id FROM descendants WHERE ancestor_id = a.id)
+                            GROUP BY ct.currency
+                        ) b
+                    ) AS cash_balances
+                FROM accounts a
+                ORDER BY a.name
+            `);
             res.json({ accounts: rows });
         } catch (err) {
             logger.error('[External API] Error fetching accounts:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // --- Cash ledger & holdings ---
+
+    // Ledger for one account, rolled up across its descendants the same way
+    // GET /accounts's cash_balances is — account_name on each row says which
+    // physical account it actually belongs to when it isn't :id itself.
+    router.get('/accounts/:id/cash-transactions', async (req, res) => {
+        try {
+            const accountId = parseInt(req.params.id, 10);
+            if (isNaN(accountId)) return res.status(400).json({ error: 'Invalid account id' });
+            const { from, to } = req.query;
+            const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 1000);
+            const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+
+            const { rows: accountRows } = await db.getPool().query('SELECT id FROM accounts WHERE id = $1', [accountId]);
+            if (accountRows.length === 0) return res.status(404).json({ error: 'Account not found' });
+
+            const { rows } = await db.getPool().query(
+                `WITH RECURSIVE descendants AS (
+                    SELECT id FROM accounts WHERE id = $1
+                    UNION ALL
+                    SELECT a.id FROM accounts a JOIN descendants d ON a.parent_account_id = d.id
+                )
+                SELECT ct.*, a.name AS account_name
+                FROM cash_transactions ct
+                JOIN accounts a ON a.id = ct.account_id
+                WHERE ct.account_id IN (SELECT id FROM descendants)
+                ORDER BY ct.date_time DESC, ct.id DESC`,
+                [accountId]
+            );
+
+            let filtered = rows;
+            if (from) filtered = filtered.filter(r => r.date_time >= from);
+            if (to) filtered = filtered.filter(r => r.date_time <= to);
+
+            const total = filtered.length;
+            const page = filtered.slice(offset, offset + limit);
+            res.json({ total, limit, offset, cash_transactions: page });
+        } catch (err) {
+            logger.error('[External API] Error fetching cash transactions:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // T-bills/bonds/other non-trade holdings. account_id rolls up across
+    // descendants like the ledger above; omit it to list every account's
+    // holdings (same "no filter = everything" convention as GET /trades).
+    // Adds two "how much is this actually earning" fields an advisor would
+    // otherwise have to derive itself by cross-referencing cash-transactions:
+    // - total_interest_earned: realized coupon income to date (sum of this
+    //   holding's own INTEREST-type rows — see modules/holdingsAccrual.js).
+    //   Excludes the maturity redemption itself (that's principal, posted as
+    //   type OTHER, not interest).
+    // - implied_annual_yield_percent: only computed when coupon_rate is
+    //   null/0 (the normal case for a TBILL — a discount instrument with no
+    //   periodic coupon at all) and maturity_date is set: the annualized
+    //   yield this holding is priced to return if held to maturity,
+    //   (face_value - purchase_price) / purchase_price, annualized by
+    //   actual days held. For a BOND, coupon_rate already answers "how much
+    //   is this earning" directly — this field is null there.
+    function enrichHolding(holding, interestByHoldingId) {
+        const purchasePrice = Number(holding.purchase_price);
+        const faceValue = Number(holding.face_value);
+        const hasCoupon = holding.coupon_rate !== null && Number(holding.coupon_rate) > 0;
+
+        let impliedAnnualYieldPercent = null;
+        if (!hasCoupon && holding.maturity_date && purchasePrice > 0) {
+            const purchaseMs = new Date(holding.purchase_date).getTime();
+            const maturityMs = new Date(holding.maturity_date).getTime();
+            const daysHeld = (maturityMs - purchaseMs) / (1000 * 60 * 60 * 24);
+            if (daysHeld > 0) {
+                impliedAnnualYieldPercent = ((faceValue - purchasePrice) / purchasePrice) * (365 / daysHeld) * 100;
+            }
+        }
+
+        return {
+            ...holding,
+            total_interest_earned: interestByHoldingId.get(holding.id) || 0,
+            implied_annual_yield_percent: impliedAnnualYieldPercent,
+        };
+    }
+
+    router.get('/holdings', async (req, res) => {
+        try {
+            const { account_id, status } = req.query;
+            const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 1000);
+            const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+
+            let rows;
+            if (account_id) {
+                const accountId = parseInt(account_id, 10);
+                if (isNaN(accountId)) return res.status(400).json({ error: 'Invalid account_id' });
+                const result = await db.getPool().query(
+                    `WITH RECURSIVE descendants AS (
+                        SELECT id FROM accounts WHERE id = $1
+                        UNION ALL
+                        SELECT a.id FROM accounts a JOIN descendants d ON a.parent_account_id = d.id
+                    )
+                    SELECT h.*, a.name AS account_name
+                    FROM holdings h
+                    JOIN accounts a ON a.id = h.account_id
+                    WHERE h.account_id IN (SELECT id FROM descendants)
+                    ORDER BY h.purchase_date DESC, h.id DESC`,
+                    [accountId]
+                );
+                rows = result.rows;
+            } else {
+                const result = await db.getPool().query(
+                    `SELECT h.*, a.name AS account_name
+                     FROM holdings h
+                     JOIN accounts a ON a.id = h.account_id
+                     ORDER BY h.purchase_date DESC, h.id DESC`
+                );
+                rows = result.rows;
+            }
+
+            if (status) {
+                const wanted = new Set(status.toUpperCase().split(',').map(s => s.trim()));
+                rows = rows.filter(h => wanted.has(h.status));
+            }
+
+            const holdingIds = rows.map(h => h.id);
+            const interestByHoldingId = new Map();
+            if (holdingIds.length > 0) {
+                const { rows: interestRows } = await db.getPool().query(
+                    `SELECT linked_holding_id, SUM(amount) AS total
+                     FROM cash_transactions
+                     WHERE type = 'INTEREST' AND linked_holding_id = ANY($1::int[])
+                     GROUP BY linked_holding_id`,
+                    [holdingIds]
+                );
+                interestRows.forEach(r => interestByHoldingId.set(r.linked_holding_id, Number(r.total)));
+            }
+
+            const enriched = rows.map(h => enrichHolding(h, interestByHoldingId));
+            const total = enriched.length;
+            const page = enriched.slice(offset, offset + limit);
+            res.json({ total, limit, offset, holdings: page });
+        } catch (err) {
+            logger.error('[External API] Error fetching holdings:', err);
             res.status(500).json({ error: err.message });
         }
     });

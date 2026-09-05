@@ -1,13 +1,12 @@
 # Capital & Cash Tracking — Design
 
-Status: **phases 1-3 implemented** (cash ledger, hierarchical accounts,
-real/virtual tracking, trade auto-settlement, holdings). Phase 4 (external
-API exposure) is not yet done. Written 2026-09-05 after a planning
-discussion; captures the decisions made so a future session can pick up
-Phase 4 directly instead of re-deriving the rest. Revised after initial
-use surfaced two corrections (see Implementation notes): `is_virtual`
-moved from the ledger to the account, and trade settlement now includes
-futures realized P&L, not just fees.
+Status: **all 4 phases implemented** (cash ledger, hierarchical accounts,
+real/virtual tracking, trade auto-settlement, holdings, external API
+exposure). Written 2026-09-05 after a planning discussion. Revised twice
+after initial use: `is_virtual` moved from the ledger to the account
+(trade settlement also gained futures realized P&L, not just fees), and
+`parent_account_id` gained actual cash/holdings roll-up behavior instead
+of being a no-op label — see Implementation notes for both.
 
 ## Implementation notes (added once built, revised after initial use)
 
@@ -168,14 +167,40 @@ CREATE TABLE holdings (
 ```
 
 Buying a holding creates a `cash_transactions` debit linked via
-`linked_holding_id`. Maturity/redemption creates a credit (face value,
-plus any final coupon if `coupon_rate` is set) — either the user marks it
-matured manually, or (later refinement) a scheduled check auto-detects
-`maturity_date <= today` and prompts/auto-creates the redemption entry.
-When `coupon_rate`/`coupon_frequency` are set, current accrued value can
-be computed on the fly (purchase_price + accrued interest since last
-coupon) for display; when they're NULL, displayed value is just
-purchase_price until maturity — no accrual modeling attempted.
+`linked_holding_id`. Coupon payments and maturity are both automatic now
+(implemented — see below), on top of the manual purchase/redeem flow
+(`POST /holdings`, `POST /holdings/:id/redeem`) which still exists for
+early sales or anything the schedule doesn't cover.
+
+**Automatic coupon/maturity processing** (`modules/holdingsAccrual.js`,
+run by a cron job every 6 hours in `server.js`, or on demand via `POST
+/holdings/process-accrual`):
+- **BOND** holdings with `coupon_rate`/`coupon_frequency` set: each coupon
+  period (`face_value × coupon_rate/100 ÷ payments-per-year`) is posted as
+  a `cash_transactions` row (`type = INTEREST`, `linked_holding_id` set)
+  the moment its due date passes. Resumes from whichever coupon was last
+  posted (found via `MAX(date_time) WHERE linked_holding_id = ... AND type
+  = 'INTEREST'`, or `purchase_date` if none yet) rather than a separately
+  maintained "next due" column — same "derive it from the ledger, don't
+  track a parallel mutable value" philosophy as account cash balances.
+  Catches up on multiple missed periods in one pass if the server was down
+  a while.
+- **Any** holding type — auto-redeems at face value and flips to
+  `MATURED` once `maturity_date <= today`. This is the whole story for a
+  **TBILL**: a zero-coupon discount instrument (bought below face value,
+  no periodic coupon, single payoff at maturity) has no `coupon_rate` set
+  at all, so it just silently sits until this one event fires. For a BOND
+  this runs alongside its last coupon payment, as two separate ledger
+  rows (final coupon, then principal).
+- Deliberately narrow: only ever posts the exact scheduled amount on the
+  exact scheduled date, for a holding still `ACTIVE`. An early sale, a
+  partial redemption, or any custom amount/date is still the manual `POST
+  /holdings/:id/redeem` flow, untouched by this.
+- Confirmed with the user: no separate "display-only accrued value"
+  estimate between now and the next due date — a holding's displayed
+  value stays flat `purchase_price` right up until an actual posting
+  happens, matching "real cash shows up automatically" rather than a
+  running projection.
 
 ### 5. Trade actions auto-settle to cash (confirmed: automatic, not manual)
 
@@ -194,15 +219,21 @@ past trade "would have done" to cash. This is forward-looking capital
 management, not historical reconciliation; backfilling years of trades
 would also surface old fee/data quirks as confusing ledger noise.
 
-## API exposure (the stated primary motivation)
+## API exposure (the stated primary motivation) — implemented
 
-- `GET /api/external/v1/accounts` gains `parent_account_id`,
-  `cash_balance`, `is_virtual` (the account's own column, not derived —
-  see section 3) per account.
+- `GET /api/external/v1/accounts` gains `parent_account_id`, `is_virtual`
+  (the account's own column, not derived — see section 3), and
+  `cash_balances` (rolled up across descendants, per currency — see the
+  parent_account_id note in Implementation notes).
 - New `GET /api/external/v1/accounts/:id/cash-transactions` — the ledger,
-  paginated like `/trades`.
+  paginated like `/trades`, rolled up the same way.
 - New `GET /api/external/v1/holdings` — T-bills/bonds, filterable by
-  account/status like `/trades`.
+  account/status like `/trades`, rolled up the same way. Also enriches
+  each row with `total_interest_earned` (realized coupon income to date)
+  and `implied_annual_yield_percent` (a `TBILL`'s annualized discount
+  yield if held to maturity) — added specifically so "how much is this
+  actually earning" doesn't require an advisor to cross-reference
+  cash-transactions and do the yield math itself.
 
 This gives an API consumer (an AI advisor) the full picture: total
 capital, how it's split across accounts, how much is cash vs. deployed in
@@ -218,7 +249,11 @@ simulated — not just trade PnL.
    `TRADE_SETTLEMENT` cash_transactions rows going forward.
 3. **`holdings`** for T-bills/bonds, simple fields required + optional
    coupon detail.
-4. **External API exposure** of all of the above — still not yet done.
+4. **External API exposure** of all of the above — done: `GET
+   /api/external/v1/accounts` (now includes `parent_account_id`,
+   `is_virtual`, rolled-up `cash_balances`), `GET
+   /api/external/v1/accounts/:id/cash-transactions`, `GET
+   /api/external/v1/holdings`. See EXTERNAL_API.md.
 
 Each phase should ship and be usable on its own before the next starts —
 this is meant to avoid becoming one giant redesign before any of it is
@@ -239,3 +274,71 @@ Ent Tot/Ext Tot columns are hidden for futures accounts for the same
 reason. Same-currency (USD) amounts sum directly; other currencies are
 shown as a separate note rather than blended in, since summing without
 FX conversion would be meaningless.
+
+## Paper vs. real IBKR Flex Web Service credentials
+
+Follows directly from `accounts.is_virtual` being account-level (see
+section 3): paper and live are different IBKR accounts, so each needs its
+own Flex Web Service token and Query IDs — one global set couldn't
+correctly cover both without risking the same kind of paper/real mixing
+`is_virtual` itself was fixed to avoid. `modules/config.js` now stores
+`ibkrFlexToken{Real,Paper}` / `ibkrFlexQueryIdActivity{Real,Paper}` /
+`ibkrFlexQueryIdTradeConf{Real,Paper}`, migrated automatically on first
+load from the old single-set fields (folded into `...Real`, the more
+common existing case) — see `migrateFlexConfig` in that file. Settings →
+TWS shows both sets side by side. `GET /api/ibkr/trade-groups-flex` (the
+endpoint behind TradeModal's "Show Chart"/import flow) now requires an
+`X-Account-ID` header — previously entirely account-agnostic — looks up
+that account's `is_virtual`, and picks the matching credential set;
+Flex's own response cache is keyed by query IDs, so paper/real never
+share a cache entry.
+
+## `parent_account_id` gets real behavior: cash/holdings roll up to the parent
+
+Until now `parent_account_id` was stored and shown in Settings but did
+nothing — no query anywhere summed a child's capital into its parent, so
+setting one was silently a no-op (confirmed and clarified with the user
+after "IB FUT Live 2026" — parent-linked to "IB Stocks" but with zero
+trades/cash of its own — correctly showed $0 everywhere, which looked
+like a bug but wasn't). The concrete use case: one real IBKR account,
+split into several journal accounts by instrument type (stocks vs.
+futures) for clarity, all sharing the same actual cash pool.
+
+- `GET /api/accounts`: `cash_balances` is now a roll-up — an account's
+  balance is its own `cash_transactions` PLUS every descendant's,
+  recursively (`WITH RECURSIVE` over `parent_account_id`). Identical to
+  before for any account with no children (verified against live data).
+- `GET /api/cash-transactions` and `GET /api/holdings` (routes/capital.js):
+  same roll-up, plus each row now carries `account_name` so the UI can
+  show which physical account it actually belongs to when viewing a
+  parent's combined view.
+- Deliberately NOT rolled up: **trades**, in the sense of Dashboard/
+  TradeList/Stats — those stay scoped to exactly the selected account,
+  confirmed with the user: you don't want your stocks book's P&L polluted
+  by futures trades or vice versa, and that per-instrument-type separation
+  is the whole reason to split one broker account into several journal
+  accounts to begin with.
+- All writes (deposit/withdrawal/transfer/exchange, holding purchase/
+  redeem/delete) stay strictly scoped to the exact selected account — a
+  row's `account_id` is real and singular, roll-up is a read-time view,
+  not a data model change. Capital.jsx disables the delete/redeem controls
+  on a row that belongs to a descendant rather than the account currently
+  selected, with a tooltip pointing at which account to switch to instead.
+
+**Total Portfolio does roll up trades, unlike Total P&L/Market Value —
+confirmed as the intended split**: "what is this account's trading P&L"
+should stay per-account (that's the point of splitting by instrument
+type), but "what is this account actually worth" (Total Portfolio) should
+reflect the real combined number, matching what IBKR itself would show.
+Implemented via `TradeContext.processRawTradesArray` — the trade→computed-
+shape pipeline (`computeTradeMeta` → FIFO lot matching → entry/exit/
+position) that `refreshTrades` already ran inline, factored out into its
+own function so it's not duplicated — plus a new context method
+`fetchProcessedTradesForAccount(accountId)` that runs that same pipeline
+*and* the live-price step (`updateTradePriceData`) for an arbitrary other
+account's trades, returning them rather than writing into the `trades`
+state (which stays exactly the selected account's own, for
+Dashboard/TradeList/Stats/Total P&L/Market Value). Navigation calls this
+for every descendant account (full recursive closure, not just direct
+children) and merges the results into Total Portfolio's STK market value
+/ FUT unrealized P&L calculation only.
