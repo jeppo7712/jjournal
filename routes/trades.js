@@ -6,17 +6,27 @@ const { getTickMultiplier, computeFuturesRealizedPnLPerAction } = require('../mo
 
 module.exports = (pool, upload, broadcastStatus, uuidv4) => {
 
-    // Auto-settles trade actions to the cash ledger. STK actions move the
-    // full notional value (price*qty) plus fee — that's genuinely what
-    // buying/selling a stock does to cash. FUT actions settle fee always
-    // (a broker charges commission per fill regardless of PnL realisation),
-    // PLUS the realised PnL for closing actions specifically — a futures
-    // BUY/SELL doesn't move notional cash (only margin), the cash impact of
-    // closing a position IS its realised PnL. Uses the same FIFO matching
-    // TradeContext.js does client-side (computeFuturesRealizedPnLPerAction
-    // in modules/tradeCalculations.js — price-difference only, no fee
-    // attribution needed there since fees are already fully handled by the
-    // flat per-action charge below).
+    // Auto-settles a trade's actions to the cash ledger as ONE row per
+    // trade, not one per fill — a trade scaled across many fills (common
+    // for futures, and for stocks scaling in/out) would otherwise flood the
+    // ledger with one entry per contract/fill. Dated at the last action's
+    // date, matching the same convention the Dashboard's realised P&L chart
+    // already uses (relevantDate = trade.lastActionDate) for "when did this
+    // trade's PnL count." Trade-off: intermediate cash impact during a
+    // trade spanning days/weeks isn't visible day-by-day, only once
+    // settled here — a deliberate simplicity choice for a personal journal,
+    // not built for t+0 reconciliation.
+    //
+    // STK actions move the full notional value (price*qty) plus fee —
+    // that's genuinely what buying/selling a stock does to cash. FUT
+    // actions settle fee always (a broker charges commission per fill
+    // regardless of PnL realisation), PLUS the realised PnL for closing
+    // actions specifically — a futures BUY/SELL doesn't move notional cash
+    // (only margin), the cash impact of closing a position IS its realised
+    // PnL. Uses the same FIFO matching TradeContext.js does client-side
+    // (computeFuturesRealizedPnLPerAction in modules/tradeCalculations.js —
+    // price-difference only, no fee attribution needed there since fees
+    // are already fully handled by the flat per-action charge below).
     async function settleTradeActionsToCash(client, tradeId, accountId, type, symbol, actions, tickSize, tickValue) {
         if (!actions || actions.length === 0) return;
 
@@ -26,41 +36,33 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
         const { rows: fsRows } = await client.query('SELECT currency FROM futures_settings WHERE symbol=$1 AND type=$2', [symbol, type]);
         const currency = fsRows.length > 0 ? fsRows[0].currency : 'USD';
 
-        // FIFO matching needs actions in chronological order regardless of
-        // the order they were entered/submitted in — sort a copy, keeping
-        // each entry's original array index so results can be looked back
-        // up while building settlement rows in the original (submission)
-        // order below.
-        let realizedByOriginalIndex = new Map();
-        if (type === 'FUT' && actions.length > 1) {
-            const withOriginalIndex = actions.map((a, i) => ({ ...a, __originalIndex: i }));
-            withOriginalIndex.sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
-            const side = withOriginalIndex[0].type === 'BUY' ? 'LONG' : 'SHORT';
+        // Chronological order regardless of submission order — needed both
+        // for the FIFO match and to find the actual last action's date.
+        const sorted = actions.slice().sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+
+        let realizedByIndex = new Map();
+        if (type === 'FUT' && sorted.length > 1) {
+            const side = sorted[0].type === 'BUY' ? 'LONG' : 'SHORT';
             const tickMultiplier = getTickMultiplier({ type, tick_size: tickSize, tick_value: tickValue });
-            const realizedBySortedIndex = computeFuturesRealizedPnLPerAction(side, withOriginalIndex, tickMultiplier);
-            realizedBySortedIndex.forEach((pnl, sortedIdx) => {
-                realizedByOriginalIndex.set(withOriginalIndex[sortedIdx].__originalIndex, pnl);
-            });
+            realizedByIndex = computeFuturesRealizedPnLPerAction(side, sorted, tickMultiplier);
         }
 
-        const values = [];
-        const placeholders = [];
-        actions.forEach((a, i) => {
+        let totalAmount = 0;
+        sorted.forEach((a, i) => {
             const qty = Number(a.quantity || 0);
             const price = Number(a.price || 0);
             const fee = Number(a.fee || 0);
-            const realizedPnL = realizedByOriginalIndex.get(i) || 0;
-            const amount = type === 'STK'
+            const realizedPnL = realizedByIndex.get(i) || 0;
+            totalAmount += type === 'STK'
                 ? (a.type === 'BUY' ? -1 : 1) * qty * price - fee
                 : -fee + realizedPnL; // FUT: fee always, plus realised PnL if this action closed something
-            const baseIndex = i * 7;
-            placeholders.push(`($${baseIndex + 1}, $${baseIndex + 2}, 'TRADE_SETTLEMENT', $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7})`);
-            values.push(accountId, a.dateTime, amount, currency, isVirtual, tradeId, `${a.type} ${qty} ${symbol}`);
         });
 
+        const lastActionDate = sorted[sorted.length - 1].dateTime;
         await client.query(
-            `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, is_virtual, linked_trade_id, note) VALUES ${placeholders.join(',')}`,
-            values
+            `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, is_virtual, linked_trade_id, note)
+             VALUES ($1, $2, 'TRADE_SETTLEMENT', $3, $4, $5, $6, $7)`,
+            [accountId, lastActionDate, totalAmount, currency, isVirtual, tradeId, `${symbol} trade settlement`]
         );
     }
 
