@@ -144,27 +144,6 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
     setShowStatusPopup(true);
   };
 
-  // Optional inclusion of the current account's cash balance in Total P&L /
-  // Market Value — off by default since neither stat historically meant
-  // "plus whatever cash is sitting in the account," and folding that in
-  // changes what the number represents. Persisted like currentAccountId so
-  // the choice sticks across reloads. Only the SAME-currency (USD) balance
-  // gets folded directly into the number — other currencies are shown
-  // separately rather than summed in, since blending currencies without FX
-  // conversion would just be wrong (see docs/CAPITAL_TRACKING_DESIGN.md).
-  const [includeCash, setIncludeCash] = useState(localStorage.getItem('navIncludeCash') === 'true');
-  useEffect(() => {
-    localStorage.setItem('navIncludeCash', includeCash);
-  }, [includeCash]);
-
-  const currentAccountCashBalances = (Array.isArray(accounts)
-    ? accounts.find(a => String(a.id) === String(currentAccountId))?.cash_balances
-    : null) || [];
-  const usdCashBalance = currentAccountCashBalances
-    .filter(b => (b.currency || 'USD').toUpperCase() === 'USD')
-    .reduce((sum, b) => sum + Number(b.balance || 0), 0);
-  const otherCurrencyCashBalances = currentAccountCashBalances.filter(b => (b.currency || 'USD').toUpperCase() !== 'USD');
-
   const totalMarketValue = Array.isArray(trades)
     ? trades
         .filter(trade =>
@@ -226,32 +205,16 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
         )}
       </div>
       <div className={styles.navStat}>
-        <span>
-          Total P&L
-          <label title="Include this account's cash balance in the number below (same-currency only — other currencies shown separately, not summed in)" style={{ marginLeft: '6px', fontWeight: 'normal', fontSize: '0.75em', cursor: 'pointer' }}>
-            <input type="checkbox" checked={includeCash} onChange={e => { e.stopPropagation(); setIncludeCash(e.target.checked); }} onClick={e => e.stopPropagation()} style={{ marginRight: '3px' }} />
-            +cash
-          </label>
+        <span>Total P&L</span>
+        <span className={`${styles.accountBalance} ${totalPnl >= 0 ? styles.positive : styles.negative}`}>
+          ${totalPnl.toFixed(2)}
         </span>
-        <span className={`${styles.accountBalance} ${(totalPnl + (includeCash ? usdCashBalance : 0)) >= 0 ? styles.positive : styles.negative}`}>
-          ${(totalPnl + (includeCash ? usdCashBalance : 0)).toFixed(2)}
-        </span>
-        {includeCash && otherCurrencyCashBalances.length > 0 && (
-          <span style={{ fontSize: '0.7em', opacity: 0.7, display: 'block' }}>
-            + {otherCurrencyCashBalances.map(b => `${Number(b.balance).toFixed(2)} ${b.currency}`).join(' · ')}
-          </span>
-        )}
       </div>
       <div className={styles.navStat}>
         <span>Market Value</span>
-        <span className={`${styles.accountBalance} ${(totalMarketValue + (includeCash ? usdCashBalance : 0)) >= 0 ? styles.positive : styles.negative}`}>
-          ${(totalMarketValue + (includeCash ? usdCashBalance : 0)).toFixed(2)}
+        <span className={`${styles.accountBalance} ${totalMarketValue >= 0 ? styles.positive : styles.negative}`}>
+          ${totalMarketValue.toFixed(2)}
         </span>
-        {includeCash && otherCurrencyCashBalances.length > 0 && (
-          <span style={{ fontSize: '0.7em', opacity: 0.7, display: 'block' }}>
-            + {otherCurrencyCashBalances.map(b => `${Number(b.balance).toFixed(2)} ${b.currency}`).join(' · ')}
-          </span>
-        )}
       </div>
 
       {/* Integrated Status Display */}
