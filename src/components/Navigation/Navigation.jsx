@@ -12,6 +12,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
   const [navMode, setNavMode] = useState('wide');
   const [isLowHeight, setIsLowHeight] = useState(false);
   const [showStatusPopup, setShowStatusPopup] = useState(false);
+  const [activeHoldings, setActiveHoldings] = useState([]);
 
   const logoRef = useRef(null); //
   const actionPopupRef = useRef(null); //
@@ -37,6 +38,17 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
     };
     fetchDbStatus();
   }, []); //
+
+  // Cash + Total Portfolio are unfiltered account snapshots (same nature as
+  // Total P&L / Market Value above), which is why they live here and not on
+  // the Dashboard, whose numbers move with the user's active filters.
+  useEffect(() => {
+    if (!currentAccountId) { setActiveHoldings([]); return; }
+    fetch(`${process.env.REACT_APP_API_URL}/api/holdings`, { headers: { 'X-Account-ID': currentAccountId } })
+      .then(res => res.ok ? res.json() : [])
+      .then(data => setActiveHoldings(Array.isArray(data) ? data.filter(h => h.status === 'ACTIVE') : []))
+      .catch(() => setActiveHoldings([]));
+  }, [currentAccountId]); //
 
   useEffect(() => {
     const handleResize = () => {
@@ -175,6 +187,40 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
   const safeAccounts = Array.isArray(accounts) ? accounts : []; //
   const safeCurrentAccountId = currentAccountId || ''; //
 
+  const currentAccountCashBalances = (safeAccounts.find(a => String(a.id) === String(currentAccountId))?.cash_balances) || [];
+  const usdCashBalance = currentAccountCashBalances
+    .filter(b => (b.currency || 'USD').toUpperCase() === 'USD')
+    .reduce((sum, b) => sum + Number(b.balance || 0), 0);
+  const otherCurrencyCashBalances = currentAccountCashBalances.filter(b => (b.currency || 'USD').toUpperCase() !== 'USD');
+
+  const usdHoldingsValue = activeHoldings
+    .filter(h => (h.currency || 'USD').toUpperCase() === 'USD')
+    .reduce((sum, h) => sum + Number(h.purchase_price || 0), 0);
+  const otherCurrencyHoldingsValues = activeHoldings
+    .filter(h => (h.currency || 'USD').toUpperCase() !== 'USD')
+    .reduce((acc, h) => {
+      const cur = h.currency.toUpperCase();
+      acc[cur] = (acc[cur] || 0) + Number(h.purchase_price || 0);
+      return acc;
+    }, {});
+
+  // Same stocks-vs-futures distinction as totalMarketValue above: a futures
+  // position's price*multiplier is notional exposure, not money possessed
+  // (margin isn't tracked as a cash event here), so only its unrealised PnL
+  // counts toward what the account is actually worth.
+  const openTrades = (Array.isArray(trades) ? trades : []).filter(t => t.status === 'OPEN' && (t.type === 'STK' || t.type === 'FUT'));
+  const stkMarketValue = openTrades
+    .filter(t => t.type === 'STK' && typeof t.position === 'number' && typeof t.currentPrice === 'number')
+    .reduce((sum, t) => sum + t.position * t.currentPrice, 0);
+  const futUnrealisedPnl = openTrades
+    .filter(t => t.type === 'FUT')
+    .reduce((sum, t) => sum + (t.currentReturn || 0), 0);
+  const totalPortfolioUsd = stkMarketValue + futUnrealisedPnl + usdCashBalance + usdHoldingsValue;
+  const otherCurrencyPortfolioNote = [
+    ...otherCurrencyCashBalances.map(b => `${Number(b.balance).toFixed(2)} ${b.currency} cash`),
+    ...Object.entries(otherCurrencyHoldingsValues).map(([cur, val]) => `${val.toFixed(2)} ${cur} holdings`),
+  ].join(' · ');
+
   const renderAccountInfo = () => (
     <div className={styles.accountInfo}>
       <span className={styles.accountLabel}>Account</span>
@@ -204,17 +250,37 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
           </select>
         )}
       </div>
-      <div className={styles.navStat}>
-        <span>Total P&L</span>
-        <span className={`${styles.accountBalance} ${totalPnl >= 0 ? styles.positive : styles.negative}`}>
-          ${totalPnl.toFixed(2)}
-        </span>
-      </div>
-      <div className={styles.navStat}>
-        <span>Market Value</span>
-        <span className={`${styles.accountBalance} ${totalMarketValue >= 0 ? styles.positive : styles.negative}`}>
-          ${totalMarketValue.toFixed(2)}
-        </span>
+      {/* Scrolls internally on short viewports rather than pushing Status
+          below the visible sidebar — this section grew from 2 stats to 4
+          and a fixed-height nav (see .navigation) won't reflow around it. */}
+      <div className={styles.navStatsGroup}>
+        <div className={styles.navStat}>
+          <span>Total P&L</span>
+          <span className={`${styles.accountBalance} ${totalPnl >= 0 ? styles.positive : styles.negative}`}>
+            ${totalPnl.toFixed(2)}
+          </span>
+        </div>
+        <div className={styles.navStat}>
+          <span>Market Value</span>
+          <span className={`${styles.accountBalance} ${totalMarketValue >= 0 ? styles.positive : styles.negative}`}>
+            ${totalMarketValue.toFixed(2)}
+          </span>
+        </div>
+        <div className={styles.navStat}>
+          <span>Cash</span>
+          <span className={`${styles.accountBalance} ${usdCashBalance >= 0 ? styles.positive : styles.negative}`}>
+            ${usdCashBalance.toFixed(2)}
+          </span>
+        </div>
+        <div className={styles.navStat}>
+          <span>Total Portfolio</span>
+          <span className={`${styles.accountBalance} ${totalPortfolioUsd >= 0 ? styles.positive : styles.negative}`}>
+            ${totalPortfolioUsd.toFixed(2)}
+          </span>
+          {otherCurrencyPortfolioNote && (
+            <span className={styles.navStatNote}>{otherCurrencyPortfolioNote}</span>
+          )}
+        </div>
       </div>
 
       {/* Integrated Status Display */}

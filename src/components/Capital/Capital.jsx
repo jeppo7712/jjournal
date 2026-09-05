@@ -26,26 +26,19 @@ const Capital = () => {
   const [error, setError] = useState(null);
 
   const currentAccount = accounts.find(a => String(a.id) === String(currentAccountId));
-  const defaultIsVirtual = currentAccount ? !!currentAccount.default_is_virtual : false;
+  // Paper-vs-real is an ACCOUNT-level property (set in Settings), not a
+  // per-transaction choice — every transaction under this account is
+  // whatever the account is. See docs/CAPITAL_TRACKING_DESIGN.md.
+  const isVirtualAccount = currentAccount ? !!currentAccount.is_virtual : false;
 
-  const [txForm, setTxForm] = useState({ type: 'DEPOSIT', amount: '', currency: 'USD', date_time: todayISO(), is_virtual: defaultIsVirtual, note: '' });
-  const [transferForm, setTransferForm] = useState({ to_account_id: '', amount: '', currency: 'USD', date_time: todayISO(), is_virtual: defaultIsVirtual, note: '' });
-  const [exchangeForm, setExchangeForm] = useState({ from_amount: '', from_currency: 'USD', to_amount: '', to_currency: 'EUR', date_time: todayISO(), is_virtual: defaultIsVirtual, note: '' });
+  const [txForm, setTxForm] = useState({ type: 'DEPOSIT', amount: '', currency: 'USD', date_time: todayISO(), note: '' });
+  const [transferForm, setTransferForm] = useState({ to_account_id: '', amount: '', currency: 'USD', date_time: todayISO(), note: '' });
+  const [exchangeForm, setExchangeForm] = useState({ from_amount: '', from_currency: 'USD', to_amount: '', to_currency: 'EUR', date_time: todayISO(), note: '' });
   const [holdingForm, setHoldingForm] = useState({
     type: 'TBILL', name: '', currency: 'USD', face_value: '', purchase_price: '', purchase_date: todayISO(),
-    maturity_date: '', coupon_rate: '', coupon_frequency: '', notes: '', is_virtual: defaultIsVirtual,
+    maturity_date: '', coupon_rate: '', coupon_frequency: '', notes: '',
   });
   const [showHoldingDetail, setShowHoldingDetail] = useState(false);
-
-  // Keep the virtual-flag defaults in step with the currently-selected
-  // account's mode, without clobbering whatever the user is mid-typing in
-  // the rest of the form.
-  useEffect(() => {
-    setTxForm(prev => ({ ...prev, is_virtual: defaultIsVirtual }));
-    setTransferForm(prev => ({ ...prev, is_virtual: defaultIsVirtual }));
-    setExchangeForm(prev => ({ ...prev, is_virtual: defaultIsVirtual }));
-    setHoldingForm(prev => ({ ...prev, is_virtual: defaultIsVirtual }));
-  }, [defaultIsVirtual]);
 
   const fetchAll = useCallback(async () => {
     if (!currentAccountId) return;
@@ -168,7 +161,7 @@ const Capital = () => {
       const res = await fetch(`${apiBaseUrl}/api/holdings/${holding.id}/redeem`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
-        body: JSON.stringify({ amount, is_virtual: holding.is_virtual }),
+        body: JSON.stringify({ amount }),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to redeem');
       fetchAll();
@@ -190,7 +183,12 @@ const Capital = () => {
 
   return (
     <div className={styles.page}>
-      <h2>Capital — {currentAccount?.name}</h2>
+      <h2>
+        Capital — {currentAccount?.name}
+        <span className={styles.virtualBadge} style={{ marginLeft: '10px', background: isVirtualAccount ? 'rgba(245, 158, 11, 0.15)' : 'rgba(34, 197, 94, 0.15)', color: isVirtualAccount ? '#F59E0B' : '#22C55E' }}>
+          {isVirtualAccount ? 'PAPER ACCOUNT' : 'REAL ACCOUNT'}
+        </span>
+      </h2>
       {error && <p className={styles.negative}>{error}</p>}
 
       <div className={styles.section}>
@@ -204,7 +202,6 @@ const Capital = () => {
                 <div className={`${styles.balanceAmount} ${Number(b.balance) >= 0 ? styles.positive : styles.negative}`}>
                   {Number(b.balance).toFixed(2)} {b.currency}
                 </div>
-                <div className={styles.balanceMeta}>{b.is_virtual ? 'Paper' : 'Real'}</div>
               </div>
             ))}
           </div>
@@ -241,13 +238,6 @@ const Capital = () => {
             <label>Date</label>
             <input type="date" value={txForm.date_time} onChange={e => setTxForm(p => ({ ...p, date_time: e.target.value }))} />
           </div>
-          <div className={styles.formField}>
-            <label>&nbsp;</label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <input type="checkbox" checked={txForm.is_virtual} onChange={e => setTxForm(p => ({ ...p, is_virtual: e.target.checked }))} />
-              Paper
-            </label>
-          </div>
           <div className={styles.formField} style={{ flex: 1, minWidth: '160px' }}>
             <label>Note</label>
             <input value={txForm.note} onChange={e => setTxForm(p => ({ ...p, note: e.target.value }))} />
@@ -278,13 +268,6 @@ const Capital = () => {
             <label>Date</label>
             <input type="date" value={transferForm.date_time} onChange={e => setTransferForm(p => ({ ...p, date_time: e.target.value }))} />
           </div>
-          <div className={styles.formField}>
-            <label>&nbsp;</label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <input type="checkbox" checked={transferForm.is_virtual} onChange={e => setTransferForm(p => ({ ...p, is_virtual: e.target.checked }))} />
-              Paper
-            </label>
-          </div>
           <button type="submit">Transfer</button>
         </form>
 
@@ -314,13 +297,6 @@ const Capital = () => {
             <label>Date</label>
             <input type="date" value={exchangeForm.date_time} onChange={e => setExchangeForm(p => ({ ...p, date_time: e.target.value }))} />
           </div>
-          <div className={styles.formField}>
-            <label>&nbsp;</label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <input type="checkbox" checked={exchangeForm.is_virtual} onChange={e => setExchangeForm(p => ({ ...p, is_virtual: e.target.checked }))} />
-              Paper
-            </label>
-          </div>
           <button type="submit">Exchange</button>
         </form>
       </div>
@@ -336,7 +312,7 @@ const Capital = () => {
               {transactions.map(tx => (
                 <tr key={tx.id}>
                   <td>{new Date(tx.date_time).toLocaleDateString()}</td>
-                  <td>{tx.type}{tx.is_virtual && <span className={styles.virtualBadge}>PAPER</span>}</td>
+                  <td>{tx.type}</td>
                   <td className={Number(tx.amount) >= 0 ? styles.positive : styles.negative}>
                     {Number(tx.amount) >= 0 ? '+' : ''}{Number(tx.amount).toFixed(2)} {tx.currency}
                   </td>
@@ -385,13 +361,6 @@ const Capital = () => {
             <label>Maturity date</label>
             <input type="date" value={holdingForm.maturity_date} onChange={e => setHoldingForm(p => ({ ...p, maturity_date: e.target.value }))} />
           </div>
-          <div className={styles.formField}>
-            <label>&nbsp;</label>
-            <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
-              <input type="checkbox" checked={holdingForm.is_virtual} onChange={e => setHoldingForm(p => ({ ...p, is_virtual: e.target.checked }))} />
-              Paper
-            </label>
-          </div>
           <button type="button" onClick={() => setShowHoldingDetail(v => !v)} style={{ opacity: 0.8 }}>
             {showHoldingDetail ? 'Hide detail' : 'More detail'}
           </button>
@@ -424,7 +393,7 @@ const Capital = () => {
           <tbody>
             {holdings.map(h => (
               <tr key={h.id}>
-                <td>{h.name}{h.is_virtual && <span className={styles.virtualBadge}>PAPER</span>}</td>
+                <td>{h.name}</td>
                 <td>{h.type}</td>
                 <td>{Number(h.face_value).toFixed(2)} {h.currency}</td>
                 <td>{new Date(h.purchase_date).toLocaleDateString()}</td>
