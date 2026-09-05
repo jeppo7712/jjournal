@@ -4,7 +4,7 @@ import { useStatus } from '../../context/StatusContext';
 import styles from './Navigation.module.css';
 
 const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
-  const { stats, accounts, currentAccountId, setCurrentAccountId, trades } = useContext(TradeContext);
+  const { stats, accounts, currentAccountId, setCurrentAccountId, trades, fetchProcessedTradesForAccount, holdings } = useContext(TradeContext);
   const { statusLogs } = useStatus();
   const [isDatabaseConnected, setIsDatabaseConnected] = useState(false);
   const [showLogoPopup, setShowLogoPopup] = useState(false);
@@ -12,7 +12,12 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
   const [navMode, setNavMode] = useState('wide');
   const [isLowHeight, setIsLowHeight] = useState(false);
   const [showStatusPopup, setShowStatusPopup] = useState(false);
-  const [activeHoldings, setActiveHoldings] = useState([]);
+  const [descendantTrades, setDescendantTrades] = useState([]);
+  // holdings comes from TradeContext (shared with Capital.jsx, which is what
+  // actually adds/redeems/deletes them) so this stays live instead of only
+  // updating on account switch / page reload. Only ACTIVE ones count toward
+  // Total Portfolio's value.
+  const activeHoldings = (Array.isArray(holdings) ? holdings : []).filter(h => h.status === 'ACTIVE');
 
   const logoRef = useRef(null); //
   const actionPopupRef = useRef(null); //
@@ -42,13 +47,35 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
   // Cash + Total Portfolio are unfiltered account snapshots (same nature as
   // Total P&L / Market Value above), which is why they live here and not on
   // the Dashboard, whose numbers move with the user's active filters.
+
+  // Total Portfolio's STK market value / FUT unrealized P&L roll up across
+  // descendant accounts too — same real broker account, shared cash, see
+  // docs/CAPITAL_TRACKING_DESIGN.md. Total P&L / Market Value above stay
+  // scoped to exactly the selected account on purpose (confirmed with the
+  // user): that per-instrument-type separation is the reason these are
+  // split into accounts in the first place — you don't want your stocks
+  // dashboard's P&L polluted by futures trades, or vice versa. Only what
+  // the account is *actually worth* (Total Portfolio) should reflect the
+  // combined real number, matching what IBKR itself would show.
   useEffect(() => {
-    if (!currentAccountId) { setActiveHoldings([]); return; }
-    fetch(`${process.env.REACT_APP_API_URL}/api/holdings`, { headers: { 'X-Account-ID': currentAccountId } })
-      .then(res => res.ok ? res.json() : [])
-      .then(data => setActiveHoldings(Array.isArray(data) ? data.filter(h => h.status === 'ACTIVE') : []))
-      .catch(() => setActiveHoldings([]));
-  }, [currentAccountId]); //
+    const safeAccountsList = Array.isArray(accounts) ? accounts : [];
+    // Full descendant closure, not just direct children — matches the
+    // recursive roll-up routes/accounts.js already does for cash/holdings.
+    const descendantIds = [];
+    const frontier = [currentAccountId];
+    while (frontier.length > 0) {
+      const parentId = frontier.pop();
+      safeAccountsList
+        .filter(a => String(a.parent_account_id) === String(parentId))
+        .forEach(a => { descendantIds.push(a.id); frontier.push(a.id); });
+    }
+    if (descendantIds.length === 0) { setDescendantTrades([]); return; }
+    let cancelled = false;
+    Promise.all(descendantIds.map(id => fetchProcessedTradesForAccount(id)))
+      .then(results => { if (!cancelled) setDescendantTrades(results.flat()); })
+      .catch(() => { if (!cancelled) setDescendantTrades([]); });
+    return () => { cancelled = true; };
+  }, [accounts, currentAccountId, fetchProcessedTradesForAccount]); //
 
   useEffect(() => {
     const handleResize = () => {
@@ -207,8 +234,11 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
   // Same stocks-vs-futures distinction as totalMarketValue above: a futures
   // position's price*multiplier is notional exposure, not money possessed
   // (margin isn't tracked as a cash event here), so only its unrealised PnL
-  // counts toward what the account is actually worth.
-  const openTrades = (Array.isArray(trades) ? trades : []).filter(t => t.status === 'OPEN' && (t.type === 'STK' || t.type === 'FUT'));
+  // counts toward what the account is actually worth. Combines this
+  // account's own trades with descendants' (see the effect above) — unlike
+  // totalPnl/totalMarketValue, which stay scoped to exactly this account.
+  const openTrades = [...(Array.isArray(trades) ? trades : []), ...descendantTrades]
+    .filter(t => t.status === 'OPEN' && (t.type === 'STK' || t.type === 'FUT'));
   const stkMarketValue = openTrades
     .filter(t => t.type === 'STK' && typeof t.position === 'number' && typeof t.currentPrice === 'number')
     .reduce((sum, t) => sum + t.position * t.currentPrice, 0);

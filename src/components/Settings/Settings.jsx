@@ -314,8 +314,14 @@ export default function Settings() {
       { host: '', port: '7497' },
       { host: '', port: '7497' }
     ],
-    ibkrFlexQueryIdActivity: '',
-    ibkrFlexQueryIdTradeConf: ''
+    // Separate Flex credentials per paper-vs-real — see
+    // docs/CAPITAL_TRACKING_DESIGN.md and routes/ibkr.js. Which set a given
+    // Flex fetch uses is decided by the account's own is_virtual, not a
+    // global choice here.
+    ibkrFlexQueryIdActivityReal: '',
+    ibkrFlexQueryIdTradeConfReal: '',
+    ibkrFlexQueryIdActivityPaper: '',
+    ibkrFlexQueryIdTradeConfPaper: '',
   });
   const [activeTab, setActiveTab] = useState('general');
   const [dbStatus, setDbStatus] = useState(null);
@@ -348,7 +354,8 @@ export default function Settings() {
   const [exchanges, setExchanges] = useState([]);
   const [futuresAutoFillNote, setFuturesAutoFillNote] = useState('');
   const [exchangeAutoFillNote, setExchangeAutoFillNote] = useState('');
-  const [newIbkrFlexToken, setNewIbkrFlexToken] = useState('');
+  const [newIbkrFlexTokenReal, setNewIbkrFlexTokenReal] = useState('');
+  const [newIbkrFlexTokenPaper, setNewIbkrFlexTokenPaper] = useState('');
   const [isDragging, setIsDragging] = useState(false);
   const [dragStart, setDragStart] = useState(null);
   const [dragEnd, setDragEnd] = useState(null);
@@ -437,8 +444,10 @@ export default function Settings() {
             { host: '', port: '7497' },
             { host: '', port: '7497' }
           ],
-          ibkrFlexQueryIdActivity: data.ibkrFlexQueryIdActivity || '',
-          ibkrFlexQueryIdTradeConf: data.ibkrFlexQueryIdTradeConf || ''
+          ibkrFlexQueryIdActivityReal: data.ibkrFlexQueryIdActivityReal || '',
+          ibkrFlexQueryIdTradeConfReal: data.ibkrFlexQueryIdTradeConfReal || '',
+          ibkrFlexQueryIdActivityPaper: data.ibkrFlexQueryIdActivityPaper || '',
+          ibkrFlexQueryIdTradeConfPaper: data.ibkrFlexQueryIdTradeConfPaper || ''
         }));
         if (process.env.NODE_ENV === 'development') {
           setApiBaseUrl(process.env.REACT_APP_API_URL);
@@ -507,14 +516,23 @@ export default function Settings() {
         }
         body.port = portNum;
       }
-      if (newIbkrFlexToken) {
-        body.ibkrFlexToken = newIbkrFlexToken;
+      if (newIbkrFlexTokenReal) {
+        body.ibkrFlexTokenReal = newIbkrFlexTokenReal;
       }
-      if (settings.ibkrFlexQueryIdActivity) {
-        body.ibkrFlexQueryIdActivity = settings.ibkrFlexQueryIdActivity;
+      if (settings.ibkrFlexQueryIdActivityReal) {
+        body.ibkrFlexQueryIdActivityReal = settings.ibkrFlexQueryIdActivityReal;
       }
-      if (settings.ibkrFlexQueryIdTradeConf) {
-        body.ibkrFlexQueryIdTradeConf = settings.ibkrFlexQueryIdTradeConf;
+      if (settings.ibkrFlexQueryIdTradeConfReal) {
+        body.ibkrFlexQueryIdTradeConfReal = settings.ibkrFlexQueryIdTradeConfReal;
+      }
+      if (newIbkrFlexTokenPaper) {
+        body.ibkrFlexTokenPaper = newIbkrFlexTokenPaper;
+      }
+      if (settings.ibkrFlexQueryIdActivityPaper) {
+        body.ibkrFlexQueryIdActivityPaper = settings.ibkrFlexQueryIdActivityPaper;
+      }
+      if (settings.ibkrFlexQueryIdTradeConfPaper) {
+        body.ibkrFlexQueryIdTradeConfPaper = settings.ibkrFlexQueryIdTradeConfPaper;
       }
       if (settings.ibkrAddresses) {
         body.ibkrAddresses = settings.ibkrAddresses.map(addr => ({
@@ -540,7 +558,8 @@ export default function Settings() {
       }
       const data = await res.json();
       alert(data.message || 'Configuration updated successfully');
-      setNewIbkrFlexToken('');
+      setNewIbkrFlexTokenReal('');
+      setNewIbkrFlexTokenPaper('');
       const statusRes = await fetch(`${apiBaseUrl}/api/config/status`);
       const statusData = await statusRes.json();
       setDbStatus(statusData);
@@ -1914,28 +1933,35 @@ export default function Settings() {
             </div>
             <h3 style={{ marginTop: '28px' }}>IBKR Flex Web Service (No TWS Required)</h3>
             <p style={{ color: '#9CA3AF', fontSize: '0.82rem', marginTop: -8, marginBottom: 14 }}>
-              One token, two saved Flex Queries on IB's side. The Activity query covers your history (up to 365 days, refreshes end-of-day); the Trade Confirmation query fills in today's trades (ready ~15-30 min after each fill). Together they cover everything — TWS is optional.
+              Paper and real IBKR accounts are separate accounts on IB's side, so each needs its own
+              Flex Web Service token and Query IDs — set up below. Which set gets used for a given
+              journal account is decided automatically by that account's own Paper/Real setting
+              (Settings → Accounts), not chosen here. Per account: one token, two saved Flex Queries
+              on IB's side — the Activity query covers your history (up to 365 days, refreshes
+              end-of-day); the Trade Confirmation query fills in today's trades (ready ~15-30 min
+              after each fill). Together they cover everything — TWS is optional.
             </p>
+            <h4 style={{ margin: '0 0 8px' }}>Real accounts</h4>
             <div className={styles.formGrid}>
               <div className={styles.formField}>
-                <label htmlFor="ibkrFlexToken">Flex Token</label>
+                <label htmlFor="ibkrFlexTokenReal">Flex Token</label>
                 <input
-                  id="ibkrFlexToken"
+                  id="ibkrFlexTokenReal"
                   type="password"
-                  value={newIbkrFlexToken}
-                  onChange={(e) => setNewIbkrFlexToken(e.target.value)}
+                  value={newIbkrFlexTokenReal}
+                  onChange={(e) => setNewIbkrFlexTokenReal(e.target.value)}
                   className={styles.inputBubble}
                   autoComplete="off"
-                  placeholder={dbStatus?.ibkrFlexTokenSet ? '********' : 'Enter Flex Token'}
+                  placeholder={dbStatus?.ibkrFlexTokenRealSet ? '********' : 'Enter Flex Token'}
                 />
-                <span>{dbStatus?.ibkrFlexTokenSet ? 'Configured' : 'Not Configured'}</span>
+                <span>{dbStatus?.ibkrFlexTokenRealSet ? 'Configured' : 'Not Configured'}</span>
               </div>
               <div className={styles.formField}>
-                <label htmlFor="ibkrFlexQueryIdActivity">Activity Query ID (historical)</label>
+                <label htmlFor="ibkrFlexQueryIdActivityReal">Activity Query ID (historical)</label>
                 <input
-                  id="ibkrFlexQueryIdActivity"
-                  name="ibkrFlexQueryIdActivity"
-                  value={settings.ibkrFlexQueryIdActivity}
+                  id="ibkrFlexQueryIdActivityReal"
+                  name="ibkrFlexQueryIdActivityReal"
+                  value={settings.ibkrFlexQueryIdActivityReal}
                   onChange={handleSettingChange}
                   className={styles.inputBubble}
                   autoComplete="off"
@@ -1943,11 +1969,51 @@ export default function Settings() {
                 />
               </div>
               <div className={styles.formField}>
-                <label htmlFor="ibkrFlexQueryIdTradeConf">Trade Confirmation Query ID (today)</label>
+                <label htmlFor="ibkrFlexQueryIdTradeConfReal">Trade Confirmation Query ID (today)</label>
                 <input
-                  id="ibkrFlexQueryIdTradeConf"
-                  name="ibkrFlexQueryIdTradeConf"
-                  value={settings.ibkrFlexQueryIdTradeConf}
+                  id="ibkrFlexQueryIdTradeConfReal"
+                  name="ibkrFlexQueryIdTradeConfReal"
+                  value={settings.ibkrFlexQueryIdTradeConfReal}
+                  onChange={handleSettingChange}
+                  className={styles.inputBubble}
+                  autoComplete="off"
+                  placeholder="e.g., 1234568"
+                />
+              </div>
+            </div>
+            <h4 style={{ margin: '20px 0 8px' }}>Paper accounts</h4>
+            <div className={styles.formGrid}>
+              <div className={styles.formField}>
+                <label htmlFor="ibkrFlexTokenPaper">Flex Token</label>
+                <input
+                  id="ibkrFlexTokenPaper"
+                  type="password"
+                  value={newIbkrFlexTokenPaper}
+                  onChange={(e) => setNewIbkrFlexTokenPaper(e.target.value)}
+                  className={styles.inputBubble}
+                  autoComplete="off"
+                  placeholder={dbStatus?.ibkrFlexTokenPaperSet ? '********' : 'Enter Flex Token'}
+                />
+                <span>{dbStatus?.ibkrFlexTokenPaperSet ? 'Configured' : 'Not Configured'}</span>
+              </div>
+              <div className={styles.formField}>
+                <label htmlFor="ibkrFlexQueryIdActivityPaper">Activity Query ID (historical)</label>
+                <input
+                  id="ibkrFlexQueryIdActivityPaper"
+                  name="ibkrFlexQueryIdActivityPaper"
+                  value={settings.ibkrFlexQueryIdActivityPaper}
+                  onChange={handleSettingChange}
+                  className={styles.inputBubble}
+                  autoComplete="off"
+                  placeholder="e.g., 1234567"
+                />
+              </div>
+              <div className={styles.formField}>
+                <label htmlFor="ibkrFlexQueryIdTradeConfPaper">Trade Confirmation Query ID (today)</label>
+                <input
+                  id="ibkrFlexQueryIdTradeConfPaper"
+                  name="ibkrFlexQueryIdTradeConfPaper"
+                  value={settings.ibkrFlexQueryIdTradeConfPaper}
                   onChange={handleSettingChange}
                   className={styles.inputBubble}
                   autoComplete="off"
