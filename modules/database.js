@@ -257,6 +257,7 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
         date_time TIMESTAMP WITH TIME ZONE NOT NULL,
         type VARCHAR NOT NULL, -- DEPOSIT | WITHDRAWAL | TRANSFER_IN | TRANSFER_OUT
                                 -- | TRADE_SETTLEMENT | INTEREST | OTHER
+                                -- | EXCHANGE_IN | EXCHANGE_OUT
         amount NUMERIC NOT NULL, -- signed: positive = cash in, negative = cash out
         currency VARCHAR NOT NULL DEFAULT 'USD',
         is_virtual BOOLEAN NOT NULL DEFAULT FALSE,
@@ -265,16 +266,47 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
         -- Links a TRANSFER_OUT row to its matching TRANSFER_IN row in the
         -- other account (and vice versa), so a transfer is always a
         -- traceable, balanced pair rather than two independent entries.
-        transfer_pair_id INTEGER REFERENCES cash_transactions(id),
+        -- Also reused for a currency EXCHANGE_OUT/EXCHANGE_IN pair, which is
+        -- the same idea within a single account (currency differs between
+        -- the two legs instead of account_id). ON DELETE SET NULL: both
+        -- sides mutually reference each other, so deleting either one first
+        -- would otherwise violate the other's FK — this lets the app delete
+        -- one side, have the other's reference auto-null, then delete that
+        -- one too, instead of failing on a circular reference.
+        transfer_pair_id INTEGER REFERENCES cash_transactions(id) ON DELETE SET NULL,
         note TEXT,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         CONSTRAINT check_cash_transaction_type CHECK (type IN (
           'DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT',
-          'TRADE_SETTLEMENT', 'INTEREST', 'OTHER'
+          'TRADE_SETTLEMENT', 'INTEREST', 'OTHER', 'EXCHANGE_IN', 'EXCHANGE_OUT'
         ))
       );
     `);
     logger.debug('Cash_transactions table created successfully');
+
+    // Existing installs from before EXCHANGE_IN/EXCHANGE_OUT existed have the
+    // narrower constraint from the original CREATE TABLE (which IF NOT
+    // EXISTS won't retroactively update) — replace it so the check reflects
+    // the current allowed type list either way.
+    await client.query(`ALTER TABLE cash_transactions DROP CONSTRAINT IF EXISTS check_cash_transaction_type`);
+    await client.query(`
+      ALTER TABLE cash_transactions ADD CONSTRAINT check_cash_transaction_type CHECK (type IN (
+        'DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT',
+        'TRADE_SETTLEMENT', 'INTEREST', 'OTHER', 'EXCHANGE_IN', 'EXCHANGE_OUT'
+      ))
+    `);
+    logger.debug('cash_transactions type constraint up to date');
+
+    // Same "IF NOT EXISTS won't retroactively update" reasoning as above —
+    // an existing install's transfer_pair_id FK has no ON DELETE behavior,
+    // which fails deleting either side of a transfer/exchange pair (they
+    // mutually reference each other).
+    await client.query(`ALTER TABLE cash_transactions DROP CONSTRAINT IF EXISTS cash_transactions_transfer_pair_id_fkey`);
+    await client.query(`
+      ALTER TABLE cash_transactions ADD CONSTRAINT cash_transactions_transfer_pair_id_fkey
+        FOREIGN KEY (transfer_pair_id) REFERENCES cash_transactions(id) ON DELETE SET NULL
+    `);
+    logger.debug('cash_transactions transfer_pair_id ON DELETE behavior up to date');
 
     await client.query(`CREATE INDEX IF NOT EXISTS idx_cash_transactions_account ON cash_transactions (account_id, date_time)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_cash_transactions_trade ON cash_transactions (linked_trade_id)`);

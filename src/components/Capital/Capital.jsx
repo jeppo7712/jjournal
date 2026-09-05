@@ -30,6 +30,7 @@ const Capital = () => {
 
   const [txForm, setTxForm] = useState({ type: 'DEPOSIT', amount: '', currency: 'USD', date_time: todayISO(), is_virtual: defaultIsVirtual, note: '' });
   const [transferForm, setTransferForm] = useState({ to_account_id: '', amount: '', currency: 'USD', date_time: todayISO(), is_virtual: defaultIsVirtual, note: '' });
+  const [exchangeForm, setExchangeForm] = useState({ from_amount: '', from_currency: 'USD', to_amount: '', to_currency: 'EUR', date_time: todayISO(), is_virtual: defaultIsVirtual, note: '' });
   const [holdingForm, setHoldingForm] = useState({
     type: 'TBILL', name: '', currency: 'USD', face_value: '', purchase_price: '', purchase_date: todayISO(),
     maturity_date: '', coupon_rate: '', coupon_frequency: '', notes: '', is_virtual: defaultIsVirtual,
@@ -42,6 +43,7 @@ const Capital = () => {
   useEffect(() => {
     setTxForm(prev => ({ ...prev, is_virtual: defaultIsVirtual }));
     setTransferForm(prev => ({ ...prev, is_virtual: defaultIsVirtual }));
+    setExchangeForm(prev => ({ ...prev, is_virtual: defaultIsVirtual }));
     setHoldingForm(prev => ({ ...prev, is_virtual: defaultIsVirtual }));
   }, [defaultIsVirtual]);
 
@@ -94,6 +96,31 @@ const Capital = () => {
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to save transfer');
       setTransferForm(prev => ({ ...prev, amount: '', note: '' }));
+      fetchAll();
+    } catch (err) { alert(err.message); }
+  };
+
+  const submitExchange = async (e) => {
+    e.preventDefault();
+    if (!exchangeForm.from_amount || Number(exchangeForm.from_amount) <= 0 || !exchangeForm.to_amount || Number(exchangeForm.to_amount) <= 0) {
+      alert('Enter positive amounts on both sides.'); return;
+    }
+    if (exchangeForm.from_currency.toUpperCase() === exchangeForm.to_currency.toUpperCase()) {
+      alert('From/To currencies must differ — use a plain deposit/withdrawal for same-currency amounts.'); return;
+    }
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/cash-transactions/exchange`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
+        body: JSON.stringify({
+          ...exchangeForm,
+          from_amount: Number(exchangeForm.from_amount),
+          to_amount: Number(exchangeForm.to_amount),
+          date_time: new Date(exchangeForm.date_time).toISOString(),
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to save exchange');
+      setExchangeForm(prev => ({ ...prev, from_amount: '', to_amount: '', note: '' }));
       fetchAll();
     } catch (err) { alert(err.message); }
   };
@@ -189,9 +216,18 @@ const Capital = () => {
         <form onSubmit={submitTransaction} className={styles.formRow}>
           <div className={styles.formField}>
             <label>Type</label>
-            <select value={txForm.type} onChange={e => setTxForm(p => ({ ...p, type: e.target.value }))}>
-              {CASH_TX_TYPES.map(t => <option key={t} value={t}>{t}</option>)}
-            </select>
+            <div className={styles.typeToggleGroup}>
+              {CASH_TX_TYPES.map(t => (
+                <button
+                  key={t}
+                  type="button"
+                  onClick={() => setTxForm(p => ({ ...p, type: t }))}
+                  className={`${styles.typeToggleBtn} ${txForm.type === t ? styles.typeToggleBtnActive : ''} ${t === 'DEPOSIT' ? styles.typeToggleIn : ''} ${t === 'WITHDRAWAL' ? styles.typeToggleOut : ''}`}
+                >
+                  {t === 'DEPOSIT' ? '+ Deposit' : t === 'WITHDRAWAL' ? '− Withdraw' : t.charAt(0) + t.slice(1).toLowerCase()}
+                </button>
+              ))}
+            </div>
           </div>
           <div className={styles.formField}>
             <label>Amount</label>
@@ -250,6 +286,42 @@ const Capital = () => {
             </label>
           </div>
           <button type="submit">Transfer</button>
+        </form>
+
+        <h4 style={{ margin: '16px 0 8px' }}>Exchange currency</h4>
+        <p style={{ margin: '0 0 8px', fontSize: '0.8rem', opacity: 0.7 }}>
+          Converting cash from one currency to another, within this account. Enter what you actually
+          received on the "To" side — the implied rate is just to/from, no rate lookup needed.
+        </p>
+        <form onSubmit={submitExchange} className={styles.formRow}>
+          <div className={styles.formField}>
+            <label>From amount</label>
+            <input type="number" step="0.01" min="0.01" value={exchangeForm.from_amount} onChange={e => setExchangeForm(p => ({ ...p, from_amount: e.target.value }))} />
+          </div>
+          <div className={styles.formField}>
+            <label>From currency</label>
+            <input value={exchangeForm.from_currency} onChange={e => setExchangeForm(p => ({ ...p, from_currency: e.target.value.toUpperCase() }))} maxLength={3} style={{ width: '60px' }} />
+          </div>
+          <div className={styles.formField}>
+            <label>To amount</label>
+            <input type="number" step="0.01" min="0.01" value={exchangeForm.to_amount} onChange={e => setExchangeForm(p => ({ ...p, to_amount: e.target.value }))} />
+          </div>
+          <div className={styles.formField}>
+            <label>To currency</label>
+            <input value={exchangeForm.to_currency} onChange={e => setExchangeForm(p => ({ ...p, to_currency: e.target.value.toUpperCase() }))} maxLength={3} style={{ width: '60px' }} />
+          </div>
+          <div className={styles.formField}>
+            <label>Date</label>
+            <input type="date" value={exchangeForm.date_time} onChange={e => setExchangeForm(p => ({ ...p, date_time: e.target.value }))} />
+          </div>
+          <div className={styles.formField}>
+            <label>&nbsp;</label>
+            <label style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+              <input type="checkbox" checked={exchangeForm.is_virtual} onChange={e => setExchangeForm(p => ({ ...p, is_virtual: e.target.checked }))} />
+              Paper
+            </label>
+          </div>
+          <button type="submit">Exchange</button>
         </form>
       </div>
 

@@ -105,6 +105,58 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         }
     });
 
+    // POST /cash-transactions/exchange — converting cash from one currency
+    // to another, within the current account (req.accountId is both legs).
+    // Same paired-entry idea as a transfer (reuses transfer_pair_id), just
+    // the currency differs between the two legs instead of the account.
+    // to_amount is whatever you actually received, not computed from a rate
+    // — the implied rate is just to_amount/from_amount, no rate lookup needed.
+    router.post('/cash-transactions/exchange', async (req, res) => {
+        const { from_amount, from_currency, to_amount, to_currency, date_time, is_virtual, note } = req.body;
+        if (typeof from_amount !== 'number' || from_amount <= 0 || typeof to_amount !== 'number' || to_amount <= 0) {
+            return res.status(400).json({ error: 'from_amount and to_amount (positive numbers) are required' });
+        }
+        if (!from_currency || !to_currency) {
+            return res.status(400).json({ error: 'from_currency and to_currency are required' });
+        }
+        if (from_currency.toUpperCase() === to_currency.toUpperCase()) {
+            return res.status(400).json({ error: 'from_currency and to_currency must differ — use a deposit/withdrawal for same-currency amounts' });
+        }
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const dt = date_time || new Date().toISOString();
+            const virtual = !!is_virtual;
+            const fromCur = from_currency.toUpperCase();
+            const toCur = to_currency.toUpperCase();
+
+            const { rows: outRows } = await client.query(
+                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, is_virtual, note)
+                 VALUES ($1, $2, 'EXCHANGE_OUT', $3, $4, $5, $6) RETURNING id`,
+                [req.accountId, dt, -Math.abs(from_amount), fromCur, virtual, note || `Exchanged for ${toCur}`]
+            );
+            const { rows: inRows } = await client.query(
+                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, is_virtual, note, transfer_pair_id)
+                 VALUES ($1, $2, 'EXCHANGE_IN', $3, $4, $5, $6, $7) RETURNING id`,
+                [req.accountId, dt, Math.abs(to_amount), toCur, virtual, note || `Exchanged from ${fromCur}`, outRows[0].id]
+            );
+            await client.query(
+                `UPDATE cash_transactions SET transfer_pair_id = $1 WHERE id = $2`,
+                [inRows[0].id, outRows[0].id]
+            );
+
+            await client.query('COMMIT');
+            broadcastStatus(uuidv4(), `Exchanged ${from_amount} ${fromCur} for ${to_amount} ${toCur}`, 'success');
+            res.json({ success: true, out_id: outRows[0].id, in_id: inRows[0].id });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            logger.error('Error creating exchange:', err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
+        }
+    });
+
     // DELETE /cash-transactions/:id — also removes the matched other side of
     // a transfer, so a transfer is always deleted as a balanced pair, never
     // leaving one side dangling.
