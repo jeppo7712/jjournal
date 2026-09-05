@@ -42,6 +42,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     clearSymbolFilter,
     setRestrictToActionsInRange,
     restrictToActionsInRange,
+    currentAccountId,
   } = useContext(TradeContext);
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimeFilterMenu, setShowTimeFilterMenu] = useState(false);
@@ -49,6 +50,37 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
   const [showGraphPopup, setShowGraphPopup] = useState(false);
   const [isGraphHidden, setIsGraphHidden] = useState(false);
   const [pnlChartType, setPnlChartType] = useState('realised'); // 'realised' or 'unrealised'
+
+  // Optional "Cash Balance" overlay line on the realised P&L graph — off by
+  // default, persisted like other display preferences. Deliberately a
+  // SEPARATE line rather than folded into the P&L line's own values: less
+  // risk of subtly changing what the existing line means, and clearer to
+  // read (an equity-curve-style chart showing P&L and cash as distinct
+  // lines is more standard than a blended one). Only USD cash is plotted —
+  // see docs/CAPITAL_TRACKING_DESIGN.md on why other currencies aren't
+  // summed in without FX conversion. Scoped to the realised chart for now;
+  // the unrealised chart's own daily series isn't augmented yet.
+  const [includeCashInGraph, setIncludeCashInGraph] = useState(localStorage.getItem('dashboardIncludeCashInGraph') === 'true');
+  useEffect(() => {
+    localStorage.setItem('dashboardIncludeCashInGraph', includeCashInGraph);
+  }, [includeCashInGraph]);
+
+  const [cashTransactions, setCashTransactions] = useState([]);
+  useEffect(() => {
+    if (!currentAccountId) { setCashTransactions([]); return; }
+    fetch(`${process.env.REACT_APP_API_URL}/api/cash-transactions`, { headers: { 'X-Account-ID': currentAccountId } })
+      .then(res => res.ok ? res.json() : [])
+      .then(setCashTransactions)
+      .catch(() => setCashTransactions([]));
+  }, [currentAccountId]);
+
+  const cumulativeUsdCashAt = (dateInput) => {
+    if (!dateInput) return 0;
+    const asOf = new Date(dateInput).getTime();
+    return cashTransactions
+      .filter(tx => (tx.currency || 'USD').toUpperCase() === 'USD' && new Date(tx.date_time).getTime() <= asOf)
+      .reduce((sum, tx) => sum + Number(tx.amount || 0), 0);
+  };
   const timeFilterRef = useRef(null);
   const menuRef = useRef(null);
   const datePickerRef = useRef(null);
@@ -157,6 +189,16 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
         pointRadius: 0,
         pointHoverRadius: 0,
       },
+      ...(includeCashInGraph ? [{
+        label: 'Cash Balance (USD)',
+        data: sortedTrades.map(trade => cumulativeUsdCashAt(trade.relevantDate)),
+        borderColor: '#F59E0B',
+        backgroundColor: 'rgba(245, 158, 11, 0.1)',
+        tension: 0.3,
+        fill: false,
+        pointRadius: 0,
+        pointHoverRadius: 0,
+      }] : []),
     ],
   };
 
@@ -510,8 +552,13 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       },
     },
     plugins: {
+      // Only shown when the cash overlay is on — with a single line the
+      // custom vertical-line hover callout (below) already labels it, no
+      // legend needed; with two lines a legend is the simplest way to tell
+      // them apart (that callout only ever labels the first dataset).
       legend: {
-        display: false
+        display: includeCashInGraph,
+        labels: { color: '#9CA3AF', boxWidth: 12, font: { size: 11 } },
       },
       tooltip: {
         enabled: false
@@ -781,6 +828,15 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     <div className={styles.dashboard}>
       <div className={styles.topRow}>
         <div className={styles.graphBubble}>
+          {pnlChartType === 'realised' && (
+            <label
+              title="Overlay this account's USD cash balance over time as a second line"
+              style={{ position: 'absolute', top: '6px', right: '10px', zIndex: 2, fontSize: '0.7rem', color: '#9CA3AF', cursor: 'pointer', display: 'flex', alignItems: 'center', gap: '4px' }}
+            >
+              <input type="checkbox" checked={includeCashInGraph} onChange={e => setIncludeCashInGraph(e.target.checked)} />
+              Show cash balance
+            </label>
+          )}
           <div className={styles.graphArea}>
             <div className={styles.graphArea}>
               {pnlChartType === 'unrealised' && isFetching && <div>Loading unrealised P&L data...</div>}

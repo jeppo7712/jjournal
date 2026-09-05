@@ -69,6 +69,40 @@
   font-size: 0.85rem;
 }
 
+.typeToggleGroup {
+  display: flex;
+  gap: 4px;
+}
+
+.typeToggleBtn {
+  background: #1a1e29;
+  border: 1px solid #32384a;
+  border-radius: 5px;
+  color: #e0e2e6;
+  padding: 6px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+  opacity: 0.7;
+}
+
+.typeToggleBtnActive {
+  opacity: 1;
+  border-color: #3B82F6;
+  box-shadow: 0 0 0 1px #3B82F6;
+}
+
+.typeToggleIn.typeToggleBtnActive {
+  border-color: #22C55E;
+  box-shadow: 0 0 0 1px #22C55E;
+  color: #22C55E;
+}
+
+.typeToggleOut.typeToggleBtnActive {
+  border-color: #EF4444;
+  box-shadow: 0 0 0 1px #EF4444;
+  color: #EF4444;
+}
+
 .table {
   width: 100%;
   border-collapse: collapse;
