@@ -576,6 +576,43 @@
   color: #F3F4F6;
 }
 
+.portfolioSummaryRow {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  width: 100%;
+  margin-bottom: 12px;
+}
+
+.portfolioPill {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 6px;
+  background: #232837;
+  border: 1px solid #32384a;
+  border-radius: 20px;
+  padding: 6px 14px;
+  box-sizing: border-box;
+}
+
+.portfolioPillLabel {
+  font-size: 0.7rem;
+  color: #A5ADBA;
+  text-transform: uppercase;
+  letter-spacing: 0.03em;
+}
+
+.portfolioPillValue {
+  font-size: 0.9rem;
+  font-weight: 600;
+}
+
+.portfolioPillNote {
+  font-size: 0.65rem;
+  opacity: 0.7;
+}
+
 .filterSections {
   display: flex;
   gap: 12px;
