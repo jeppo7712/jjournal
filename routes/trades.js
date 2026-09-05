@@ -2,20 +2,22 @@ const express = require('express');
 const fs = require('fs').promises;
 const router = express.Router();
 const { logger } = require('../modules/logger.js');
+const { getTickMultiplier, computeFuturesRealizedPnLPerAction } = require('../modules/tradeCalculations.js');
 
 module.exports = (pool, upload, broadcastStatus, uuidv4) => {
 
     // Auto-settles trade actions to the cash ledger. STK actions move the
     // full notional value (price*qty) plus fee — that's genuinely what
-    // buying/selling a stock does to cash. FUT actions only settle the fee:
-    // opening/closing a futures position doesn't move notional cash (only
-    // margin, which isn't a "transaction" in this ledger's sense), and this
-    // does NOT attempt to auto-compute realized P&L settlement for futures
-    // — that needs the same incremental FIFO matching TradeContext.js does
-    // client-side for unrealized/realized PnL, not duplicated here (yet —
-    // see docs/CAPITAL_TRACKING_DESIGN.md). Record a futures trade's P&L in
-    // cash manually (a plain OTHER cash_transaction) until that's built.
-    async function settleTradeActionsToCash(client, tradeId, accountId, type, symbol, actions) {
+    // buying/selling a stock does to cash. FUT actions settle fee always
+    // (a broker charges commission per fill regardless of PnL realisation),
+    // PLUS the realised PnL for closing actions specifically — a futures
+    // BUY/SELL doesn't move notional cash (only margin), the cash impact of
+    // closing a position IS its realised PnL. Uses the same FIFO matching
+    // TradeContext.js does client-side (computeFuturesRealizedPnLPerAction
+    // in modules/tradeCalculations.js — price-difference only, no fee
+    // attribution needed there since fees are already fully handled by the
+    // flat per-action charge below).
+    async function settleTradeActionsToCash(client, tradeId, accountId, type, symbol, actions, tickSize, tickValue) {
         if (!actions || actions.length === 0) return;
 
         const { rows: accRows } = await client.query('SELECT default_is_virtual FROM accounts WHERE id=$1', [accountId]);
@@ -24,15 +26,33 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
         const { rows: fsRows } = await client.query('SELECT currency FROM futures_settings WHERE symbol=$1 AND type=$2', [symbol, type]);
         const currency = fsRows.length > 0 ? fsRows[0].currency : 'USD';
 
+        // FIFO matching needs actions in chronological order regardless of
+        // the order they were entered/submitted in — sort a copy, keeping
+        // each entry's original array index so results can be looked back
+        // up while building settlement rows in the original (submission)
+        // order below.
+        let realizedByOriginalIndex = new Map();
+        if (type === 'FUT' && actions.length > 1) {
+            const withOriginalIndex = actions.map((a, i) => ({ ...a, __originalIndex: i }));
+            withOriginalIndex.sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+            const side = withOriginalIndex[0].type === 'BUY' ? 'LONG' : 'SHORT';
+            const tickMultiplier = getTickMultiplier({ type, tick_size: tickSize, tick_value: tickValue });
+            const realizedBySortedIndex = computeFuturesRealizedPnLPerAction(side, withOriginalIndex, tickMultiplier);
+            realizedBySortedIndex.forEach((pnl, sortedIdx) => {
+                realizedByOriginalIndex.set(withOriginalIndex[sortedIdx].__originalIndex, pnl);
+            });
+        }
+
         const values = [];
         const placeholders = [];
         actions.forEach((a, i) => {
             const qty = Number(a.quantity || 0);
             const price = Number(a.price || 0);
             const fee = Number(a.fee || 0);
+            const realizedPnL = realizedByOriginalIndex.get(i) || 0;
             const amount = type === 'STK'
                 ? (a.type === 'BUY' ? -1 : 1) * qty * price - fee
-                : -fee; // FUT: fee only — see function comment above
+                : -fee + realizedPnL; // FUT: fee always, plus realised PnL if this action closed something
             const baseIndex = i * 7;
             placeholders.push(`($${baseIndex + 1}, $${baseIndex + 2}, 'TRADE_SETTLEMENT', $${baseIndex + 3}, $${baseIndex + 4}, $${baseIndex + 5}, $${baseIndex + 6}, $${baseIndex + 7})`);
             values.push(accountId, a.dateTime, amount, currency, isVirtual, tradeId, `${a.type} ${qty} ${symbol}`);
@@ -161,7 +181,7 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
         `;
                 await client.query(insertActionsQuery, actionValues);
 
-                await settleTradeActionsToCash(client, tradeId, accountId, type, symbol, actions);
+                await settleTradeActionsToCash(client, tradeId, accountId, type, symbol, actions, tickSize, tickValue);
             }
 
             // Insert journal if present
@@ -272,7 +292,7 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
         `;
                 await client.query(insertActionsQuery, actionValues);
 
-                await settleTradeActionsToCash(client, id, accountId, type, symbol, actions);
+                await settleTradeActionsToCash(client, id, accountId, type, symbol, actions, tickSize, tickValue);
             }
 
             // Re-insert journal (delete existing, then insert new if present)

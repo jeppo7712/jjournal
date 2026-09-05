@@ -180,4 +180,57 @@ function computeTradeDerived(trade, futuresSettings) {
     };
 }
 
-module.exports = { computeTradeDerived, getTickMultiplier };
+/**
+ * FIFO-matches a FUTURES trade's actions to compute the realised PnL
+ * attributable to EACH CLOSING action individually (not just the final
+ * total) — needed so a closing fill can settle its own realised PnL to
+ * cash as it happens (see routes/trades.js's settleTradeActionsToCash),
+ * rather than only being knowable once the whole position is closed.
+ *
+ * Deliberately price-difference only, no fee attribution — unlike
+ * matchLotsFIFO in TradeContext.js (which folds proportional entry/exit
+ * fees into its running realisedPnL total). Fees here are already
+ * correctly settled to cash the moment each action is charged one,
+ * regardless of when its PnL gets realised (a broker charges commission
+ * per fill, not per eventual close) — adding fee-slicing on top of that
+ * would double-count it. This only needs to answer "how much of the
+ * price move did this specific close realise."
+ *
+ * @param {string} side - 'LONG' or 'SHORT'
+ * @param {Array} actions - chronologically sorted {type, quantity, price}
+ * @param {number} tickMultiplier - see getTickMultiplier
+ * @returns {Map<number, number>} action array index -> realised PnL for
+ *   that action (only closing actions have entries; opening actions
+ *   realise nothing yet).
+ */
+function computeFuturesRealizedPnLPerAction(side, actions, tickMultiplier) {
+    const realizedByIndex = new Map();
+    if (side !== 'LONG' && side !== 'SHORT') return realizedByIndex;
+
+    const openLots = []; // { quantity, price }
+    const openingType = side === 'LONG' ? 'BUY' : 'SELL';
+    const closingType = side === 'LONG' ? 'SELL' : 'BUY';
+    const sign = side === 'LONG' ? 1 : -1;
+
+    actions.forEach((action, idx) => {
+        if (action.type === openingType) {
+            openLots.push({ quantity: Number(action.quantity || 0), price: Number(action.price || 0) });
+        } else if (action.type === closingType) {
+            let realizedForThisAction = 0;
+            let closeQty = Number(action.quantity || 0);
+            while (closeQty > 0 && openLots.length > 0) {
+                const lot = openLots[0];
+                const qtyToClose = Math.min(lot.quantity, closeQty);
+                realizedForThisAction += (Number(action.price) - lot.price) * sign * qtyToClose * tickMultiplier;
+                lot.quantity -= qtyToClose;
+                closeQty -= qtyToClose;
+                if (lot.quantity <= 0) openLots.shift();
+            }
+            realizedByIndex.set(idx, realizedForThisAction);
+        }
+    });
+
+    return realizedByIndex;
+}
+
+module.exports = { computeTradeDerived, getTickMultiplier, computeFuturesRealizedPnLPerAction, parseActionDate };
