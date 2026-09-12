@@ -104,6 +104,21 @@ function BubbleButton({ children, onClick, color = '#3B82F6', disabled, circle =
   );
 }
 
+// action.quantity is rendered raw from the DB with no cap at all — fine for
+// whole-share STK fills, but a crypto fill's real fractional size (e.g.
+// 0.16608935 BTC) needs up to 8 decimal places, and combined with a price on
+// the same line that's what was overflowing the timeline's fixed-width slots
+// (see the JSX below, and .timelineQtyPrice in the CSS). Trims only trailing
+// zeros — never rounds — so "1.00000000" shows as "1" but a genuinely
+// precise fill keeps its real precision; toFixed(8) first guards against
+// scientific notation for very small values (e.g. 1e-8) that plain
+// Number.toString() would otherwise produce.
+function formatQuantity(quantity) {
+  const num = Number(quantity);
+  if (!Number.isFinite(num)) return String(quantity);
+  return num.toFixed(8).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+}
+
 function formatTimelineDate(dateTime, pricePrecision = 2) {
   if (!(dateTime instanceof DateTime) || !dateTime.isValid) {
     console.warn(`Invalid dateTime: ${dateTime}`);
@@ -1564,9 +1579,11 @@ useEffect(() => {
                         </div>
                       </div>
                       <div className={styles.timelineQtyPrice}>
-                        <span className={styles.timelineQty}>{action.quantity}</span>
-                        <span className={styles.timelineAtSymbol}>@</span>
-                        <span className={styles.timelinePrice}>${Number(action.price).toFixed(pricePrecision)}</span>
+                        <span className={styles.timelineQty}>{formatQuantity(action.quantity)}</span>
+                        <span className={styles.timelineAtPrice}>
+                          <span className={styles.timelineAtSymbol}>@</span>
+                          <span className={styles.timelinePrice}>${Number(action.price).toFixed(pricePrecision)}</span>
+                        </span>
                       </div>
                     </div>
                   );
