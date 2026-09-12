@@ -180,12 +180,26 @@
   height: 32px;
 }
 
+/* Quantity and price used to sit on one nowrap line — fine for a whole-share
+   STK fill, but a crypto fill's real fractional quantity (up to 8 decimal
+   places, see formatQuantity in TradeView.jsx) combined with a price easily
+   exceeded the fixed-width dot slot below and overflowed into the next
+   action's slot. Stacking them (qty above, "@ $price" below) roughly halves
+   each line's width; word-break/overflow-wrap stay as a last-resort safety
+   net rather than the primary fix, so a single line still wraps instead of
+   silently spilling over a neighbor in some future edge case. */
 .timelineQtyPrice {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
   text-align: center;
   margin-top: 0;
+  line-height: 1.25;
+  max-width: 100%;
+}
+
+.timelineAtPrice {
   white-space: nowrap;
-  word-break: normal;
-  line-height: 1.1;
 }
 
 .timelineQty,
@@ -194,14 +208,15 @@
   color: #e0e2e6;
   font-size: 0.85em;
   font-weight: 400;
+  overflow-wrap: anywhere;
+}
+
+.timelineQty {
+  overflow-wrap: anywhere;
 }
 
 .timelineAtSymbol {
   color: #7fd7ff;
-  margin-right: 4px;
-}
-
-.timelineQty {
   margin-right: 4px;
 }
 
