@@ -67,7 +67,7 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
                     FROM accounts a
                     JOIN descendants d ON a.parent_account_id = d.descendant_id
                 )
-                SELECT a.id, a.name, a.parent_account_id, a.is_virtual, a.created_at, a.updated_at,
+                SELECT a.id, a.name, a.parent_account_id, a.is_virtual, a.custodian, a.custodian_is_us, a.created_at, a.updated_at,
                     (
                         SELECT COALESCE(json_agg(json_build_object(
                             'currency', b.currency,

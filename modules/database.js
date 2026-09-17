@@ -61,6 +61,8 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
         name VARCHAR NOT NULL UNIQUE,
         parent_account_id INTEGER REFERENCES accounts(id),
         is_virtual BOOLEAN NOT NULL DEFAULT FALSE,
+        custodian VARCHAR,
+        custodian_is_us BOOLEAN,
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
       );
@@ -99,6 +101,25 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
       END $$;
     `);
     logger.debug('accounts hierarchy/virtual columns ready');
+
+    // custodian / custodian_is_us: WHERE this account's cash is actually
+    // held — a different question from is_virtual (paper vs real) or which
+    // securities are traded. custodian is free text for a human to read
+    // (e.g. "IBKR
+    // LLC", "IBKR Ireland", "Kraken"); custodian_is_us is the boolean an
+    // automated consumer acts on, kept separate so nothing has to guess the
+    // entity from the spelling of a name. Nullable on purpose and never
+    // inferred/backfilled — every existing account starts NULL
+    // ("unclassified"), set explicitly by the user, same as is_virtual was
+    // never guessed from an account's name. Like is_virtual, a
+    // parent/child group is the same real account at the same real
+    // custodian, so a child can't legitimately disagree with its parent —
+    // see the inheritance enforcement in routes/accounts.js, which is why
+    // there's no migration/backfill logic needed here beyond adding the
+    // columns themselves.
+    await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS custodian VARCHAR`);
+    await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS custodian_is_us BOOLEAN`);
+    logger.debug('accounts custodian columns ready');
 
     logger.debug('Creating account_filters table...');
     await client.query(`
