@@ -332,7 +332,11 @@ export default function Settings() {
   const [editingSetting, setEditingSetting] = useState(null);
   const [editingExchange, setEditingExchange] = useState(null);
   const [editingAccountId, setEditingAccountId] = useState(null);
-  const [accountForm, setAccountForm] = useState({ name: '', parent_account_id: '', is_virtual: false });
+  // custodian_is_us is genuinely tri-state (US / non-US / not set) — '' is
+  // the form's "not set" sentinel (a native <select> value must be a
+  // string), converted to true/false/null right before the request goes
+  // out. See saveAccountForm.
+  const [accountForm, setAccountForm] = useState({ name: '', parent_account_id: '', is_virtual: false, custodian: '', custodian_is_us: '' });
   const [form, setForm] = useState({
     symbol: '',
     type: 'FUT',
@@ -587,13 +591,25 @@ export default function Settings() {
   // choice. A real paper-trading account is a genuinely different account
   // at the broker (different account number entirely), so "graduating" to
   // live trading means switching to a separate real account, not flipping
-  // this flag on an existing one.
+  // this flag on an existing one. custodian/custodian_is_us describe where
+  // this account's cash actually sits (e.g. for tracking US-situs estate
+  // tax exposure) — same "permanent fact about the whole account" shape as
+  // is_virtual, and same reasoning for why a child can't disagree with its
+  // parent: they're the same real account at the same real custodian. The
+  // form still carries these three fields for an account WITH a parent
+  // (disabled, showing the parent's live values below) purely for display —
+  // the backend ignores whatever's submitted for them in that case and uses
+  // the parent's own current values instead (see routes/accounts.js).
   const openAccountModal = (account = null) => {
     setEditingAccountId(account ? account.id : null);
     setAccountForm({
       name: account ? account.name : '',
       parent_account_id: account && account.parent_account_id ? String(account.parent_account_id) : '',
       is_virtual: account ? !!account.is_virtual : false,
+      custodian: account ? (account.custodian || '') : '',
+      custodian_is_us: account && account.custodian_is_us !== null && account.custodian_is_us !== undefined
+        ? String(account.custodian_is_us)
+        : '',
     });
     setShowAccountModal(true);
   };
@@ -613,6 +629,11 @@ export default function Settings() {
           name: accountForm.name.trim(),
           parent_account_id: accountForm.parent_account_id || null,
           is_virtual: accountForm.is_virtual,
+          custodian: accountForm.custodian.trim() || null,
+          // '' (not set) -> null; the backend ignores all three of these
+          // anyway when parent_account_id is set, inheriting the parent's
+          // values instead — see routes/accounts.js.
+          custodian_is_us: accountForm.custodian_is_us === 'true' ? true : accountForm.custodian_is_us === 'false' ? false : null,
         }),
       });
       if (!res.ok) {
@@ -1658,6 +1679,7 @@ export default function Settings() {
                     <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Name</th>
                     <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Parent</th>
                     <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Mode</th>
+                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}} title="Where this account's cash is actually held — for tracking US-situs estate tax exposure">Custodian</th>
                     <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Status</th>
                     <th style={{padding: '12px', textAlign: 'center', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Actions</th>
                   </tr>
@@ -1672,6 +1694,12 @@ export default function Settings() {
                       <td style={{padding: '12px', color: acc.is_virtual ? '#F59E0B' : '#22C55E'}}>
                         {acc.is_virtual ? 'Paper' : 'Real'}
                       </td>
+                      <td style={{padding: '12px', color: '#e0e2e6'}}>
+                        {acc.custodian || <span style={{ opacity: 0.5 }}>—</span>}
+                        {acc.custodian_is_us === true && <span style={{ marginLeft: '6px', color: '#F59E0B' }}>(US)</span>}
+                        {acc.custodian_is_us === false && <span style={{ marginLeft: '6px', color: '#22C55E' }}>(non-US)</span>}
+                        {(acc.custodian_is_us === null || acc.custodian_is_us === undefined) && <span style={{ marginLeft: '6px', opacity: 0.5 }}>(unclassified)</span>}
+                      </td>
                       <td style={{padding: '12px', color: '#e0e2e6'}}>{acc.id === parseInt(currentAccountId) ? 'Current' : ''}</td>
                       <td style={{padding: '12px', textAlign: 'center'}}>
                         <button className={styles.actionBtn} onClick={() => openAccountModal(acc)} style={{marginRight: '8px'}}>Edit</button>
@@ -1681,7 +1709,7 @@ export default function Settings() {
                   ))}
                   {accounts.length === 0 && (
                     <tr>
-                      <td colSpan="5" style={{padding: '12px', textAlign: 'center', color: '#e0e2e6'}}>No accounts configured</td>
+                      <td colSpan="6" style={{padding: '12px', textAlign: 'center', color: '#e0e2e6'}}>No accounts configured</td>
                     </tr>
                   )}
                 </tbody>
@@ -1731,18 +1759,72 @@ export default function Settings() {
                     ))}
                   </select>
                 </div>
-                <div className={styles.formField}>
-                  <label htmlFor="accountVirtual" title="Every trade and cash transaction in this account is treated as paper/simulated — not a per-transaction choice. If this account graduates to real trading, use a separate real account instead of flipping this later.">
-                    <input
-                      id="accountVirtual"
-                      type="checkbox"
-                      checked={accountForm.is_virtual}
-                      onChange={e => setAccountForm(prev => ({ ...prev, is_virtual: e.target.checked }))}
-                      style={{ marginRight: '8px' }}
-                    />
-                    Paper / virtual account (all trades and cash here are simulated)
-                  </label>
-                </div>
+                {(() => {
+                  // A parent/child group is the same real account at the same
+                  // real custodian — is_virtual/custodian/custodian_is_us
+                  // can't differ from the parent's, so once a parent is
+                  // chosen these three become read-only, showing the
+                  // parent's own live values (what will actually be saved —
+                  // the backend ignores whatever this form holds for them in
+                  // that case). See routes/accounts.js.
+                  const parentAccount = accountForm.parent_account_id
+                    ? accounts.find(a => String(a.id) === String(accountForm.parent_account_id))
+                    : null;
+                  const inherited = !!parentAccount;
+                  const displayIsVirtual = inherited ? !!parentAccount.is_virtual : accountForm.is_virtual;
+                  const displayCustodian = inherited ? (parentAccount.custodian || '') : accountForm.custodian;
+                  const displayCustodianIsUs = inherited
+                    ? (parentAccount.custodian_is_us === null || parentAccount.custodian_is_us === undefined ? '' : String(parentAccount.custodian_is_us))
+                    : accountForm.custodian_is_us;
+                  return (
+                    <>
+                      <div className={styles.formField}>
+                        <label htmlFor="accountVirtual" title="Every trade and cash transaction in this account is treated as paper/simulated — not a per-transaction choice. If this account graduates to real trading, use a separate real account instead of flipping this later.">
+                          <input
+                            id="accountVirtual"
+                            type="checkbox"
+                            checked={displayIsVirtual}
+                            disabled={inherited}
+                            onChange={e => setAccountForm(prev => ({ ...prev, is_virtual: e.target.checked }))}
+                            style={{ marginRight: '8px' }}
+                          />
+                          Paper / virtual account (all trades and cash here are simulated)
+                          {inherited && <span style={{ opacity: 0.6 }}> — inherited from {parentAccount.name}</span>}
+                        </label>
+                      </div>
+                      <div className={styles.formField}>
+                        <label htmlFor="accountCustodian" title="Where this account's cash is actually held (e.g. for tracking US-situs estate tax exposure) — a different fact from is_virtual or which securities are traded. Free text.">
+                          Custodian{inherited && <span style={{ opacity: 0.6 }}> — inherited from {parentAccount.name}</span>}
+                        </label>
+                        <input
+                          id="accountCustodian"
+                          value={displayCustodian}
+                          disabled={inherited}
+                          placeholder="e.g. IBKR LLC, IBKR Ireland, Kraken"
+                          onChange={e => setAccountForm(prev => ({ ...prev, custodian: e.target.value }))}
+                          className={styles.inputBubble}
+                          autoComplete="off"
+                        />
+                      </div>
+                      <div className={styles.formField}>
+                        <label htmlFor="accountCustodianIsUs" title="Whether the custodian above is a US entity — left as 'Not set' means unclassified, not confirmed non-US.">
+                          Custodian is a US entity?{inherited && <span style={{ opacity: 0.6 }}> — inherited from {parentAccount.name}</span>}
+                        </label>
+                        <select
+                          id="accountCustodianIsUs"
+                          value={displayCustodianIsUs}
+                          disabled={inherited}
+                          onChange={e => setAccountForm(prev => ({ ...prev, custodian_is_us: e.target.value }))}
+                          className={styles.inputBubble}
+                        >
+                          <option value="">Not set</option>
+                          <option value="true">US entity</option>
+                          <option value="false">Non-US entity</option>
+                        </select>
+                      </div>
+                    </>
+                  );
+                })()}
               </div>
               <div className={styles.footerRow}>
                 <BubbleButton onClick={saveAccountForm} color="#3B82F6">Save</BubbleButton>

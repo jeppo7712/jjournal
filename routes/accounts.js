@@ -2,6 +2,51 @@ const express = require('express');
 const router = express.Router();
 const { logger } = require('../modules/logger.js');
 
+// A parent/child group represents one real broker account (see the
+// cash_balances roll-up in GET / below) — is_virtual, custodian, and
+// custodian_is_us describe facts about that one real account/custodian, so
+// a child can never legitimately disagree with its parent on any of them.
+// Rather than just hiding the controls in the UI, this is enforced here too
+// so a direct API write can't create a contradiction: whatever is submitted
+// for these three fields on an account WITH a parent is ignored, replaced
+// with the parent's own current values.
+async function resolveInheritedFields(pool, parentAccountId) {
+    if (!parentAccountId) return null;
+    const { rows } = await pool.query(
+        'SELECT is_virtual, custodian, custodian_is_us FROM accounts WHERE id = $1',
+        [parentAccountId]
+    );
+    return rows[0] || null;
+}
+
+// Pushes an account's just-resolved is_virtual/custodian/custodian_is_us
+// down to every existing descendant, recursively — so editing the account
+// at the top of a group (or re-parenting a whole sub-tree onto a new
+// parent) fixes up the whole family immediately, not just new children
+// created going forward.
+async function cascadeToDescendants(pool, accountId, fields) {
+    await pool.query(
+        `WITH RECURSIVE descendants AS (
+            SELECT id FROM accounts WHERE parent_account_id = $1
+            UNION ALL
+            SELECT a.id FROM accounts a JOIN descendants d ON a.parent_account_id = d.id
+        )
+        UPDATE accounts SET is_virtual=$2, custodian=$3, custodian_is_us=$4, updated_at=NOW()
+        WHERE id IN (SELECT id FROM descendants)`,
+        [accountId, fields.is_virtual, fields.custodian, fields.custodian_is_us]
+    );
+}
+
+// true/false stay themselves; anything else (undefined, null, an empty
+// string from a tri-state form control) becomes NULL — "not set yet" and
+// "confirmed not a US entity" are different facts, so a missing value must
+// never silently become false.
+function normalizeCustodianIsUs(value) {
+    if (value === true) return true;
+    if (value === false) return false;
+    return null;
+}
+
 // Export a function that accepts dependencies
 module.exports = (pool, broadcastStatus, uuidv4) => {
 
@@ -60,15 +105,21 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
 
     // POST /accounts
     router.post('/', async (req, res) => {
-        const { name, parent_account_id, is_virtual } = req.body;
+        const { name, parent_account_id, is_virtual, custodian, custodian_is_us } = req.body;
         if (!name) {
             broadcastStatus(uuidv4(), 'Account name is required', 'error');
             return res.status(400).json({ error: 'Name is required' });
         }
         try {
+            const parentId = parent_account_id || null;
+            const inherited = await resolveInheritedFields(pool, parentId);
+            const effectiveIsVirtual = inherited ? inherited.is_virtual : !!is_virtual;
+            const effectiveCustodian = inherited ? inherited.custodian : (custodian || null);
+            const effectiveCustodianIsUs = inherited ? inherited.custodian_is_us : normalizeCustodianIsUs(custodian_is_us);
+
             const { rows } = await pool.query(
-                'INSERT INTO accounts (name, parent_account_id, is_virtual) VALUES ($1, $2, $3) RETURNING id',
-                [name, parent_account_id || null, !!is_virtual]
+                'INSERT INTO accounts (name, parent_account_id, is_virtual, custodian, custodian_is_us) VALUES ($1, $2, $3, $4, $5) RETURNING id',
+                [name, parentId, effectiveIsVirtual, effectiveCustodian, effectiveCustodianIsUs]
             );
             broadcastStatus(uuidv4(), `Created account: ${name}`, 'success');
             res.json({ success: true, id: rows[0].id });
@@ -85,12 +136,17 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
     });
 
     // PUT /accounts/:id
-    // Sets parent_account_id/is_virtual directly (not COALESCE) — the
-    // settings form always submits the full account state, including
-    // explicitly clearing parent_account_id back to top-level.
+    // Sets parent_account_id/is_virtual/custodian/custodian_is_us directly
+    // (not COALESCE) — the settings form always submits the full account
+    // state, including explicitly clearing parent_account_id back to
+    // top-level. When parent_account_id is set, is_virtual/custodian/
+    // custodian_is_us are always overridden with the parent's own current
+    // values regardless of what was submitted (see resolveInheritedFields)
+    // — then that resolved set is cascaded to every existing descendant
+    // too, so the whole family stays consistent, not just this one row.
     router.put('/:id', async (req, res) => {
         const { id } = req.params;
-        const { name, parent_account_id, is_virtual } = req.body;
+        const { name, parent_account_id, is_virtual, custodian, custodian_is_us } = req.body;
         if (!name) {
             broadcastStatus(uuidv4(), 'Account name is required for update', 'error');
             return res.status(400).json({ error: 'Name is required' });
@@ -99,18 +155,33 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
             return res.status(400).json({ error: 'An account cannot be its own parent' });
         }
         try {
+            const parentId = parent_account_id || null;
+            const inherited = await resolveInheritedFields(pool, parentId);
+            const effectiveIsVirtual = inherited ? inherited.is_virtual : !!is_virtual;
+            const effectiveCustodian = inherited ? inherited.custodian : (custodian || null);
+            const effectiveCustodianIsUs = inherited ? inherited.custodian_is_us : normalizeCustodianIsUs(custodian_is_us);
+
             const { rowCount } = await pool.query(
                 `UPDATE accounts SET name=$1,
                     parent_account_id = $2,
                     is_virtual = $3,
+                    custodian = $4,
+                    custodian_is_us = $5,
                     updated_at=NOW()
-                 WHERE id=$4`,
-                [name, parent_account_id || null, !!is_virtual, id]
+                 WHERE id=$6`,
+                [name, parentId, effectiveIsVirtual, effectiveCustodian, effectiveCustodianIsUs, id]
             );
             if (rowCount === 0) {
                 broadcastStatus(uuidv4(), `Account ID ${id} not found`, 'error');
                 return res.status(404).json({ error: 'Account not found' });
             }
+
+            await cascadeToDescendants(pool, id, {
+                is_virtual: effectiveIsVirtual,
+                custodian: effectiveCustodian,
+                custodian_is_us: effectiveCustodianIsUs,
+            });
+
             broadcastStatus(uuidv4(), `Updated account ID ${id} to ${name}`, 'success');
             res.json({ success: true });
         } catch (err) {
