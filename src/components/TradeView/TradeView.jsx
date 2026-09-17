@@ -211,7 +211,61 @@ function getBackAdjustmentInfo(bars) {
 
 
 export default function TradeView({ trade, onClose, onEdit }) {
-  const { futuresSettings } = useContext(TradeContext);
+  const { futuresSettings, accounts, currentAccountId, refreshTrades, refreshAccounts } = useContext(TradeContext);
+  const [showMoveMenu, setShowMoveMenu] = useState(false);
+  const [moveTargetId, setMoveTargetId] = useState('');
+  const [isMoving, setIsMoving] = useState(false);
+  // One ref on the wrapper around both the trigger button and the popover —
+  // BubbleButton is a plain function component (not React.forwardRef), so a
+  // ref placed directly on it would silently never attach and the
+  // outside-click check below would then never see a real element to test
+  // against, permanently short-circuiting to "never close."
+  const moveWrapperRef = useRef(null);
+
+  // Reassigns this trade (and everything attached to it) to a different
+  // account — for a trade logged under the wrong account, or an account
+  // being reorganized after the fact (e.g. splitting a bond/T-bill that was
+  // originally logged as a stock trade off into its own account, so its
+  // P&L stops mixing into the stock account's). See POST /trades/:id/move
+  // in routes/trades.js for exactly what moves with it.
+  const handleMoveTrade = useCallback(async () => {
+    if (!moveTargetId || !trade?.id) return;
+    setIsMoving(true);
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/trades/${trade.id}/move`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
+        body: JSON.stringify({ to_account_id: moveTargetId }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Failed to move trade');
+      setShowMoveMenu(false);
+      refreshTrades();
+      // The trade's settled cash (TRADE_SETTLEMENT rows) moved to the
+      // destination account too — without this, Navigation's Cash/Total
+      // Portfolio would stay stale for both accounts until a page reload,
+      // same class of bug as the earlier "add cash doesn't update nav" fix.
+      refreshAccounts();
+      // The trade no longer belongs to the account currently being viewed —
+      // nothing left here for this view to show.
+      onClose && onClose();
+    } catch (err) {
+      alert(err.message);
+    } finally {
+      setIsMoving(false);
+    }
+  }, [moveTargetId, trade?.id, currentAccountId, refreshTrades, refreshAccounts, onClose]);
+
+  useEffect(() => {
+    if (!showMoveMenu) return;
+    const handleClickOutside = (e) => {
+      if (moveWrapperRef.current && !moveWrapperRef.current.contains(e.target)) {
+        setShowMoveMenu(false);
+      }
+    };
+    document.addEventListener('pointerdown', handleClickOutside);
+    return () => document.removeEventListener('pointerdown', handleClickOutside);
+  }, [showMoveMenu]);
   const defaultTimeframe = trade?.type === 'FUT' ? '1H' : '1D';
   const [displayTimezone, setDisplayTimezoneState] = useState(loadStoredDisplayTimezone);
   const setDisplayTimezone = useCallback((value) => {
@@ -1722,6 +1776,44 @@ useEffect(() => {
             >
               <ChartIcon className={styles.aiIcon} />
             </BubbleButton>
+            {Array.isArray(accounts) && accounts.length > 1 && (
+              <div style={{ position: 'relative' }} ref={moveWrapperRef}>
+                <BubbleButton
+                  color="#6B7280"
+                  onClick={() => {
+                    setMoveTargetId('');
+                    setShowMoveMenu(v => !v);
+                  }}
+                >
+                  Move
+                </BubbleButton>
+                {showMoveMenu && (
+                  <div className={styles.moveMenu}>
+                    <label className={styles.moveMenuLabel}>Move to account</label>
+                    <select
+                      className={styles.moveMenuSelect}
+                      value={moveTargetId}
+                      onChange={e => setMoveTargetId(e.target.value)}
+                    >
+                      <option value="">Choose account…</option>
+                      {accounts
+                        .filter(a => String(a.id) !== String(trade.account_id ?? currentAccountId))
+                        .map(a => (
+                          <option key={a.id} value={a.id}>{a.name}</option>
+                        ))}
+                    </select>
+                    <button
+                      type="button"
+                      className={styles.moveMenuConfirm}
+                      disabled={!moveTargetId || isMoving}
+                      onClick={handleMoveTrade}
+                    >
+                      {isMoving ? 'Moving…' : 'Move'}
+                    </button>
+                  </div>
+                )}
+              </div>
+            )}
           </div>
           <BubbleButton color="#3B82F6" onClick={() => onEdit && onEdit(trade)}>
             Edit
