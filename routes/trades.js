@@ -379,6 +379,79 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
         }
     });
 
+    // POST /trades/:id/move — reassigns a trade (and everything attached to
+    // it) to a different account. For when a trade was logged under the
+    // wrong account, or an account's purpose is being reorganized after the
+    // fact (e.g. splitting a bond/T-bill holding that was originally logged
+    // as a stock trade off into its own account, so its P&L stops mixing
+    // into the stock account's numbers).
+    //
+    // Moves, in one transaction:
+    // - trades.account_id itself.
+    // - trade_attachments.account_id — this table carries its own
+    //   account_id independent of trade_id (unlike trade_actions/
+    //   trade_journals, which are purely trade_id-keyed and move for free).
+    //   Left stale, later attachment management (delete/relink, which scope
+    //   by trade_id AND account_id together) would silently stop finding
+    //   them once the trade's own account_id no longer matches.
+    // - cash_transactions.account_id for any row already settled against
+    //   this trade (linked_trade_id) — so the trade's cash impact follows it
+    //   to the new account rather than staying attributed to the old one.
+    //
+    // Does NOT touch trade_journals or trade_actions (no account_id column
+    // on either — already move for free via trade_id), and does not
+    // re-derive/re-settle cash — the existing settlement amount and date are
+    // preserved exactly, just reattributed to the new account.
+    router.post('/trades/:id/move', async (req, res) => {
+        const client = await pool.connect();
+        const { id } = req.params;
+        const { to_account_id } = req.body;
+        try {
+            const toAccountId = parseInt(to_account_id, 10);
+            if (isNaN(toAccountId)) {
+                return res.status(400).json({ error: 'to_account_id is required' });
+            }
+            if (toAccountId === req.accountId) {
+                return res.status(400).json({ error: 'Trade is already in this account' });
+            }
+
+            await client.query('BEGIN');
+
+            const { rows: tradeRows } = await client.query(
+                'SELECT id, symbol FROM trades WHERE id=$1 AND account_id=$2',
+                [id, req.accountId]
+            );
+            if (tradeRows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Trade not found' });
+            }
+
+            const { rows: destRows } = await client.query('SELECT id, name FROM accounts WHERE id=$1', [toAccountId]);
+            if (destRows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Destination account not found' });
+            }
+
+            await client.query(`UPDATE trades SET account_id=$1, updated_at=NOW() WHERE id=$2`, [toAccountId, id]);
+            await client.query(
+                `UPDATE trade_attachments SET account_id=$1 WHERE trade_id=$2 AND account_id=$3`,
+                [toAccountId, id, req.accountId]
+            );
+            await client.query(`UPDATE cash_transactions SET account_id=$1 WHERE linked_trade_id=$2`, [toAccountId, id]);
+
+            await client.query('COMMIT');
+            broadcastStatus(uuidv4(), `Moved ${tradeRows[0].symbol} (trade ${id}) to ${destRows[0].name}`, 'success');
+            res.json({ success: true, to_account_id: toAccountId, to_account_name: destRows[0].name });
+        } catch (err) {
+            await client.query('ROLLBACK');
+            broadcastStatus(uuidv4(), `Error moving trade: ${err.message}`, 'error');
+            logger.error('Error moving trade:', err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
+        }
+    });
+
     // --- DayNotes Endpoints ---
 
     // Optimized GET /daynotes: single query with JSON aggregation, no image data included
