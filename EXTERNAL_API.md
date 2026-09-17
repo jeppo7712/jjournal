@@ -35,6 +35,8 @@ List all accounts.
       "name": "Main",
       "parent_account_id": null,
       "is_virtual": false,
+      "custodian": "IBKR LLC",
+      "custodian_is_us": true,
       "created_at": "...",
       "updated_at": "...",
       "cash_balances": [
@@ -50,6 +52,7 @@ Field notes:
 - `is_virtual`: paper/simulated vs. real money, permanently, for the whole account — never per-transaction (see `GET /accounts/:id/cash-transactions` below).
 - `parent_account_id`: non-`null` when this account represents part of the same real broker account as another (e.g. a combined stocks+futures IBKR account split into two journal accounts by instrument type). Trades are **not** shared between parent/child — only cash.
 - `cash_balances`: **rolled up** — includes this account's own cash plus every descendant account's (recursively), per currency, never summed across currencies without an FX rate. For an account with no children this is just its own balance.
+- `custodian` / `custodian_is_us`: where this account's *cash* is actually held — a different question from `is_virtual`, and from a security's own situs (a security's situs follows its issuer, not the account holding it — the journal doesn't attempt to classify that; a consumer working that out needs to do it from the symbol/ticker itself). `custodian` is free text for a human to read (e.g. `"IBKR LLC"`, `"IBKR Ireland"`, `"Kraken"`). `custodian_is_us` is the boolean a consumer should act on: `true` a US entity, `false` not, **`null` means not yet classified — never treat `null` as `false`, an unclassified account is not the same fact as a confirmed-non-US one.** Never inferred or backfilled by the app; set explicitly by the user in Settings. A child account (non-`null` `parent_account_id`) always has the *same* `custodian`/`custodian_is_us` as its parent — enforced server-side, so any account's own field can be read and trusted directly without walking up to a root parent yourself.
 
 ---
 

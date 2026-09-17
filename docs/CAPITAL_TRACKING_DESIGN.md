@@ -373,3 +373,56 @@ trade leaves the current account's list) and `refreshAccounts()` (its
 settled cash moved too, so both accounts' balances/Total Portfolio need
 to reflect that immediately, not after a reload) on success, then closes
 the trade view since there's nothing left there to show.
+
+## `custodian` / `custodian_is_us`, and hierarchy consistency for account-level facts
+
+Two new nullable columns on `accounts`: `custodian` (free text — who
+actually holds this account's cash, e.g. "IBKR LLC", "Kraken") and
+`custodian_is_us` (boolean, tri-state including `NULL` = not yet
+classified). Requested by an external API consumer — the journal previously had no field saying where an account's
+cash actually sits, only `id`/`name`/`parent_account_id`/`is_virtual`.
+Same shape as `is_virtual`: one permanent fact about the whole account,
+never inferred/backfilled (every existing account starts `NULL`, set
+explicitly by the user), never a per-transaction choice.
+
+**This surfaced a real gap in the existing `is_virtual`/`parent_account_id`
+design, not just a new field to add**: nothing stopped a child account
+from having a different `is_virtual` than its parent, even though a
+parent/child group is *defined* as being the same real account at the
+same real broker — a child disagreeing with its parent on paper-vs-real
+(or, now, on custodian) is a contradiction, not a valid state, the same
+class of problem `is_virtual` itself was simplified to fix originally
+(see the `is_virtual`-on-the-ledger section above). Fixed the same way:
+enforced server-side, not just hidden in the UI.
+
+`routes/accounts.js`:
+- `resolveInheritedFields(pool, parentAccountId)`: when a `POST`/`PUT`
+  submits a `parent_account_id`, `is_virtual`/`custodian`/
+  `custodian_is_us` submitted in that same request are **ignored** —
+  replaced with the parent's own current values. A direct API write can't
+  create a contradiction any more than the UI can.
+- `cascadeToDescendants(pool, accountId, fields)`: after resolving an
+  account's own effective values, pushes them down to every *existing*
+  descendant too (`WITH RECURSIVE`, same pattern as the `cash_balances`
+  roll-up), so re-parenting a sub-tree, or editing the account at the top
+  of a group, fixes up the whole family immediately — not just new
+  children created going forward. Concretely: set `custodian` once on the
+  top-level account, and every child (existing and future) inherits it
+  without being touched individually.
+- `custodian_is_us` is normalized to strictly `true`/`false`/`null` — an
+  omitted or unrecognized value becomes `null`, never silently `false`
+  ("not set" and "confirmed not a US entity" are different facts).
+
+`routes/external.js`: `GET /accounts` includes both fields as their own
+account's stored values — because inheritance is enforced at *write*
+time (not computed at read time), a child's own row already holds the
+correct, already-consistent value, so a consumer can read any account
+directly and trust it without walking up to a root parent itself.
+
+`src/components/Settings/Settings.jsx`: the account edit form's
+Paper/virtual checkbox, plus the two new custodian controls (free-text
+input; a three-way select — US entity / non-US entity / not set, able to
+genuinely submit `null`), all become read-only the moment a parent is
+chosen, displaying the parent's own live values (looked up from the
+already-fetched `accounts` list) rather than whatever the form happens to
+hold — an honest preview of what will actually be saved.
