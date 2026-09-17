@@ -244,6 +244,59 @@
   gap: 8px;
 }
 
+.moveMenu {
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 0;
+  z-index: 20;
+  background: #2a2f3e;
+  border: 1px solid #3a4050;
+  border-radius: 12px;
+  padding: 14px;
+  width: 220px;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.35);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.moveMenuLabel {
+  font-size: 0.78rem;
+  color: #A5ADBA;
+}
+
+.moveMenuSelect {
+  background: #1a1e29;
+  border: 1px solid #3a4050;
+  border-radius: 8px;
+  color: #e0e2e6;
+  padding: 8px 10px;
+  font-size: 0.9rem;
+  width: 100%;
+  box-sizing: border-box;
+}
+
+.moveMenuConfirm {
+  background: #3B82F6;
+  color: #fff;
+  border: none;
+  border-radius: 8px;
+  padding: 8px 12px;
+  font-weight: 600;
+  font-size: 0.9rem;
+  cursor: pointer;
+  transition: background-color 0.18s, opacity 0.18s;
+}
+
+.moveMenuConfirm:hover:not(:disabled) {
+  background: #4B9BFF;
+}
+
+.moveMenuConfirm:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
 .saveBtn {
   padding: 10px 28px;
   background: radial-gradient(circle at 45deg, #3B82F6 0%, #2563eb 100%);

@@ -342,3 +342,34 @@ Dashboard/TradeList/Stats/Total P&L/Market Value). Navigation calls this
 for every descendant account (full recursive closure, not just direct
 children) and merges the results into Total Portfolio's STK market value
 / FUT unrealized P&L calculation only.
+
+## Moving a trade to a different account
+
+Complements the above: an account split often means a trade that already
+exists needs to move, not just new ones going forward — e.g. a bond ETF
+originally logged as a stock trade
+under a general "stocks" account, where its price/interest movement was
+mixing into that account's stock P&L, needing to move to a dedicated
+account once one exists. There was previously no way to do this at all.
+
+`POST /api/trades/:id/move` (`routes/trades.js`), body `{ to_account_id }`,
+`X-Account-ID` header is the source account (ownership check same as
+PUT/DELETE `/trades/:id`). Moves, in one transaction:
+- `trades.account_id` itself.
+- `trade_attachments.account_id` — this table carries its own `account_id`
+  independent of `trade_id` (unlike `trade_actions`/`trade_journals`,
+  which are purely `trade_id`-keyed and move for free); left stale, later
+  attachment management (which scopes by `trade_id` AND `account_id`
+  together) would silently stop finding them.
+- `cash_transactions.account_id` for any row already settled against this
+  trade (`linked_trade_id`) — so the trade's cash impact follows it to the
+  new account rather than staying attributed to the old one. Not
+  re-derived/re-settled — the existing amount and date are preserved
+  exactly, just reattributed.
+
+Frontend: a "Move" button in TradeView's footer opens a small popover
+(destination account picker + confirm) — calls `refreshTrades()` (the
+trade leaves the current account's list) and `refreshAccounts()` (its
+settled cash moved too, so both accounts' balances/Total Portfolio need
+to reflect that immediately, not after a reload) on success, then closes
+the trade view since there's nothing left there to show.
