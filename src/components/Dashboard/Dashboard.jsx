@@ -633,17 +633,26 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
 
   ChartJS.register(verticalLinePlugin);
 
+  const lineCountOf = (stat) => toTotalsList(stat.totals || {}).length;
+
   // A stat box is a fixed 50px with its value absolutely positioned — one
   // line fits, two do not (a second currency overflowed the box entirely).
   // So a single currency renders exactly as it always has, untouched, and
   // only two-or-more switches to a stacked, smaller variant.
   //
+  // `groupLines` is the line count of the *pair* a box is rendered beside,
+  // not its own: R P&L holding USD+EUR while U P&L holds only USD would
+  // otherwise put a small stacked box next to a large single-line one. Both
+  // take the taller one's treatment, so the pair reads as one unit and the
+  // shared currency lands on the same baseline in both.
+  //
   // `align` differs by box on purpose: the P&L boxes have no percentage
   // gauge so their values can sit right; the AVG boxes do, so theirs stay
   // left and capped in width to keep clear of it.
-  const renderStatValue = (stat, align = 'left') => {
+  const renderStatValue = (stat, align = 'left', groupLines = 0) => {
     const list = toTotalsList(stat.totals || {});
-    if (list.length <= 1) {
+    const lines = Math.max(groupLines, list.length);
+    if (lines <= 1) {
       return <div className={styles.statValue} style={{ color: stat.color }}>{stat.value}</div>;
     }
     // .statBox is a fixed 50px and the stack starts at top:16px, leaving
@@ -653,13 +662,13 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     // 3 lines at the 2-line size overflow ~6px past the bottom border).
     // Capped at the base size so one or two render at the verified size.
     const basePx = align === 'right' ? 11.5 : 10;
-    const fontPx = Math.min(basePx, 30 / list.length / 1.12);
+    const fontPx = Math.min(basePx, 30 / lines / 1.12);
     return (
       <div
         className={`${styles.statValue} ${styles.statValueStacked} ${align === 'right' ? styles.statValueStackedRight : styles.statValueStackedLeft}`}
         style={{ color: stat.color, fontSize: `${fontPx.toFixed(2)}px` }}
       >
-        {list.map(({ currency, amount }) => (
+        {list.length === 0 ? <span>{stat.value}</span> : list.map(({ currency, amount }) => (
           <span key={currency}>
             {formatMoney(stat.abs ? Math.abs(amount) : amount, currency, stat.decimals ?? 2)}
           </span>
@@ -681,7 +690,12 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       { label: 'AVG W', value: formatTotals(stats.avgWinByCurrency, { decimals: 0, abs: true }), totals: stats.avgWinByCurrency, decimals: 0, abs: true, pct: (stats.avgWinPct ?? 0).toFixed(0) + '%', color: '#22C55E' },
       { label: 'AVG L', value: formatTotals(stats.avgLossByCurrency, { decimals: 0 }), totals: stats.avgLossByCurrency, decimals: 0, pct: (stats.avgLossPct ?? 0).toFixed(0) + '%', color: '#EF4444' },
     ],
-  ];
+  ].map((row) => {
+    // Every row is one side-by-side pair, so both boxes in it share a line
+    // count and therefore a size and alignment.
+    const lines = Math.max(0, ...row.map(lineCountOf));
+    return row.map((stat) => ({ ...stat, lines }));
+  });
 
   const timeFilters = [
     { label: 'TODAY', value: 'TODAY' },
@@ -745,6 +759,9 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       if (isGraphHidden) setShowGraphPopup(true);
     },
   };
+
+  // R P&L and U P&L sit side by side, so they share a line count too.
+  const pnlStatLines = Math.max(lineCountOf(realisedPnlStat), lineCountOf(unrealisedPnlStat));
 
   const handleTimeFilterClick = (value) => {
     if (timeFilter === value) {
@@ -864,7 +881,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
                     onClick={stat.onClick}
                   >
                     <div className={styles.statLabel}>{stat.label}</div>
-                    {renderStatValue(stat, 'left')}
+                    {renderStatValue(stat, 'left', stat.lines)}
                     <div className={styles.statPctContainer}>
                       <svg className={styles.progressRing} width="34" height="34">
                         <circle
@@ -911,7 +928,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
                     onClick={stat.onClick}
                   >
                     <div className={styles.statLabel}>{stat.label}</div>
-                    {renderStatValue(stat, 'left')}
+                    {renderStatValue(stat, 'left', stat.lines)}
                     <div className={styles.statPctContainer}>
                       <svg className={styles.progressRing} width="34" height="34">
                         <circle
@@ -954,7 +971,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
                     style={{ borderColor: '#32384a', color: stat.color }}
                   >
                     <div className={styles.statLabel}>{stat.label}</div>
-                    {renderStatValue(stat, 'left')}
+                    {renderStatValue(stat, 'left', stat.lines)}
                     <div className={styles.statPctContainer}>
                       <svg className={styles.progressRing} width="34" height="34">
                         <circle
@@ -992,7 +1009,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
                 onClick={realisedPnlStat.onClick}
               >
                 <div className={styles.statLabel}>{realisedPnlStat.label}</div>
-                {renderStatValue(realisedPnlStat, 'right')}
+                {renderStatValue(realisedPnlStat, 'right', pnlStatLines)}
               </div>
               <div
                 className={styles.statBox}
@@ -1000,7 +1017,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
                 onClick={unrealisedPnlStat.onClick}
               >
                 <div className={styles.statLabel}>{unrealisedPnlStat.label}</div>
-                {renderStatValue(unrealisedPnlStat, 'right')}
+                {renderStatValue(unrealisedPnlStat, 'right', pnlStatLines)}
               </div>
             </div>
           </div>
