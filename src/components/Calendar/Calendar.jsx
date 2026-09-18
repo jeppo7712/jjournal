@@ -1,4 +1,5 @@
 import React, { useContext, useState } from 'react';
+import { sumByCurrency, formatTotals, toTotalsList } from '../../utils/currencyTotals';
 import { TradeContext } from '../../context/TradeContext';
 import styles from './Calendar.module.css';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addMonths, subMonths, eachWeekOfInterval, startOfDay, endOfDay } from 'date-fns';
@@ -24,9 +25,10 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
     if (trade.status === 'WIN' || trade.status === 'LOSS') {
       const dateKey = trade.lastActionDate.setZone(zone).toFormat('yyyy-MM-dd');
       if (!acc[dateKey]) {
-        acc[dateKey] = { total: 0, count: 0, trades: [] };
+        acc[dateKey] = { totalByCurrency: {}, count: 0, trades: [] };
       }
-      acc[dateKey].total += trade.return || 0;
+      { const code = String(trade.currency || 'USD').toUpperCase();
+        acc[dateKey].totalByCurrency[code] = (acc[dateKey].totalByCurrency[code] || 0) + (trade.return || 0); }
       acc[dateKey].count += 1;
       acc[dateKey].trades.push(trade);
     }
@@ -45,13 +47,13 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
       const tradeDateKey = trade.lastActionDate.setZone(zone).toFormat('yyyy-MM-dd');
       return tradeDateKey >= weekStartKey && tradeDateKey <= weekEndKey;
     });
-    const total = weekTrades.reduce((sum, trade) => sum + (trade.return || 0), 0);
-    const fees = weekTrades.reduce((sum, trade) => sum + (trade.buyFee || 0) + (trade.sellFee || 0), 0);
+    const totalByCurrency = sumByCurrency(weekTrades, t => t.return || 0);
+    const feesByCurrency = sumByCurrency(weekTrades, t => (t.buyFee || 0) + (t.sellFee || 0));
     const count = weekTrades.length;
     const wins = weekTrades.filter(trade => trade.status === 'WIN').length;
     const losses = weekTrades.filter(trade => trade.status === 'LOSS').length;
     const weekKey = format(weekStart, 'yyyy-MM-dd');
-    acc[weekKey] = { total, fees, wins, losses, count, weekStart, weekEnd };
+    acc[weekKey] = { totalByCurrency, feesByCurrency, wins, losses, count, weekStart, weekEnd };
     return acc;
   }, {});
 
@@ -121,14 +123,14 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
               <React.Fragment key={dateKey}>
                 <div
                   className={`${styles.dayCell} ${!isCurrentMonth ? styles.outsideMonth : ''} ${summary ? styles.clickable : ''
-                    } ${summary ? (summary.total >= 0 ? styles.positiveDay : styles.negativeDay) : ''}`}
+                    } ${summary ? ((toTotalsList(summary.totalByCurrency)[0]?.amount ?? 0) >= 0 ? styles.positiveDay : styles.negativeDay) : ''}`}
                   onClick={() => summary && handleDayClick(day)}
                 >
                   <span className={styles.dayNumber}>{format(day, 'd')}</span>
                   {summary && (
                     <div className={styles.daySummary}>
-                      <span style={{ color: summary.total >= 0 ? '#22C55E' : '#EF4444' }}>
-                        ${Math.abs(summary.total).toFixed(2)}
+                      <span style={{ color: (toTotalsList(summary.totalByCurrency)[0]?.amount ?? 0) >= 0 ? '#22C55E' : '#EF4444' }}>
+                        {formatTotals(summary.totalByCurrency, { abs: true })}
                       </span>
                       <span>
                         {summary.count} Trade{summary.count !== 1 ? 's' : ''}
@@ -139,15 +141,15 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
                 {index % 7 === 6 && (
                   <div
                     className={`${styles.weekSummaryCell} ${weekSummary && weekSummary.count > 0 ? styles.clickable : ''
-                      } ${weekSummary && weekSummary.count > 0 ? (weekSummary.total >= 0 ? styles.positiveWeek : styles.negativeWeek) : ''}`}
+                      } ${weekSummary && weekSummary.count > 0 ? ((toTotalsList(weekSummary.totalByCurrency)[0]?.amount ?? 0) >= 0 ? styles.positiveWeek : styles.negativeWeek) : ''}`}
                     onClick={() => weekKey && weekSummary && weekSummary.count > 0 && handleWeekClick(weekKey)}
                   >
                     {weekSummary && weekSummary.count > 0 && (
                       <div className={styles.weekSummary}>
                         <div className={styles.weekSummaryContent}>
                           <span>P&L: </span>
-                          <span style={{ color: weekSummary.total >= 0 ? '#22C55E' : '#EF4444' }}>
-                            ${Math.abs(weekSummary.total).toFixed(2)}
+                          <span style={{ color: (toTotalsList(weekSummary.totalByCurrency)[0]?.amount ?? 0) >= 0 ? '#22C55E' : '#EF4444' }}>
+                            {formatTotals(weekSummary.totalByCurrency, { abs: true })}
                           </span>
                         </div>
                         <div className={styles.weekSummaryContent}>
@@ -160,7 +162,7 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
                         </div>
                         <div className={styles.weekSummaryContent}>
                           <span>Fees: </span>
-                          <span style={{ color: '#F3F4F6' }}>${weekSummary.fees.toFixed(2)}</span>
+                          <span style={{ color: '#F3F4F6' }}>{formatTotals(weekSummary.feesByCurrency)}</span>
                         </div>
                       </div>
                     )}
@@ -189,14 +191,14 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
                   return (
                     <div
                       key={`${rowIndex}-${weekIndex}`}
-                      className={`${styles.dayCell} ${!isCurrentMonth ? styles.outsideMonth : ''} ${summary ? styles.clickable : ''} ${summary ? (summary.total >= 0 ? styles.positiveDay : styles.negativeDay) : ''}`}
+                      className={`${styles.dayCell} ${!isCurrentMonth ? styles.outsideMonth : ''} ${summary ? styles.clickable : ''} ${summary ? ((toTotalsList(summary.totalByCurrency)[0]?.amount ?? 0) >= 0 ? styles.positiveDay : styles.negativeDay) : ''}`}
                       onClick={() => summary && handleDayClick(day)}
                     >
                       <span className={styles.dayNumber}>{format(day, 'd')}</span>
                       {summary && (
                         <div className={styles.daySummary}>
-                          <span style={{ color: summary.total >= 0 ? '#22C55E' : '#EF4444' }}>
-                            ${Math.abs(summary.total).toFixed(2)}
+                          <span style={{ color: (toTotalsList(summary.totalByCurrency)[0]?.amount ?? 0) >= 0 ? '#22C55E' : '#EF4444' }}>
+                            {formatTotals(summary.totalByCurrency, { abs: true })}
                           </span>
                           <span>
                             {summary.count} Trade{summary.count !== 1 ? 's' : ''}
@@ -211,15 +213,15 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
                   return (
                     <div
                       key={`${rowIndex}-${weekIndex}`}
-                      className={`${styles.weekSummaryCell} ${weekSummary && weekSummary.count > 0 ? styles.clickable : ''} ${weekSummary && weekSummary.count > 0 ? (weekSummary.total >= 0 ? styles.positiveWeek : styles.negativeWeek) : ''}`}
+                      className={`${styles.weekSummaryCell} ${weekSummary && weekSummary.count > 0 ? styles.clickable : ''} ${weekSummary && weekSummary.count > 0 ? ((toTotalsList(weekSummary.totalByCurrency)[0]?.amount ?? 0) >= 0 ? styles.positiveWeek : styles.negativeWeek) : ''}`}
                       onClick={() => weekSummary && weekSummary.count > 0 && handleWeekClick(weekKey)}
                     >
                       {weekSummary && weekSummary.count > 0 && (
                         <div className={styles.weekSummary}>
                           <div className={styles.weekSummaryContent}>
                             <span>P&L: </span>
-                            <span style={{ color: weekSummary.total >= 0 ? '#22C55E' : '#EF4444' }}>
-                              ${Math.abs(weekSummary.total).toFixed(2)}
+                            <span style={{ color: (toTotalsList(weekSummary.totalByCurrency)[0]?.amount ?? 0) >= 0 ? '#22C55E' : '#EF4444' }}>
+                              {formatTotals(weekSummary.totalByCurrency, { abs: true })}
                             </span>
                           </div>
                           <div className={styles.weekSummaryContent}>
@@ -232,7 +234,7 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
                           </div>
                           <div className={styles.weekSummaryContent}>
                             <span>Fees: </span>
-                            <span style={{ color: '#F3F4F6' }}>${weekSummary.fees.toFixed(2)}</span>
+                            <span style={{ color: '#F3F4F6' }}>{formatTotals(weekSummary.feesByCurrency)}</span>
                           </div>
                         </div>
                       )}
