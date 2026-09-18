@@ -4,6 +4,7 @@ import { TradeContext, formatDate, parseActionDate, TRADE_LIST_COLUMNS } from '.
 import { DateTime } from 'luxon';
 import { sanitizeNotesHtml } from '../../utils/sanitizeHtml';
 import styles from './TradeList.module.css';
+import { formatMoney, currencyMark } from '../../utils/formatMoney';
 
 // SVG Icons for Mood, Market Condition, and Market Volume (existing)
 const moodSvgs = [
@@ -317,9 +318,9 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                     </div>
                     <div className={styles.cellBottom}>
                       {item.entry !== undefined && item.entry !== null
-                        ? `$${item.entry.toFixed(item.pricePrecision || 2)}`
+                        ? formatMoney(item.entry, item.currency, item.pricePrecision || 2)
                         : '-'} - {item.exit !== undefined && item.exit !== null
-                          ? `$${item.exit.toFixed(item.pricePrecision || 2)}`
+                          ? formatMoney(item.exit, item.currency, item.pricePrecision || 2)
                           : '-'}
                     </div>
                   </div>
@@ -328,7 +329,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                       {item.status === 'OPEN' ? (
                         item.currentReturn !== undefined && item.currentReturn !== null ? (
                           <span className={item.currentReturn >= 0 ? styles.positiveItalic : styles.negativeItalic}>
-                            ({item.currentReturn >= 0 ? '$' : '$'}{Math.abs(item.currentReturn).toFixed(2)})
+                            ({currencyMark(item.currency)}{Math.abs(item.currentReturn).toFixed(2)})
                           </span>
                         ) : (
                           <span className={styles.loading}>Loading...</span>
@@ -336,7 +337,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                       ) : (
                         item.return !== undefined && item.return !== null ? (
                           <span className={item.return >= 0 ? styles.positive : styles.negative}>
-                            {item.return >= 0 ? '$' : '$'}{Math.abs(item.return).toFixed(2)}
+                            {currencyMark(item.currency)}{Math.abs(item.return).toFixed(2)}
                           </span>
                         ) : (
                           '-'
@@ -395,22 +396,22 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                   )}
                   {isColumnVisible('entry') && (
                     <div className={styles.cell}>
-                      {item.entry !== undefined && item.entry !== null ? `$${item.entry.toFixed(item.pricePrecision || 2)}` : '-'}
+                      {item.entry !== undefined && item.entry !== null ? formatMoney(item.entry, item.currency, item.pricePrecision || 2) : '-'}
                     </div>
                   )}
                   {isColumnVisible('exit') && (
                     <div className={styles.cell}>
-                      {item.exit !== undefined && item.exit !== null ? `$${item.exit.toFixed(item.pricePrecision || 2)}` : '-'}
+                      {item.exit !== undefined && item.exit !== null ? formatMoney(item.exit, item.currency, item.pricePrecision || 2) : '-'}
                     </div>
                   )}
                   {isColumnVisible('entryTotal') && (
                     <div className={`${styles.cell} ${styles.colEntryTotal}`}>
-                      {item.entryTotal !== undefined && item.entryTotal !== null ? `$${item.entryTotal.toFixed(2)}` : '-'}
+                      {item.entryTotal !== undefined && item.entryTotal !== null ? formatMoney(item.entryTotal, item.currency) : '-'}
                     </div>
                   )}
                   {isColumnVisible('exitTotal') && (
                     <div className={`${styles.cell} ${styles.colExitTotal}`}>
-                      {item.exitTotal !== undefined && item.exitTotal !== null ? `$${item.exitTotal.toFixed(2)}` : '-'}
+                      {item.exitTotal !== undefined && item.exitTotal !== null ? formatMoney(item.exitTotal, item.currency) : '-'}
                     </div>
                   )}
                   {isColumnVisible('position') && (
@@ -428,7 +429,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                       {item.status === 'OPEN' ? (
                         item.currentReturn !== undefined && item.currentReturn !== null ? (
                           <span className={item.currentReturn >= 0 ? styles.positiveItalic : styles.negativeItalic}>
-                            ({item.currentReturn >= 0 ? '$' : '$'}{Math.abs(item.currentReturn).toFixed(2)})
+                            ({currencyMark(item.currency)}{Math.abs(item.currentReturn).toFixed(2)})
                           </span>
                         ) : (
                           <span className={styles.loading}>Loading...</span>
@@ -436,7 +437,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                       ) : (
                         item.return !== undefined && item.return !== null ? (
                           <span className={item.return >= 0 ? styles.positive : styles.negative}>
-                            {item.return >= 0 ? '$' : '$'}{Math.abs(item.return).toFixed(2)}
+                            {currencyMark(item.currency)}{Math.abs(item.return).toFixed(2)}
                           </span>
                         ) : (
                           '-'
