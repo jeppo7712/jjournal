@@ -2,6 +2,8 @@ import React, { useContext, useState, useEffect, useRef } from 'react';
 import { TradeContext, getRealisedPnL, getTickMultiplier } from '../../context/TradeContext';
 import { useStatus } from '../../context/StatusContext';
 import styles from './Navigation.module.css';
+import { formatMoney } from '../../utils/formatMoney';
+import { sumByCurrency, mergeTotals, toTotalsList } from '../../utils/currencyTotals';
 
 const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
   const { stats, accounts, currentAccountId, setCurrentAccountId, trades, fetchProcessedTradesForAccount, holdings } = useContext(TradeContext);
@@ -183,73 +185,93 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
     setShowStatusPopup(true);
   };
 
-  const totalMarketValue = Array.isArray(trades)
-    ? trades
-        .filter(trade =>
-          trade.status === 'OPEN' &&
-          (trade.type === 'STK' || trade.type === 'FUT') &&
-          typeof trade.position === 'number' &&
-          typeof trade.currentPrice === 'number'
-        )
-        // FUT contracts aren't worth their raw quoted price per unit (e.g. an ES
-        // point isn't a dollar) — scale by the same tick multiplier every PnL
-        // formula in this file uses. STK keeps multiplier 1, so unaffected.
-        .reduce((sum, trade) => sum + trade.position * trade.currentPrice * getTickMultiplier(trade), 0)
-    : 0;
+  // Both of these are per-currency maps ({ USD: n, EUR: m }), not scalars —
+  // this app performs no FX conversion, so adding a EUR trade's P&L to a USD
+  // one would produce a number that looks precise and means nothing. An
+  // account holding a single currency yields a single entry and renders
+  // exactly as it did before.
+  const totalMarketValueByCurrency = sumByCurrency(
+    (Array.isArray(trades) ? trades : []).filter(trade =>
+      trade.status === 'OPEN' &&
+      (trade.type === 'STK' || trade.type === 'FUT') &&
+      typeof trade.position === 'number' &&
+      typeof trade.currentPrice === 'number'
+    ),
+    // FUT contracts aren't worth their raw quoted price per unit (e.g. an ES
+    // point isn't a dollar) — scale by the same tick multiplier every PnL
+    // formula in this file uses. STK keeps multiplier 1, so unaffected.
+    trade => trade.position * trade.currentPrice * getTickMultiplier(trade)
+  );
 
   // Realised (closed trades' return, plus open trades' realised-so-far) *and*
   // unrealised (open trades' live mark-to-market) so this actually is a total,
   // matching Dashboard's R P&L + U P&L combined rather than realised P&L alone.
-  const totalPnl = Array.isArray(trades)
-    ? trades.reduce((sum, trade) => {
-        if (trade.status === 'WIN' || trade.status === 'LOSS' || trade.status === 'WASH') {
-          return sum + (trade.return || 0); //
-        } else if (trade.status === 'OPEN' && (trade.type === 'STK' || trade.type === 'FUT')) {
-          return sum + getRealisedPnL(trade) + (trade.currentReturn || 0); //
-        }
-        return sum; //
-      }, 0) //
-    : 0; //
+  const totalPnlByCurrency = sumByCurrency(
+    (Array.isArray(trades) ? trades : []).filter(trade =>
+      trade.status === 'WIN' || trade.status === 'LOSS' || trade.status === 'WASH' ||
+      (trade.status === 'OPEN' && (trade.type === 'STK' || trade.type === 'FUT'))
+    ),
+    trade => (trade.status === 'OPEN'
+      ? getRealisedPnL(trade) + (trade.currentReturn || 0)
+      : (trade.return || 0))
+  );
 
   const safeAccounts = Array.isArray(accounts) ? accounts : []; //
   const safeCurrentAccountId = currentAccountId || ''; //
 
   const currentAccountCashBalances = (safeAccounts.find(a => String(a.id) === String(currentAccountId))?.cash_balances) || [];
-  const usdCashBalance = currentAccountCashBalances
-    .filter(b => (b.currency || 'USD').toUpperCase() === 'USD')
-    .reduce((sum, b) => sum + Number(b.balance || 0), 0);
-  const otherCurrencyCashBalances = currentAccountCashBalances.filter(b => (b.currency || 'USD').toUpperCase() !== 'USD');
+  const cashByCurrency = sumByCurrency(currentAccountCashBalances, b => b.balance, b => b.currency);
+  const holdingsByCurrency = sumByCurrency(activeHoldings, h => h.purchase_price, h => h.currency);
 
-  const usdHoldingsValue = activeHoldings
-    .filter(h => (h.currency || 'USD').toUpperCase() === 'USD')
-    .reduce((sum, h) => sum + Number(h.purchase_price || 0), 0);
-  const otherCurrencyHoldingsValues = activeHoldings
-    .filter(h => (h.currency || 'USD').toUpperCase() !== 'USD')
-    .reduce((acc, h) => {
-      const cur = h.currency.toUpperCase();
-      acc[cur] = (acc[cur] || 0) + Number(h.purchase_price || 0);
-      return acc;
-    }, {});
-
-  // Same stocks-vs-futures distinction as totalMarketValue above: a futures
+  // Same stocks-vs-futures distinction as totalMarketValueByCurrency above: a futures
   // position's price*multiplier is notional exposure, not money possessed
   // (margin isn't tracked as a cash event here), so only its unrealised PnL
   // counts toward what the account is actually worth. Combines this
   // account's own trades with descendants' (see the effect above) — unlike
-  // totalPnl/totalMarketValue, which stay scoped to exactly this account.
+  // totalPnlByCurrency/totalMarketValueByCurrency, which stay scoped to this account.
   const openTrades = [...(Array.isArray(trades) ? trades : []), ...descendantTrades]
     .filter(t => t.status === 'OPEN' && (t.type === 'STK' || t.type === 'FUT'));
-  const stkMarketValue = openTrades
-    .filter(t => t.type === 'STK' && typeof t.position === 'number' && typeof t.currentPrice === 'number')
-    .reduce((sum, t) => sum + t.position * t.currentPrice, 0);
-  const futUnrealisedPnl = openTrades
-    .filter(t => t.type === 'FUT')
-    .reduce((sum, t) => sum + (t.currentReturn || 0), 0);
-  const totalPortfolioUsd = stkMarketValue + futUnrealisedPnl + usdCashBalance + usdHoldingsValue;
-  const otherCurrencyPortfolioNote = [
-    ...otherCurrencyCashBalances.map(b => `${Number(b.balance).toFixed(2)} ${b.currency} cash`),
-    ...Object.entries(otherCurrencyHoldingsValues).map(([cur, val]) => `${val.toFixed(2)} ${cur} holdings`),
-  ].join(' · ');
+  const stkMarketValueByCurrency = sumByCurrency(
+    openTrades.filter(t => t.type === 'STK' && typeof t.position === 'number' && typeof t.currentPrice === 'number'),
+    t => t.position * t.currentPrice
+  );
+  const futUnrealisedByCurrency = sumByCurrency(
+    openTrades.filter(t => t.type === 'FUT'),
+    t => t.currentReturn || 0
+  );
+
+  // Cash and holdings were already kept per-currency here, but the open
+  // positions feeding this total were not — a EUR position's market value
+  // was being added straight into the USD figure while EUR cash was
+  // (correctly) held back into a side note. Everything is per-currency now,
+  // which both fixes that and removes the need for the side note: each
+  // currency's true net worth stands on its own.
+  const totalPortfolioByCurrency = mergeTotals(
+    cashByCurrency,
+    holdingsByCurrency,
+    stkMarketValueByCurrency,
+    futUnrealisedByCurrency
+  );
+
+  // One line per currency, each coloured by its own sign — a USD gain
+  // alongside a EUR loss is two separate facts and can't share one colour.
+  // .navStat is already a vertical flex column, and the sidebar is 180px
+  // wide, so stacking is the only thing that fits anyway. A single-currency
+  // account renders exactly one line, identical to before.
+  const renderCurrencyStat = (totals) => {
+    const list = toTotalsList(totals);
+    if (list.length === 0) {
+      return <span className={`${styles.accountBalance} ${styles.positive}`}>{formatMoney(0, 'USD')}</span>;
+    }
+    return list.map(({ currency, amount }) => (
+      <span
+        key={currency}
+        className={`${styles.accountBalance} ${amount >= 0 ? styles.positive : styles.negative}`}
+      >
+        {formatMoney(amount, currency)}
+      </span>
+    ));
+  };
 
   const renderAccountInfo = () => (
     <div className={styles.accountInfo}>
@@ -286,30 +308,19 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
       <div className={styles.navStatsGroup}>
         <div className={styles.navStat}>
           <span>Total P&L</span>
-          <span className={`${styles.accountBalance} ${totalPnl >= 0 ? styles.positive : styles.negative}`}>
-            ${totalPnl.toFixed(2)}
-          </span>
+          {renderCurrencyStat(totalPnlByCurrency)}
         </div>
         <div className={styles.navStat}>
           <span>Market Value</span>
-          <span className={`${styles.accountBalance} ${totalMarketValue >= 0 ? styles.positive : styles.negative}`}>
-            ${totalMarketValue.toFixed(2)}
-          </span>
+          {renderCurrencyStat(totalMarketValueByCurrency)}
         </div>
         <div className={styles.navStat}>
           <span>Cash</span>
-          <span className={`${styles.accountBalance} ${usdCashBalance >= 0 ? styles.positive : styles.negative}`}>
-            ${usdCashBalance.toFixed(2)}
-          </span>
+          {renderCurrencyStat(cashByCurrency)}
         </div>
         <div className={styles.navStat}>
           <span>Total Portfolio</span>
-          <span className={`${styles.accountBalance} ${totalPortfolioUsd >= 0 ? styles.positive : styles.negative}`}>
-            ${totalPortfolioUsd.toFixed(2)}
-          </span>
-          {otherCurrencyPortfolioNote && (
-            <span className={styles.navStatNote}>{otherCurrencyPortfolioNote}</span>
-          )}
+          {renderCurrencyStat(totalPortfolioByCurrency)}
         </div>
       </div>
 

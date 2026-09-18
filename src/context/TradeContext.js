@@ -503,18 +503,26 @@ function sortItems(items, field, direction) {
   });
 }
 
+// Counts and percentages are currency-agnostic and stay scalar; money is
+// accumulated per currency, because summing a EUR win into a USD average
+// would produce a number in no currency at all. avgWin/avgLoss/totalReturn
+// are therefore { CODE: amount } maps — one entry for a single-currency
+// account, rendering exactly as before.
 function computeStats(trades, futuresSettings) {
   let wins = 0,
     losses = 0,
     wash = 0,
     open = 0,
-    totalReturn = 0,
-    winSum = 0,
-    lossSum = 0,
     winCount = 0,
     lossCount = 0;
   let winReturnPctSum = 0,
     lossReturnPctSum = 0;
+  const totalReturnByCurrency = {};
+  const winSumByCurrency = {};
+  const lossSumByCurrency = {};
+  const winCountByCurrency = {};
+  const lossCountByCurrency = {};
+  const bump = (map, code, by) => { map[code] = (map[code] || 0) + by; };
 
   trades.forEach(trade => {
     if (!trade.status) return;
@@ -565,12 +573,15 @@ function computeStats(trades, futuresSettings) {
       returnPct = entryTotal ? ((ret / tickMultiplier) / entryTotal) * 100 : 0;
     }
 
+    const code = String(trade.currency || 'USD').toUpperCase();
+
     if (trade.status === 'WIN') {
       if (ret <= 0) {
         console.warn(`WIN trade with non-positive return: ${ret}`, trade);
       } else {
         wins++;
-        winSum += ret;
+        bump(winSumByCurrency, code, ret);
+        bump(winCountByCurrency, code, 1);
         winCount++;
         winReturnPctSum += returnPct;
       }
@@ -579,7 +590,8 @@ function computeStats(trades, futuresSettings) {
         console.warn(`LOSS trade with non-negative return: ${ret}`, trade);
       } else {
         losses++;
-        lossSum += ret;
+        bump(lossSumByCurrency, code, ret);
+        bump(lossCountByCurrency, code, 1);
         lossCount++;
         lossReturnPctSum += returnPct;
       }
@@ -590,7 +602,7 @@ function computeStats(trades, futuresSettings) {
     }
 
     if (trade.status === 'WIN' || trade.status === 'LOSS') {
-      totalReturn += ret;
+      bump(totalReturnByCurrency, code, ret);
     }
   });
 
@@ -602,11 +614,17 @@ function computeStats(trades, futuresSettings) {
     wash,
     open,
     winRate: totalTrades ? Math.round((wins / totalTrades) * 100) : 0,
-    avgWin: winCount ? winSum / winCount : 0,
-    avgLoss: lossCount ? -lossSum / lossCount : 0,
+    avgWinByCurrency: Object.fromEntries(
+      Object.entries(winSumByCurrency).map(([code, sum]) => [code, sum / winCountByCurrency[code]])
+    ),
+    // Negated to match the previous scalar avgLoss, which reported the
+    // average loss as a positive magnitude.
+    avgLossByCurrency: Object.fromEntries(
+      Object.entries(lossSumByCurrency).map(([code, sum]) => [code, -sum / lossCountByCurrency[code]])
+    ),
     avgWinPct: winCount ? winReturnPctSum / winCount : 0,
     avgLossPct: lossCount ? -lossReturnPctSum / lossCount : 0,
-    totalReturn,
+    totalReturnByCurrency,
     totalTrades,
   };
 }
