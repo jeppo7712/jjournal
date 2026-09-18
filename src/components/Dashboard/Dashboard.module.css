@@ -425,6 +425,42 @@
   transform: translateX(10px);
 }
 
+/* Two or more currencies in one stat box. .statBox is a fixed 50px with the
+   value absolutely positioned at top:20px, which leaves room for exactly one
+   line at 1.1em — a second line overflowed the box outright. Stacking starts
+   3px higher (the 10px label only reaches ~15px) so the lines fit inside the
+   remaining height. The font size is not set here: Dashboard.jsx derives it
+   from how many currencies there are, so three or four still fit. Only
+   applied when there really are several currencies; a single value keeps
+   .statValue untouched. */
+.statValueStacked {
+  display: flex;
+  flex-direction: column;
+  top: 16px;
+  line-height: 1.12;
+  transform: none;
+  white-space: nowrap;
+}
+
+/* R P&L / U P&L have no percentage ring, so the full right edge is free. */
+.statValueStackedRight {
+  left: auto;
+  right: 12px;
+  align-items: flex-end;
+  text-align: right;
+}
+
+/* AVG W / AVG L do have a ring (34px at right:12px), so these stay left and
+   are capped short of it, with smaller type again to fit the narrower run. */
+.statValueStackedLeft {
+  left: 12px;
+  right: auto;
+  align-items: flex-start;
+  text-align: left;
+  max-width: calc(100% - 62px);
+  overflow: hidden;
+}
+
 .statPctContainer {
   position: absolute;
   top: 50%;
