@@ -6,6 +6,7 @@ import { TradeContext, parseActionDate, formatDate } from '../../context/TradeCo
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import styles from './Dashboard.module.css';
+import { sumByCurrency, formatTotals, toTotalsList } from '../../utils/currencyTotals';
 import { DateTime } from 'luxon';
 import { getRealisedPnL } from '../../context/TradeContext';
 import { debounce } from 'lodash';
@@ -140,24 +141,39 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
 
   const chartLabels = sortedTrades.map(trade => formatDate(trade.relevantDate));
 
+  // One cumulative line per currency. A single blended line would draw a
+  // curve whose y-axis is in no currency at all; separate lines each stay in
+  // their own. A single-currency account still renders exactly one line, in
+  // the original blue, so nothing changes visually until a second currency
+  // actually exists.
+  const CHART_SERIES_COLORS = ['#3B82F6', '#F59E0B', '#A855F7', '#14B8A6', '#EC4899'];
+  const chartCurrencies = [...new Set(sortedTrades.map(t => String(t.currency || 'USD').toUpperCase()))]
+    .sort((a, b) => (a === 'USD' ? -1 : b === 'USD' ? 1 : a.localeCompare(b)));
+
   const chartData = {
     labels: chartLabels,
-    datasets: [
-      {
-        label: 'Realised P&L',
-        data: sortedTrades.reduce((acc, trade) => {
-          const last = acc.length ? acc[acc.length - 1] : 0;
-          acc.push(last + (trade.realisedPnL || 0));
-          return acc;
-        }, []),
-        borderColor: '#3B82F6',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
+    datasets: chartCurrencies.map((code, i) => {
+      // Cumulative within this currency, carrying the running total across
+      // points belonging to other currencies so every series stays aligned
+      // to the shared label axis.
+      let running = 0;
+      const data = sortedTrades.map(trade => {
+        if (String(trade.currency || 'USD').toUpperCase() === code) {
+          running += trade.realisedPnL || 0;
+        }
+        return running;
+      });
+      return {
+        label: chartCurrencies.length > 1 ? `Realised P&L (${code})` : 'Realised P&L',
+        data,
+        borderColor: CHART_SERIES_COLORS[i % CHART_SERIES_COLORS.length],
+        backgroundColor: i === 0 ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
         tension: 0.3,
-        fill: true,
+        fill: i === 0,
         pointRadius: 0,
         pointHoverRadius: 0,
-      },
-    ],
+      };
+    }),
   };
 
   function computeOpenLotsPerDay(trade) {
@@ -626,8 +642,8 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       { label: 'WASH', value: stats.wash, pct: stats.totalTrades ? Math.round((stats.wash / stats.totalTrades) * 100) + '%' : '0%', color: '#A5ADBA', onClick: () => toggleFilter('WASH'), filterValue: 'WASH' },
     ],
     [
-      { label: 'AVG W', value: '$' + Math.abs(stats.avgWin).toFixed(0), pct: (stats.avgWinPct ?? 0).toFixed(0) + '%', color: '#22C55E' },
-      { label: 'AVG L', value: '$' + stats.avgLoss.toFixed(0), pct: (stats.avgLossPct ?? 0).toFixed(0) + '%', color: '#EF4444' },
+      { label: 'AVG W', value: formatTotals(stats.avgWinByCurrency, { decimals: 0, abs: true }), pct: (stats.avgWinPct ?? 0).toFixed(0) + '%', color: '#22C55E' },
+      { label: 'AVG L', value: formatTotals(stats.avgLossByCurrency, { decimals: 0 }), pct: (stats.avgLossPct ?? 0).toFixed(0) + '%', color: '#EF4444' },
     ],
   ];
 
@@ -651,40 +667,30 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     },
   ];
 
-  const totalPnl = useMemo(() => {
-    return filteredItems
-      .filter(item => (item.type === 'FUT' || item.type === 'STK') && (item.status === 'WIN' || item.status === 'LOSS' || item.status === 'WASH'))
-      .reduce((sum, trade) => sum + (trade.return || 0), 0);
-  }, [filteredItems]);
+  // Per-currency ({ USD: n, EUR: m }) rather than a scalar — no FX
+  // conversion happens anywhere in this app, so blending currencies would
+  // produce a confident-looking number that means nothing. One currency in,
+  // one value out, rendered exactly as before.
+  const unrealisedPnlByCurrency = useMemo(() => sumByCurrency(
+    filteredItems.filter(item => (item.type === 'FUT' || item.type === 'STK') && item.status === 'OPEN'),
+    trade => trade.currentReturn || 0
+  ), [filteredItems]);
 
-  const unrealisedPnl = useMemo(() => {
-    return filteredItems
-      .filter(item => (item.type === 'FUT' || item.type === 'STK') && item.status === 'OPEN')
-      .reduce((sum, trade) => sum + (trade.currentReturn || 0), 0);
-  }, [filteredItems]);
-
-  const totalRealisedPnl = useMemo(() => {
-    const closedPnL = filteredItems
-      .filter(item =>
-        (item.type === 'FUT' || item.type === 'STK') &&
-        (item.status === 'WIN' || item.status === 'LOSS' || item.status === 'WASH')
-      )
-      .reduce((sum, trade) => sum + (trade.return || 0), 0);
-
-    const openPnL = filteredItems
-      .filter(item =>
-        (item.type === 'FUT' || item.type === 'STK') &&
-        item.status === 'OPEN'
-      )
-      .reduce((sum, trade) => sum + getRealisedPnL(trade), 0);
-
-    return closedPnL + openPnL;
-  }, [filteredItems]);
+  const totalRealisedPnlByCurrency = useMemo(() => sumByCurrency(
+    filteredItems.filter(item =>
+      (item.type === 'FUT' || item.type === 'STK') &&
+      (item.status === 'WIN' || item.status === 'LOSS' || item.status === 'WASH' || item.status === 'OPEN')
+    ),
+    trade => (trade.status === 'OPEN' ? getRealisedPnL(trade) : (trade.return || 0))
+  ), [filteredItems]);
 
   const realisedPnlStat = {
     label: 'R P&L',
-    value: '$' + Math.abs(totalRealisedPnl).toFixed(2),
-    color: totalRealisedPnl >= 0 ? '#22C55E' : '#EF4444',
+    value: formatTotals(totalRealisedPnlByCurrency, { abs: true }),
+    // Colour follows the leading currency's sign. With several currencies a
+    // single colour can't be right for all of them, but the values are
+    // individually labelled, so it stays a hint rather than the only signal.
+    color: (toTotalsList(totalRealisedPnlByCurrency)[0]?.amount ?? 0) >= 0 ? '#22C55E' : '#EF4444',
     onClick: () => {
       setPnlChartType('realised');
       if (isGraphHidden) setShowGraphPopup(true);
@@ -692,8 +698,8 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
   };
   const unrealisedPnlStat = {
     label: 'U P&L',
-    value: '$' + Math.abs(unrealisedPnl).toFixed(2),
-    color: unrealisedPnl >= 0 ? '#22C55E' : '#EF4444',
+    value: formatTotals(unrealisedPnlByCurrency, { abs: true }),
+    color: (toTotalsList(unrealisedPnlByCurrency)[0]?.amount ?? 0) >= 0 ? '#22C55E' : '#EF4444',
     onClick: () => {
       setPnlChartType('unrealised');
       if (isGraphHidden) setShowGraphPopup(true);
