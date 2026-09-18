@@ -42,6 +42,7 @@ import {
   computeAvgWinLoss,
 } from './statsUtils';
 import styles from './Stats.module.css';
+import { currencyMark } from '../../utils/formatMoney';
 import { Line, Bar, Doughnut, Scatter } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { DateTime } from 'luxon';
@@ -108,10 +109,36 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
     setCurrentView('dashboard');
   };
 
+  // Currencies present in the current (filtered) set, USD first.
+  const availableCurrencies = useMemo(() => {
+    const codes = new Set(
+      (filteredItems || [])
+        .filter(item => item?.type === 'FUT' || item?.type === 'STK')
+        .map(t => String(t.currency || 'USD').toUpperCase())
+    );
+    return [...codes].sort((a, b) => (a === 'USD' ? -1 : b === 'USD' ? 1 : a.localeCompare(b)));
+  }, [filteredItems]);
+
+  // Unlike a sum, the metrics on this page (profit factor, expectancy,
+  // Sharpe, Sortino, drawdown, R:R, streak P&L…) cannot be shown "per
+  // currency" side by side — they're ratios and distributions over a set of
+  // returns, and a set mixing EUR and USD returns has no meaningful standard
+  // deviation or profit factor at all. So the page is scoped to exactly one
+  // currency at a time. Scoping here, at the single point where trades enter,
+  // means all ~28 compute functions in statsUtils stay untouched and
+  // automatically operate within one currency.
+  const [currencyScope, setCurrencyScope] = useState(null);
+  const activeCurrency = (currencyScope && availableCurrencies.includes(currencyScope))
+    ? currencyScope
+    : (availableCurrencies[0] || 'USD');
+
   const trades = useMemo(() => {
     if (!filteredItems) return [];
-    return filteredItems.filter(item => item?.type === 'FUT' || item?.type === 'STK');
-  }, [filteredItems]);
+    return filteredItems.filter(item =>
+      (item?.type === 'FUT' || item?.type === 'STK') &&
+      String(item.currency || 'USD').toUpperCase() === activeCurrency
+    );
+  }, [filteredItems, activeCurrency]);
 
   const tradesWithJournal = useMemo(() => {
     return trades.filter(t => t.journal && (t.journal.notes_html || t.journal.confidence || t.journal.execution_rating));
@@ -481,7 +508,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         ticks: {
           color: '#9CA3AF',
           font: { size: 11 },
-          callback: value => `$${value.toFixed(2)}`,
+          callback: value => `${currencyMark(activeCurrency)}${value.toFixed(2)}`,
         },
         grid: { display: true, color: 'rgba(156, 163, 175, 0.1)' },
       },
@@ -493,7 +520,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         mode: 'index',
         intersect: false,
         callbacks: {
-          label: context => `$${context.parsed.y.toFixed(2)}`,
+          label: context => `${currencyMark(activeCurrency)}${context.parsed.y.toFixed(2)}`,
         },
       },
       verticalLine: { enabled: false },
@@ -650,7 +677,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
       tooltip: {
         enabled: true,
         callbacks: {
-          label: context => `$${context.parsed.toFixed(2)}`,
+          label: context => `${currencyMark(activeCurrency)}${context.parsed.toFixed(2)}`,
         },
       },
     },
@@ -763,6 +790,21 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
 
       <div className={styles.statsContainer}>
         <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, marginBottom: 8 }}>
+          {availableCurrencies.length > 1 && (
+            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
+              <span style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>Currency</span>
+              <select
+                value={activeCurrency}
+                onChange={e => setCurrencyScope(e.target.value)}
+                style={{ background: '#353943', border: 'none', borderRadius: 18, color: '#e0e2e6', padding: '6px 14px', fontSize: '0.9em', cursor: 'pointer' }}
+                title="These metrics are ratios and distributions over a set of returns, so they're only meaningful within a single currency. Pick which one to analyse."
+              >
+                {availableCurrencies.map(code => (
+                  <option key={code} value={code}>{code}</option>
+                ))}
+              </select>
+            </div>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>Timezone</span>
             <TimezonePicker value={displayTimezone} onChange={setDisplayTimezone} options={STATS_TIMEZONE_OPTIONS} />
@@ -890,7 +932,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                       {computedStats.monthlyPnL.map((month, idx) => (
                         <tr key={idx}>
                           <td>{month.month}</td>
-                          <td style={{ color: month.pnl >= 0 ? '#22C55E' : '#EF4444' }}>${month.pnl}</td>
+                          <td style={{ color: month.pnl >= 0 ? '#22C55E' : '#EF4444' }}>{currencyMark(activeCurrency)}{month.pnl}</td>
                           <td>{month.wins}</td>
                           <td>{month.losses}</td>
                           <td>{month.trades}</td>
@@ -933,7 +975,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                             <td style={{ color: '#22C55E' }}>{hour.wins}</td>
                             <td style={{ color: '#EF4444' }}>{hour.losses}</td>
                             <td>{hour.winRate}%</td>
-                            <td style={{ color: hour.pnl >= 0 ? '#22C55E' : '#EF4444' }}>${hour.pnl}</td>
+                            <td style={{ color: hour.pnl >= 0 ? '#22C55E' : '#EF4444' }}>{currencyMark(activeCurrency)}{hour.pnl}</td>
                           </tr>
                         )
                       ))}
@@ -1002,7 +1044,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                       <div
                         key={idx}
                         className={styles.statBox}
-                        title={isRatio ? 'Computed from raw $ P&L per trade, not annualized returns — not comparable across position sizes or to standard benchmark Sharpe/Sortino figures.' : undefined}
+                        title={isRatio ? 'Computed from raw per-trade P&L in the selected currency, not annualized returns — not comparable across position sizes or to standard benchmark Sharpe/Sortino figures.' : undefined}
                       >
                         <div className={styles.statLabel}>{stat.label}{isRatio ? ' *' : ''}</div>
                         <div className={styles.statValue}>{stat.value}</div>
@@ -1057,7 +1099,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                         <tr key={`win-${idx}`}>
                           <td>Win</td>
                           <td>{trade.symbol}</td>
-                          <td>${trade.return.toFixed(2)}</td>
+                          <td>{currencyMark(activeCurrency)}{trade.return.toFixed(2)}</td>
                           <td>{trade.date}</td>
                         </tr>
                       ))}
@@ -1065,7 +1107,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                         <tr key={`loss-${idx}`}>
                           <td>Loss</td>
                           <td>{trade.symbol}</td>
-                          <td>${trade.return.toFixed(2)}</td>
+                          <td>{currencyMark(activeCurrency)}{trade.return.toFixed(2)}</td>
                           <td>{trade.date}</td>
                         </tr>
                       ))}
@@ -1103,7 +1145,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                       {Object.entries(computedStats.feeAnalysis.feesPerMonth).sort().map(([month, fees]) => (
                         <tr key={month}>
                           <td>{month}</td>
-                          <td>${fees.toFixed(2)}</td>
+                          <td>{currencyMark(activeCurrency)}{fees.toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1126,7 +1168,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                       {Object.entries(computedStats.feeAnalysis.feesPerSymbol).map(([symbol, fees]) => (
                         <tr key={symbol}>
                           <td>{symbol}</td>
-                          <td>${fees.toFixed(2)}</td>
+                          <td>{currencyMark(activeCurrency)}{fees.toFixed(2)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1165,7 +1207,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                     {computedStats.bestPerformingAssets.map((asset, idx) => (
                       <tr key={idx}>
                         <td>{asset.symbol}</td>
-                        <td>${asset.totalPnl.toFixed(2)}</td>
+                        <td>{currencyMark(activeCurrency)}{asset.totalPnl.toFixed(2)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1265,7 +1307,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                       </div>
                       <div className={styles.headerRight}>
                         <span className={`${styles.pnlBadge} ${trade.return >= 0 ? styles.win : styles.loss}`}>
-                          ${(Math.abs(trade.return) || 0).toFixed(2)}
+                          {currencyMark(activeCurrency)}{(Math.abs(trade.return) || 0).toFixed(2)}
                         </span>
                         <span className={styles.dateBadge}>{trade.openDate}</span>
                       </div>
