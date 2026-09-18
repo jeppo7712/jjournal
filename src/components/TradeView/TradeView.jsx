@@ -5,6 +5,7 @@ import { sanitizeNotesHtml } from '../../utils/sanitizeHtml';
 import { getWebSocketUrl } from '../../utils/getWebSocketUrl';
 import { loadStoredDisplayTimezone, storeDisplayTimezone, resolveDisplayZone, TimezonePicker } from '../../utils/timezonePreference';
 import styles from './TradeView.module.css';
+import { formatMoney, currencyMark } from '../../utils/formatMoney';
 import { ChartIcon } from './TradeViewIcons';
 import { createChart, LineType } from 'lightweight-charts';
 import { getRealisedPnL } from '../../context/TradeContext';
@@ -1555,13 +1556,13 @@ useEffect(() => {
                       className={styles.plValue}
                       style={{ color: realisedPnL > 0 ? '#22C55E' : realisedPnL < 0 ? '#EF4444' : '#A5ADBA' }}
                     >
-                      [R] ${Math.abs(realisedPnL).toFixed(2)}
+                      [R] {currencyMark(trade.currency)}{Math.abs(realisedPnL).toFixed(2)}
                     </span>
                     <span
                       className={styles.plValue}
                       style={{ color: unrealisedPnL > 0 ? '#22C55E' : unrealisedPnL < 0 ? '#EF4444' : '#A5ADBA' }}
                     >
-                      [U] {unrealisedPnL !== null ? `$${Math.abs(unrealisedPnL).toFixed(2)}` : 'Loading...'}
+                      [U] {unrealisedPnL !== null ? formatMoney(Math.abs(unrealisedPnL), trade.currency) : 'Loading...'}
                     </span>
                   </>
                 ) : (
@@ -1569,7 +1570,7 @@ useEffect(() => {
                     className={styles.plValue}
                     style={{ color: totalPnL > 0 ? '#22C55E' : totalPnL < 0 ? '#EF4444' : '#A5ADBA' }}
                   >
-                    ${Math.abs(totalPnL).toFixed(2)}
+                    {currencyMark(trade.currency)}{Math.abs(totalPnL).toFixed(2)}
                   </span>
                 )}
               </div>
@@ -1636,7 +1637,7 @@ useEffect(() => {
                         <span className={styles.timelineQty}>{formatQuantity(action.quantity)}</span>
                         <span className={styles.timelineAtPrice}>
                           <span className={styles.timelineAtSymbol}>@</span>
-                          <span className={styles.timelinePrice}>${Number(action.price).toFixed(pricePrecision)}</span>
+                          <span className={styles.timelinePrice}>{formatMoney(Number(action.price), trade.currency, pricePrecision)}</span>
                         </span>
                       </div>
                     </div>
@@ -1737,13 +1738,13 @@ useEffect(() => {
               {totalFees > 0 && (
                 <div className={styles.metaBadge} style={{ background: 'rgba(60,154,239,0.3)' }}>
                   <span className={styles.metaLabel}>FEES</span>
-                  <span className={styles.metaValue}>${totalFees.toFixed(2)}</span>
+                  <span className={styles.metaValue}>{formatMoney(totalFees, trade.currency)}</span>
                 </div>
               )}
               {trade.stop_loss != null && !isNaN(trade.stop_loss) && Number(trade.stop_loss) > 0 && (
                 <div className={styles.metaBadge} style={{ background: 'rgb(29, 78, 216, 0.5)' }}>
                   <span className={styles.metaLabel}>STOP</span>
-                  <span className={styles.metaValue}>${Number(trade.stop_loss).toFixed(pricePrecision)}</span>
+                  <span className={styles.metaValue}>{formatMoney(Number(trade.stop_loss), trade.currency, pricePrecision)}</span>
                 </div>
               )}
               {trade.rMultiple != null && !isNaN(trade.rMultiple) && (
@@ -1755,7 +1756,7 @@ useEffect(() => {
               {risk !== null && (
                 <div className={styles.metaBadge} style={{ background: 'rgb(234, 179, 8, 0.5)' }}>
                   <span className={styles.metaLabel}>RISK</span>
-                  <span className={styles.metaValue}>${risk.toFixed(2)}</span>
+                  <span className={styles.metaValue}>{formatMoney(risk, trade.currency)}</span>
                 </div>
               )}
             </div>
