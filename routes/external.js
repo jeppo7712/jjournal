@@ -18,7 +18,7 @@
 const express = require('express');
 const router = express.Router();
 const { logger } = require('../modules/logger.js');
-const { computeTradeDerived } = require('../modules/tradeCalculations.js');
+const { computeTradeDerived, resolveTradeCurrency } = require('../modules/tradeCalculations.js');
 
 const API_VERSION = 'v1';
 
@@ -276,6 +276,11 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
         return {
             ...row,
             ...derived,
+            // Every money figure on this object (return, entry_total, fees…)
+            // is denominated in this currency — resolved from the symbol's
+            // settings, never stored per trade. Values from different
+            // currencies must not be summed without converting first.
+            currency: resolveTradeCurrency(row.symbol, row.type, futuresSettings) || 'USD',
             attachments: (row.attachments || []).map(a => ({ ...a, url: attachmentUrl(a.id) })),
         };
     }
@@ -428,7 +433,7 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
     router.get('/symbols', async (req, res) => {
         try {
             const { rows } = await db.getPool().query(`
-                SELECT fs.id, fs.symbol, fs.type, fs.tick_size, fs.tick_value, fs.fee, fs.exchange,
+                SELECT fs.id, fs.symbol, fs.type, fs.currency, fs.tick_size, fs.tick_value, fs.fee, fs.exchange,
                        fs.rollover_months, fs.initial_margin, fs.maintenance_margin, fs.timeframe_settings,
                        e.timezone
                 FROM futures_settings fs

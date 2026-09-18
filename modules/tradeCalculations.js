@@ -57,6 +57,38 @@ function getFuturesSetting(symbol, type, futuresSettings) {
     return settings.find(s => s.symbol === 'DEFAULT' && s.type === type) || settings.find(s => s.symbol === 'DEFAULT') || null;
 }
 
+// The currency a trade is denominated in, resolved from its SYMBOL's
+// settings — deliberately not stored on the trade or its actions. Same
+// "derive it, don't duplicate it" rule that fixed is_virtual: a duplicated
+// copy drifts the moment the symbol's own setting is corrected, whereas
+// deriving means fixing a mis-set symbol retroactively fixes every trade on
+// it. Uses getFuturesSetting's startsWith+DEFAULT resolution rather than an
+// exact symbol match, so a contract-suffixed symbol (MNQZ5 against an "MNQ"
+// setting) resolves the same way the rest of the app resolves it.
+//
+// Deliberately stricter than getFuturesSetting: resolves ONLY from a
+// specific symbol row of the same instrument type, never from the DEFAULT
+// row. getFuturesSetting falls back to DEFAULT (and even to a DEFAULT of a
+// different type) because tick size and margin are sizing defaults that a
+// blanket row can sensibly stand in for — but "what currency is this priced
+// in" is part of the instrument's identity, which a DEFAULT row cannot know.
+// Inheriting it would mean an unconfigured EUR stock silently resolving to
+// the FUT default's USD, which is exactly the silent assumption this exists
+// to eliminate.
+//
+// Returns null when nothing specific matches, so the caller can warn and
+// fall back explicitly rather than this inventing an answer.
+function resolveTradeCurrency(symbol, type, futuresSettings) {
+    const settings = Array.isArray(futuresSettings) ? futuresSettings : [];
+    if (!symbol || !type) return null;
+    const upperSymbol = symbol.toUpperCase();
+    const match = settings
+        .filter(s => s.symbol !== 'DEFAULT' && s.type === type)
+        .sort((a, b) => b.symbol.length - a.symbol.length)
+        .find(s => upperSymbol.startsWith(s.symbol));
+    return match && match.currency ? match.currency : null;
+}
+
 /**
  * Computes side, status, realised PnL, return %, R-multiple, average/entry/
  * exit prices, position size, and hold time for a trade — the same derived
@@ -233,4 +265,4 @@ function computeFuturesRealizedPnLPerAction(side, actions, tickMultiplier) {
     return realizedByIndex;
 }
 
-module.exports = { computeTradeDerived, getTickMultiplier, computeFuturesRealizedPnLPerAction, parseActionDate };
+module.exports = { computeTradeDerived, getTickMultiplier, computeFuturesRealizedPnLPerAction, parseActionDate, getFuturesSetting, resolveTradeCurrency };

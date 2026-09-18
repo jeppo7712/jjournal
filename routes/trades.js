@@ -2,7 +2,7 @@ const express = require('express');
 const fs = require('fs').promises;
 const router = express.Router();
 const { logger } = require('../modules/logger.js');
-const { getTickMultiplier, computeFuturesRealizedPnLPerAction } = require('../modules/tradeCalculations.js');
+const { getTickMultiplier, computeFuturesRealizedPnLPerAction, resolveTradeCurrency } = require('../modules/tradeCalculations.js');
 
 module.exports = (pool, upload, broadcastStatus, uuidv4) => {
 
@@ -32,8 +32,22 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
 
         // Paper-vs-real is derived from the account, not stored per
         // transaction — see docs/CAPITAL_TRACKING_DESIGN.md.
-        const { rows: fsRows } = await client.query('SELECT currency FROM futures_settings WHERE symbol=$1 AND type=$2', [symbol, type]);
-        const currency = fsRows.length > 0 ? fsRows[0].currency : 'USD';
+        //
+        // Currency comes from the SYMBOL's settings, resolved through the
+        // same startsWith+DEFAULT logic the rest of the app uses
+        // (resolveTradeCurrency) rather than the exact-match lookup this
+        // used to do — an exact match silently missed a contract-suffixed
+        // symbol (MNQZ5 against an "MNQ" setting) and fell through to USD.
+        // Harmless while everything was USD; actively wrong the moment a
+        // non-USD instrument is traded, which is why the fallback now warns
+        // instead of assuming quietly.
+        const { rows: allSettings } = await client.query('SELECT symbol, type, currency FROM futures_settings');
+        const resolved = resolveTradeCurrency(symbol, type, allSettings);
+        const currency = resolved || 'USD';
+        if (!resolved) {
+            broadcastStatus(uuidv4(), `No currency configured for ${symbol} (${type}) — settling as USD. Set it in Settings → Symbols if that's wrong.`, 'warning');
+            logger.warn(`[settleTradeActionsToCash] No futures_settings currency for ${symbol} (${type}); defaulting to USD`);
+        }
 
         // Chronological order regardless of submission order — needed both
         // for the FIFO match and to find the actual last action's date.
@@ -75,8 +89,15 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
                     t.id, t.account_id, t.type, t.symbol, t.target, t.stop_loss,
                     t.tick_size, t.tick_value, t.contract_month, t.created_at, t.updated_at,
                     (
+                        -- trade_actions.currency/exchange_fee exist on older
+                        -- installs but are vestigial: nothing writes them and
+                        -- modules/database.js doesn't create them, so their
+                        -- value is a stale default. Stripped here so nothing
+                        -- downstream mistakes them for a real per-action
+                        -- currency — a trade's currency is resolved from its
+                        -- symbol and returned at trade level below.
                         SELECT COALESCE(json_agg(
-                            to_jsonb(a) || jsonb_build_object('execId', a.exec_id)
+                            (to_jsonb(a) - 'currency' - 'exchange_fee') || jsonb_build_object('execId', a.exec_id)
                             ORDER BY a.date_time ASC
                         ), '[]'::json)
                         FROM trade_actions a WHERE a.trade_id = t.id
@@ -98,8 +119,11 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
                 WHERE t.account_id = $1
                 ORDER BY t.created_at DESC
             `;
-            const { rows: trades } = await pool.query(query, [req.accountId]);
-            res.json(trades);
+            const [{ rows: trades }, { rows: allSettings }] = await Promise.all([
+                pool.query(query, [req.accountId]),
+                pool.query('SELECT symbol, type, currency FROM futures_settings'),
+            ]);
+            res.json(trades.map(t => ({ ...t, currency: resolveTradeCurrency(t.symbol, t.type, allSettings) || 'USD' })));
         } catch (err) {
             broadcastStatus(uuidv4(), `Error fetching trades: ${err.message}`, 'error');
             logger.error('Error fetching trades:', err);
@@ -115,8 +139,9 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
         SELECT
           t.*,
           (
+            -- vestigial columns stripped, same as GET /trades above
             SELECT COALESCE(json_agg(
-                to_jsonb(a) || jsonb_build_object('execId', a.exec_id)
+                (to_jsonb(a) - 'currency' - 'exchange_fee') || jsonb_build_object('execId', a.exec_id)
                 ORDER BY a.date_time ASC
             ), '[]'::json)
             FROM trade_actions a WHERE a.trade_id = t.id
@@ -138,12 +163,16 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
         FROM trades t
         WHERE t.id = $1 AND t.account_id = $2
       `;
-            const { rows } = await pool.query(query, [id, req.accountId]);
+            const [{ rows }, { rows: allSettings }] = await Promise.all([
+                pool.query(query, [id, req.accountId]),
+                pool.query('SELECT symbol, type, currency FROM futures_settings'),
+            ]);
             if (rows.length === 0) {
                 broadcastStatus(uuidv4(), `Trade ID ${id} not found`, 'error');
                 return res.status(404).json({ error: 'Not found' });
             }
-            res.json(rows[0]);
+            const trade = rows[0];
+            res.json({ ...trade, currency: resolveTradeCurrency(trade.symbol, trade.type, allSettings) || 'USD' });
         } catch (err) {
             broadcastStatus(uuidv4(), `Error fetching trade ${id}: ${err.message}`, 'error');
             logger.error(`Error fetching trade ${id}:`, err);
