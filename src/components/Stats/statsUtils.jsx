@@ -1,4 +1,14 @@
 import { DateTime } from 'luxon';
+import { currencyMark } from '../../utils/formatMoney';
+
+// The Stats page scopes itself to exactly one currency before calling into
+// here (see activeCurrency in Stats.jsx) — these ratios and distributions
+// are only meaningful within one currency, so every array reaching these
+// functions is single-currency by construction. That means the mark can be
+// read off the set itself rather than threaded through ~28 signatures.
+// Falls back to USD for an empty set, where there's nothing to label anyway.
+const markFor = (trades) => currencyMark((Array.isArray(trades) && trades[0] && trades[0].currency) || 'USD');
+
 
 // General Performance Stats
 export const computeGeneralStats = (trades) => {
@@ -22,9 +32,9 @@ export const computeGeneralStats = (trades) => {
     { label: 'Losses', value: lossTrades },
     { label: 'Win Rate', value: `${winRate}%` },
     { label: 'Profit Factor', value: profitFactor },
-    { label: 'Total P&L', value: `$${totalPnl.toFixed(2)}` },
-    { label: 'Avg P&L per Trade', value: `$${avgPnl}` },
-    { label: 'Total Fees', value: `$${totalFees}` },
+    { label: 'Total P&L', value: `${markFor(trades)}${totalPnl.toFixed(2)}` },
+    { label: 'Avg P&L per Trade', value: `${markFor(trades)}${avgPnl}` },
+    { label: 'Total Fees', value: `${markFor(trades)}${totalFees}` },
   ];
 };
 
@@ -36,7 +46,7 @@ export const computeRiskMetrics = (trades) => {
   const sortinoRatio = computeSortinoRatio(closedTrades);
 
   return [
-    { label: 'Max Drawdown', value: `$${maxDrawdown.toFixed(2)}` },
+    { label: 'Max Drawdown', value: `${markFor(trades)}${maxDrawdown.toFixed(2)}` },
     { label: 'Sharpe Ratio', value: sharpeRatio },
     { label: 'Sortino Ratio', value: sortinoRatio },
   ];
@@ -53,8 +63,8 @@ export const computeTradeAnalysis = (trades) => {
   return [
     { label: 'Avg Holding Time', value: avgHoldTime },
     { label: 'Avg Trades per Day', value: tradesPerDay },
-    { label: 'Best Trade', value: `$${bestTrade.toFixed(2)}` },
-    { label: 'Worst Trade', value: `$${worstTrade.toFixed(2)}` },
+    { label: 'Best Trade', value: `${markFor(trades)}${bestTrade.toFixed(2)}` },
+    { label: 'Worst Trade', value: `${markFor(trades)}${worstTrade.toFixed(2)}` },
     { label: 'Win Streak', value: winStreak },
     { label: 'Loss Streak', value: lossStreak },
   ];
@@ -76,9 +86,9 @@ export const computeSymbolStats = (trades) => {
     return {
       symbol,
       stats: [
-        { label: 'Total P&L', value: `$${totalPnl.toFixed(2)}` },
+        { label: 'Total P&L', value: `${markFor(trades)}${totalPnl.toFixed(2)}` },
         { label: 'Win Rate', value: `${winRate}%` },
-        { label: 'Total Fees', value: `$${totalFees}` },
+        { label: 'Total Fees', value: `${markFor(trades)}${totalFees}` },
       ],
     };
   });
@@ -224,8 +234,8 @@ export const computeOpenTradeStats = (trades) => {
 
   return [
     { label: 'Total Open Trades', value: totalOpenTrades },
-    { label: 'Total Open P&L', value: `$${totalOpenPnl.toFixed(2)}` },
-    { label: 'Avg Open P&L per Trade', value: `$${avgOpenPnl}` },
+    { label: 'Total Open P&L', value: `${markFor(trades)}${totalOpenPnl.toFixed(2)}` },
+    { label: 'Avg Open P&L per Trade', value: `${markFor(trades)}${avgOpenPnl}` },
   ];
 };
 
@@ -240,8 +250,8 @@ export const computeOpenSymbolStats = (trades) => {
     return {
       symbol,
       stats: [
-        { label: 'Total Open P&L', value: `$${totalOpenPnl.toFixed(2)}` },
-        { label: 'Avg Open P&L per Trade', value: `$${avgOpenPnl}` },
+        { label: 'Total Open P&L', value: `${markFor(trades)}${totalOpenPnl.toFixed(2)}` },
+        { label: 'Avg Open P&L per Trade', value: `${markFor(trades)}${avgOpenPnl}` },
       ],
     };
   });
