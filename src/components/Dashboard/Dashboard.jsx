@@ -7,6 +7,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import styles from './Dashboard.module.css';
 import { sumByCurrency, formatTotals, toTotalsList } from '../../utils/currencyTotals';
+import { formatMoney } from '../../utils/formatMoney';
 import { DateTime } from 'luxon';
 import { getRealisedPnL } from '../../context/TradeContext';
 import { debounce } from 'lodash';
@@ -632,6 +633,41 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
 
   ChartJS.register(verticalLinePlugin);
 
+  // A stat box is a fixed 50px with its value absolutely positioned — one
+  // line fits, two do not (a second currency overflowed the box entirely).
+  // So a single currency renders exactly as it always has, untouched, and
+  // only two-or-more switches to a stacked, smaller variant.
+  //
+  // `align` differs by box on purpose: the P&L boxes have no percentage
+  // gauge so their values can sit right; the AVG boxes do, so theirs stay
+  // left and capped in width to keep clear of it.
+  const renderStatValue = (stat, align = 'left') => {
+    const list = toTotalsList(stat.totals || {});
+    if (list.length <= 1) {
+      return <div className={styles.statValue} style={{ color: stat.color }}>{stat.value}</div>;
+    }
+    // .statBox is a fixed 50px and the stack starts at top:16px, leaving
+    // the lines ~30px to share (34px to the border, less a little margin).
+    // Sizing from the count keeps any number of currencies inside the box
+    // rather than fitting exactly two and spilling on a third (measured:
+    // 3 lines at the 2-line size overflow ~6px past the bottom border).
+    // Capped at the base size so one or two render at the verified size.
+    const basePx = align === 'right' ? 11.5 : 10;
+    const fontPx = Math.min(basePx, 30 / list.length / 1.12);
+    return (
+      <div
+        className={`${styles.statValue} ${styles.statValueStacked} ${align === 'right' ? styles.statValueStackedRight : styles.statValueStackedLeft}`}
+        style={{ color: stat.color, fontSize: `${fontPx.toFixed(2)}px` }}
+      >
+        {list.map(({ currency, amount }) => (
+          <span key={currency}>
+            {formatMoney(stat.abs ? Math.abs(amount) : amount, currency, stat.decimals ?? 2)}
+          </span>
+        ))}
+      </div>
+    );
+  };
+
   const statGrid = [
     [
       { label: 'WINS', value: stats.wins, pct: stats.winRate + '%', color: '#22C55E', onClick: () => toggleFilter('WIN'), filterValue: 'WIN' },
@@ -642,8 +678,8 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       { label: 'WASH', value: stats.wash, pct: stats.totalTrades ? Math.round((stats.wash / stats.totalTrades) * 100) + '%' : '0%', color: '#A5ADBA', onClick: () => toggleFilter('WASH'), filterValue: 'WASH' },
     ],
     [
-      { label: 'AVG W', value: formatTotals(stats.avgWinByCurrency, { decimals: 0, abs: true }), pct: (stats.avgWinPct ?? 0).toFixed(0) + '%', color: '#22C55E' },
-      { label: 'AVG L', value: formatTotals(stats.avgLossByCurrency, { decimals: 0 }), pct: (stats.avgLossPct ?? 0).toFixed(0) + '%', color: '#EF4444' },
+      { label: 'AVG W', value: formatTotals(stats.avgWinByCurrency, { decimals: 0, abs: true }), totals: stats.avgWinByCurrency, decimals: 0, abs: true, pct: (stats.avgWinPct ?? 0).toFixed(0) + '%', color: '#22C55E' },
+      { label: 'AVG L', value: formatTotals(stats.avgLossByCurrency, { decimals: 0 }), totals: stats.avgLossByCurrency, decimals: 0, pct: (stats.avgLossPct ?? 0).toFixed(0) + '%', color: '#EF4444' },
     ],
   ];
 
@@ -687,6 +723,8 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
   const realisedPnlStat = {
     label: 'R P&L',
     value: formatTotals(totalRealisedPnlByCurrency, { abs: true }),
+    totals: totalRealisedPnlByCurrency,
+    abs: true,
     // Colour follows the leading currency's sign. With several currencies a
     // single colour can't be right for all of them, but the values are
     // individually labelled, so it stays a hint rather than the only signal.
@@ -699,6 +737,8 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
   const unrealisedPnlStat = {
     label: 'U P&L',
     value: formatTotals(unrealisedPnlByCurrency, { abs: true }),
+    totals: unrealisedPnlByCurrency,
+    abs: true,
     color: (toTotalsList(unrealisedPnlByCurrency)[0]?.amount ?? 0) >= 0 ? '#22C55E' : '#EF4444',
     onClick: () => {
       setPnlChartType('unrealised');
@@ -824,7 +864,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
                     onClick={stat.onClick}
                   >
                     <div className={styles.statLabel}>{stat.label}</div>
-                    <div className={styles.statValue}>{stat.value}</div>
+                    {renderStatValue(stat, 'left')}
                     <div className={styles.statPctContainer}>
                       <svg className={styles.progressRing} width="34" height="34">
                         <circle
@@ -871,7 +911,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
                     onClick={stat.onClick}
                   >
                     <div className={styles.statLabel}>{stat.label}</div>
-                    <div className={styles.statValue}>{stat.value}</div>
+                    {renderStatValue(stat, 'left')}
                     <div className={styles.statPctContainer}>
                       <svg className={styles.progressRing} width="34" height="34">
                         <circle
@@ -914,7 +954,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
                     style={{ borderColor: '#32384a', color: stat.color }}
                   >
                     <div className={styles.statLabel}>{stat.label}</div>
-                    <div className={styles.statValue}>{stat.value}</div>
+                    {renderStatValue(stat, 'left')}
                     <div className={styles.statPctContainer}>
                       <svg className={styles.progressRing} width="34" height="34">
                         <circle
@@ -952,7 +992,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
                 onClick={realisedPnlStat.onClick}
               >
                 <div className={styles.statLabel}>{realisedPnlStat.label}</div>
-                <div className={styles.statValue} style={{ color: realisedPnlStat.color }}>{realisedPnlStat.value}</div>
+                {renderStatValue(realisedPnlStat, 'right')}
               </div>
               <div
                 className={styles.statBox}
@@ -960,7 +1000,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
                 onClick={unrealisedPnlStat.onClick}
               >
                 <div className={styles.statLabel}>{unrealisedPnlStat.label}</div>
-                <div className={styles.statValue} style={{ color: unrealisedPnlStat.color }}>{unrealisedPnlStat.value}</div>
+                {renderStatValue(unrealisedPnlStat, 'right')}
               </div>
             </div>
           </div>
