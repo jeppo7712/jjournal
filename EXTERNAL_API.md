@@ -186,6 +186,7 @@ List trades across one or all accounts, with computed fields included so you don
   "account_name": "Main",
   "type": "FUT",
   "symbol": "MNQ",
+  "currency": "USD",
   "contract_month": "202506",
   "target": 21050.5,
   "stop_loss": 20980.0,
@@ -243,6 +244,7 @@ Field notes:
 - For a still-`OPEN` trade: `return`, `return_percentage`, and `exit_total` are `null` (there's no exit yet to compute them from). `entry_total`, `avg_buy_price`/`avg_sell_price`, and `position` are **not** null — they describe the cost basis and size of what's currently held, and are exactly what you need alongside a live quote to compute unrealised PnL yourself (this API doesn't do that math for you).
 - To compute unrealised PnL for an `OPEN` trade: `(quote_price - avg_buy_price) * position` for `LONG`, `(avg_sell_price - quote_price) * position` for `SHORT`. **For `type: "FUT"`, multiply the result by `tick_value / tick_size`** — a futures quote is a raw point price, not a dollar amount, so skipping this multiplier under/overstates the P&L by that ratio (e.g. MNQ's is 0.5/0.25 = 2x). `type: "STK"` needs no multiplier (equivalent to 1).
 - `r_multiple` is `null` if the trade has no `stop_loss` set, or isn't closed yet.
+- `currency`: **every money field on this trade** — `return`, `entry_total`, `exit_total`, `avg_buy_price`/`avg_sell_price`, `buy_fee`/`sell_fee`, `target`, `stop_loss` — is denominated in this currency. It's resolved from the *symbol's* configured currency (`GET /symbols`), not stored per trade, so correcting a mis-set symbol currency retroactively corrects every trade on it. **Do not sum money fields across trades of different currencies without converting first** — this API deliberately performs no FX conversion, and an account can legitimately hold instruments in several currencies at once. Falls back to `"USD"` if the symbol has no configured currency at all.
 
 ---
 
@@ -332,7 +334,7 @@ curl http://localhost:3999/api/external/v1/attachments/88 -o entry-chart.png
 
 ## GET /symbols
 
-Instrument settings — tick size/value, fees, margins, exchange, and per-timeframe fetch configuration.
+Instrument settings — currency, tick size/value, fees, margins, exchange, and per-timeframe fetch configuration.
 
 ```json
 {
@@ -341,6 +343,7 @@ Instrument settings — tick size/value, fees, margins, exchange, and per-timefr
       "id": 3,
       "symbol": "MNQ",
       "type": "FUT",
+      "currency": "USD",
       "tick_size": 0.25,
       "tick_value": 0.5,
       "fee": 1.24,
@@ -357,6 +360,8 @@ Instrument settings — tick size/value, fees, margins, exchange, and per-timefr
   ]
 }
 ```
+
+`currency` is the ISO code this instrument is priced and traded in, and is the authoritative source for the `currency` on every trade of this symbol (see [GET /trades](#get-trades)). It also determines the currency of the cash settlement a trade writes to the ledger.
 
 ---
 

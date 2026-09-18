@@ -2,6 +2,38 @@ const express = require('express');
 const router = express.Router();
 const { logger } = require('../modules/logger.js');
 const { DEFAULT_TIMEFRAME_SETTINGS } = require('../modules/historical-data-service.js');
+const { resolveTradeCurrency } = require('../modules/tradeCalculations.js');
+
+// A trade's currency is derived from its symbol's settings rather than
+// stored (see resolveTradeCurrency), but a TRADE_SETTLEMENT cash row stamps
+// the currency at the moment it's written. Correcting a mis-set symbol
+// currency therefore reinterprets the trade while leaving its already-
+// written settlement row denominated in the old currency — the row's AMOUNT
+// was always in the instrument's real currency, only the label was wrong, so
+// relabelling is exactly the right fix (it moves the amount into the correct
+// per-currency bucket in every balance that reads it).
+//
+// Reconciles every mismatch rather than just the symbol being edited, so any
+// drift that already exists gets healed too. Returns the number of rows fixed.
+async function reconcileSettlementCurrencies(client) {
+    const { rows: settings } = await client.query('SELECT symbol, type, currency FROM futures_settings');
+    const { rows: settlements } = await client.query(
+        `SELECT ct.id, ct.currency, t.symbol, t.type
+         FROM cash_transactions ct
+         JOIN trades t ON t.id = ct.linked_trade_id
+         WHERE ct.type = 'TRADE_SETTLEMENT'`
+    );
+
+    let fixed = 0;
+    for (const row of settlements) {
+        const expected = resolveTradeCurrency(row.symbol, row.type, settings) || 'USD';
+        if (expected !== row.currency) {
+            await client.query('UPDATE cash_transactions SET currency = $1 WHERE id = $2', [expected, row.id]);
+            fixed++;
+        }
+    }
+    return fixed;
+}
 
 // Export a function that accepts dependencies
 module.exports = (pool, broadcastStatus, uuidv4) => {
@@ -99,7 +131,11 @@ return res.status(400).json({ error: 'Initial margin is required for futures con
                 await client.query('DELETE FROM historical_data WHERE futures_setting_id = $1', [futuresSettingId]);
                 broadcastStatus(uuidv4(), `Historical data for old settings of ${originalSymbol} (${originalType}) deleted due to settings change.`, 'info');
             }
-            const { rowCount } = await pool.query(
+            // client.query, not pool.query — this runs inside the BEGIN above,
+            // so a later failure/ROLLBACK has to be able to undo it. On a
+            // separate pool connection it committed independently of the
+            // transaction that deleted this symbol's historical data.
+            const { rowCount } = await client.query(
 'UPDATE futures_settings SET symbol=$1, type=$2, tick_size=$3, tick_value=$4, fee=$5, exchange=$6, currency=$7, rollover_months=$8, initial_margin=$9, maintenance_margin=$10, timeframe_settings=$11 WHERE symbol=$12 AND type=$13',
 [symbol, type, tick_size, tick_value, fee, exchange || null, currency || 'USD', type === 'FUT' ? rollover_months : null, initial_margin || null, maintenance_margin || null, JSON.stringify(resolvedTimeframeSettings), originalSymbol, originalType]
             );
@@ -107,8 +143,21 @@ return res.status(400).json({ error: 'Initial margin is required for futures con
                 await client.query('ROLLBACK');
                 return res.status(404).json({ error: 'Symbol and type not found for update (unexpected)' });
             }
+
+            // Settlement rows stamped the old currency — relabel them to match
+            // (see reconcileSettlementCurrencies). Only worth running when the
+            // currency actually moved.
+            let settlementsFixed = 0;
+            if (currencyChanged) {
+                settlementsFixed = await reconcileSettlementCurrencies(client);
+                if (settlementsFixed > 0) {
+                    broadcastStatus(uuidv4(), `${symbol}: currency changed to ${newCurrencyNormalized} — relabelled ${settlementsFixed} existing cash settlement row(s) to match.`, 'info');
+                    logger.info(`[FuturesSettings] Reconciled ${settlementsFixed} TRADE_SETTLEMENT currencies after ${originalSymbol} currency change`);
+                }
+            }
+
             await client.query('COMMIT');
-            res.json({ success: true });
+            res.json({ success: true, settlement_rows_relabelled: settlementsFixed });
         } catch (err) {
             await client.query('ROLLBACK');
             if (err.code === '23505') {
