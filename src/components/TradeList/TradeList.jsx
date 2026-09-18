@@ -5,6 +5,7 @@ import { DateTime } from 'luxon';
 import { sanitizeNotesHtml } from '../../utils/sanitizeHtml';
 import styles from './TradeList.module.css';
 import { formatMoney, currencyMark } from '../../utils/formatMoney';
+import { sumByCurrency, formatTotals, toTotalsList } from '../../utils/currencyTotals';
 
 // SVG Icons for Mood, Market Condition, and Market Volume (existing)
 const moodSvgs = [
@@ -128,7 +129,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
   const filterRange = timeFilter ? getTimeRange(timeFilter, customStartDate, customEndDate) : null;
 
   const getDailyStats = (noteDate) => {
-    if (!(noteDate instanceof DateTime) || !noteDate.isValid) return { dailyPnL: 0, wins: 0, losses: 0 };
+    if (!(noteDate instanceof DateTime) || !noteDate.isValid) return { dailyPnLByCurrency: {}, wins: 0, losses: 0 };
 
     const sameDayTrades = trades.filter((trade) => {
       if ((trade.type !== 'STK' && trade.type !== 'FUT') || trade.status === 'OPEN') return false;
@@ -141,14 +142,16 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
       );
     });
 
-    let dailyPnL = 0;
+    // Per-currency: a day can close a USD and a EUR trade, and their P&L
+    // cannot be added together. Win/loss counts are currency-agnostic.
+    const dailyPnLByCurrency = sumByCurrency(
+      sameDayTrades.filter(t => t.return !== undefined && t.return !== null),
+      t => t.return
+    );
     let wins = 0;
     let losses = 0;
 
     sameDayTrades.forEach((trade) => {
-      if (trade.return !== undefined && trade.return !== null) {
-        dailyPnL += trade.return;
-      }
       if (trade.status === 'WIN') {
         wins++;
       } else if (trade.status === 'LOSS') {
@@ -156,7 +159,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
       }
     });
 
-    return { dailyPnL, wins, losses };
+    return { dailyPnLByCurrency, wins, losses };
   };
 
   const getStatusText = (status) => {
@@ -470,7 +473,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
               </div>
             );
           } else if (item.type === 'dayNote') {
-            const { dailyPnL, wins, losses } = getDailyStats(item.date);
+            const { dailyPnLByCurrency, wins, losses } = getDailyStats(item.date);
             const hasTrades = wins > 0 || losses > 0;
 
             return (
@@ -512,8 +515,8 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                     <div className={styles.noteStats}>
                       {hasTrades ? (
                         <>
-                          <span className={`${styles.dailyPnL} ${dailyPnL >= 0 ? styles.statusWin : styles.statusLoss}`}>
-                            {dailyPnL >= 0 ? '$' : '$'}{Math.abs(dailyPnL).toFixed(2)}
+                          <span className={`${styles.dailyPnL} ${(toTotalsList(dailyPnLByCurrency)[0]?.amount ?? 0) >= 0 ? styles.statusWin : styles.statusLoss}`}>
+                            {formatTotals(dailyPnLByCurrency, { abs: true })}
                           </span>
                           <span className={styles.tradeCounts}>
                             <span className={styles.wins}>{wins}</span>/
@@ -562,8 +565,8 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                   <div className={styles.noteStats}>
                     {hasTrades ? (
                       <>
-                        <span className={`${styles.dailyPnL} ${dailyPnL >= 0 ? styles.statusWin : styles.statusLoss}`}>
-                          {dailyPnL >= 0 ? '$' : '$'}{Math.abs(dailyPnL).toFixed(2)}
+                        <span className={`${styles.dailyPnL} ${(toTotalsList(dailyPnLByCurrency)[0]?.amount ?? 0) >= 0 ? styles.statusWin : styles.statusLoss}`}>
+                          {formatTotals(dailyPnLByCurrency, { abs: true })}
                         </span>
                         <span className={styles.tradeCounts}>
                           <span className={styles.wins}>{wins}</span>/
