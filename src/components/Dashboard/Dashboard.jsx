@@ -148,8 +148,27 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
   // the original blue, so nothing changes visually until a second currency
   // actually exists.
   const CHART_SERIES_COLORS = ['#3B82F6', '#F59E0B', '#A855F7', '#14B8A6', '#EC4899'];
-  const chartCurrencies = [...new Set(sortedTrades.map(t => String(t.currency || 'USD').toUpperCase()))]
-    .sort((a, b) => (a === 'USD' ? -1 : b === 'USD' ? 1 : a.localeCompare(b)));
+  const tradeCurrency = t => String(t.currency || 'USD').toUpperCase();
+  // Only currencies that have actually realised something get a line. A
+  // currency whose positions are all still open has no realised curve to
+  // draw, and drawing it anyway put a flat line at zero on the chart — which
+  // is not harmless: the series share one y-axis, so that zero line drags the
+  // axis down to include 0 and squashes the real curve into whatever height
+  // is left. An account whose cumulative P&L sits well away from zero lost
+  // nearly all of its vertical detail that way.
+  const currenciesWithRealised = [...new Set(
+    sortedTrades.filter(t => (Number(t.realisedPnL) || 0) !== 0).map(tradeCurrency)
+  )];
+  // USD first, then alphabetical — a stable order, so a live-updating chart
+  // never swaps its series colours around mid-session.
+  const byUsdFirst = (a, b) => (a === 'USD' ? -1 : b === 'USD' ? 1 : a.localeCompare(b));
+  // If nothing is realised yet there is no second series to worry about, so
+  // fall back to a single line and keep the chart looking as it always did.
+  // Sorted before the slice, or the fallback would pick whichever currency
+  // happened to come first in the trade array rather than a predictable one.
+  const chartCurrencies = currenciesWithRealised.length > 0
+    ? [...currenciesWithRealised].sort(byUsdFirst)
+    : [...new Set(sortedTrades.map(tradeCurrency))].sort(byUsdFirst).slice(0, 1);
 
   const chartData = {
     labels: chartLabels,
@@ -159,7 +178,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       // to the shared label axis.
       let running = 0;
       const data = sortedTrades.map(trade => {
-        if (String(trade.currency || 'USD').toUpperCase() === code) {
+        if (tradeCurrency(trade) === code) {
           running += trade.realisedPnL || 0;
         }
         return running;
@@ -726,12 +745,19 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     trade => trade.currentReturn || 0
   ), [filteredItems]);
 
+  // Same rule as the chart: a still-open position has realised nothing, so it
+  // must not put its currency on the realised board. Without this an account
+  // holding only open EUR positions printed a phantom "EUR 0.00" beside the
+  // real USD figure. A partially closed position has genuinely realised part
+  // of itself and still counts.
+  const realisedOf = trade => (trade.status === 'OPEN' ? getRealisedPnL(trade) : (trade.return || 0));
   const totalRealisedPnlByCurrency = useMemo(() => sumByCurrency(
     filteredItems.filter(item =>
       (item.type === 'FUT' || item.type === 'STK') &&
-      (item.status === 'WIN' || item.status === 'LOSS' || item.status === 'WASH' || item.status === 'OPEN')
+      (item.status === 'WIN' || item.status === 'LOSS' || item.status === 'WASH' || item.status === 'OPEN') &&
+      (item.status !== 'OPEN' || (Number(realisedOf(item)) || 0) !== 0)
     ),
-    trade => (trade.status === 'OPEN' ? getRealisedPnL(trade) : (trade.return || 0))
+    realisedOf
   ), [filteredItems]);
 
   const realisedPnlStat = {
