@@ -48,6 +48,24 @@ const ShortArrowSvg = (
   </svg>
 );
 
+// Each currency's figure carries its own win/loss colour. Taking the colour
+// from the first currency alone marked a losing EUR day as a win because the
+// USD on that day was positive.
+function renderDailyPnL(totals, styles) {
+  const list = toTotalsList(totals);
+  if (list.length === 0) {
+    return <span className={styles.dailyPnL}>{formatTotals(totals, { abs: true })}</span>;
+  }
+  return list.map(({ currency, amount }) => (
+    <span
+      key={currency}
+      className={`${styles.dailyPnL} ${amount >= 0 ? styles.statusWin : styles.statusLoss}`}
+    >
+      {formatMoney(Math.abs(amount), currency)}
+    </span>
+  ));
+}
+
 const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
   const {
     filteredItems,
@@ -515,9 +533,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                     <div className={styles.noteStats}>
                       {hasTrades ? (
                         <>
-                          <span className={`${styles.dailyPnL} ${(toTotalsList(dailyPnLByCurrency)[0]?.amount ?? 0) >= 0 ? styles.statusWin : styles.statusLoss}`}>
-                            {formatTotals(dailyPnLByCurrency, { abs: true })}
-                          </span>
+                          {renderDailyPnL(dailyPnLByCurrency, styles)}
                           <span className={styles.tradeCounts}>
                             <span className={styles.wins}>{wins}</span>/
                             <span className={styles.losses}>{losses}</span>
@@ -565,9 +581,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                   <div className={styles.noteStats}>
                     {hasTrades ? (
                       <>
-                        <span className={`${styles.dailyPnL} ${(toTotalsList(dailyPnLByCurrency)[0]?.amount ?? 0) >= 0 ? styles.statusWin : styles.statusLoss}`}>
-                          {formatTotals(dailyPnLByCurrency, { abs: true })}
-                        </span>
+                        {renderDailyPnL(dailyPnLByCurrency, styles)}
                         <span className={styles.tradeCounts}>
                           <span className={styles.wins}>{wins}</span>/
                           <span className={styles.losses}>{losses}</span>
