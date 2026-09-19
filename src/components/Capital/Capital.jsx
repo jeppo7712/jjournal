@@ -260,7 +260,9 @@ const Capital = () => {
               <div key={i} className={styles.balanceCard}>
                 <div className={styles.balanceCurrency}>{b.currency}</div>
                 <div className={`${styles.balanceAmount} ${Number(b.balance) >= 0 ? styles.positive : styles.negative}`}>
-                  {Number(b.balance).toFixed(2)}
+                  {/* No minus sign: the card is already red when the balance
+                      is negative, so the glyph only adds noise. */}
+                  {Math.abs(Number(b.balance)).toFixed(2)}
                 </div>
               </div>
             ))}
