@@ -68,6 +68,24 @@ export function toTotalsList(totals) {
 
 // The currency a single-value display should lead with — the first in the
 // stable order above, so it matches what's rendered first.
+// The sign of a whole per-currency map: 'positive' or 'negative' when every
+// currency agrees, 'mixed' when they disagree.
+//
+// Colouring a multi-currency figure green or red by its first currency alone
+// states the opposite of the truth for every other currency in it — a
+// negative EUR total rendered green because the USD beside it happened to be
+// positive. Individual figures should be coloured by their own sign; this is
+// for the cases where a single container still needs one answer, and it says
+// "mixed" rather than picking a side.
+export function totalsSign(totals) {
+  const amounts = Object.values(totals || {}).filter(n => Number.isFinite(Number(n)));
+  if (amounts.length === 0) return 'positive';
+  const anyNegative = amounts.some(n => Number(n) < 0);
+  const anyPositive = amounts.some(n => Number(n) > 0);
+  if (anyNegative && anyPositive) return 'mixed';
+  return anyNegative ? 'negative' : 'positive';
+}
+
 export function dominantCurrency(totals) {
   const list = toTotalsList(totals);
   return list.length > 0 ? list[0].currency : DEFAULT_CURRENCY;
