@@ -7,7 +7,7 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import styles from './Dashboard.module.css';
 import { sumByCurrency, formatTotals, toTotalsList } from '../../utils/currencyTotals';
-import { formatMoney } from '../../utils/formatMoney';
+import { formatMoney, currencyMark } from '../../utils/formatMoney';
 import { DateTime } from 'luxon';
 import { getRealisedPnL } from '../../context/TradeContext';
 import { debounce } from 'lodash';
@@ -51,6 +51,10 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
   const [showGraphPopup, setShowGraphPopup] = useState(false);
   const [isGraphHidden, setIsGraphHidden] = useState(false);
   const [pnlChartType, setPnlChartType] = useState('realised'); // 'realised' or 'unrealised'
+  // Which currency the P&L chart is showing. null means "whichever comes
+  // first", so a single-currency account never has to choose. Set by clicking
+  // a figure in the R P&L / U P&L boxes.
+  const [chartCurrency, setChartCurrency] = useState(null);
   const timeFilterRef = useRef(null);
   const menuRef = useRef(null);
   const datePickerRef = useRef(null);
@@ -170,9 +174,18 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     ? [...currenciesWithRealised].sort(byUsdFirst)
     : [...new Set(sortedTrades.map(tradeCurrency))].sort(byUsdFirst).slice(0, 1);
 
+  // One currency on the chart at a time — see the note on the unrealised
+  // chart below for why they can't share a y-axis.
+  const activeChartCurrency = chartCurrencies.includes(chartCurrency)
+    ? chartCurrency
+    : chartCurrencies[0];
+
   const chartData = {
     labels: chartLabels,
-    datasets: chartCurrencies.map((code, i) => {
+    datasets: chartCurrencies
+      .map((code, i) => ({ code, i }))
+      .filter(({ code }) => code === activeChartCurrency)
+      .map(({ code, i }) => {
       // Cumulative within this currency, carrying the running total across
       // points belonging to other currencies so every series stays aligned
       // to the shared label axis.
@@ -193,7 +206,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
         pointRadius: 0,
         pointHoverRadius: 0,
       };
-    }),
+      }),
   };
 
   function computeOpenLotsPerDay(trade) {
@@ -298,13 +311,19 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
 
     const days = Math.ceil(latestDate.diff(earliestDate, 'days').days) + 1;
     const labels = [];
-    const series = [];
+    // Unrealised P&L per currency per day. Summing an open EUR position into
+    // the same running number as the USD ones produces a figure denominated
+    // in nothing, exactly as it would for realised P&L, so the series are
+    // kept apart here rather than blended and split later.
+    const seriesCurrencies = [...new Set(relevantTrades.map(t => String(t.currency || 'USD').toUpperCase()))];
+    const seriesByCurrency = {};
+    seriesCurrencies.forEach(code => { seriesByCurrency[code] = []; });
 
     for (let i = 0; i < days; i++) {
       const currentDate = earliestDate.plus({ days: i });
       const currentDateISO = currentDate.toISODate();
       labels.push(formatDate(currentDate)); // formatDate is from TradeContext
-      let dailyUnrealised = 0;
+      const dailyByCurrency = {};
 
       openLotsPerTrade.forEach(item => { // Renamed to avoid conflict with outer 'trade'
         const { trade, openLotsMap } = item;
@@ -390,11 +409,17 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
           unrealised = (avgOpenCost - price) * openQty * tickMultiplier;
           unrealised -= (lots.openFee || 0);
         }
-        dailyUnrealised += unrealised;
+        const code = String(trade.currency || 'USD').toUpperCase();
+        dailyByCurrency[code] = (dailyByCurrency[code] || 0) + unrealised;
       });
-      series.push(dailyUnrealised);
+      // Every currency gets a point for every label, so all the series stay
+      // aligned to the shared x-axis even on days one of them contributes
+      // nothing.
+      seriesCurrencies.forEach(code => {
+        seriesByCurrency[code].push(dailyByCurrency[code] || 0);
+      });
     }
-    return { labels, series };
+    return { labels, seriesByCurrency };
   }
 
   const [historicalDataMap, setHistoricalDataMap] = useState({});
@@ -469,12 +494,12 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     return () => debouncedFetchHistoricalData.current.cancel();
   }, [sortedTrades]);
 
-  const { labels: unrealisedLabels, series: unrealisedSeries } = useMemo(() => {
+  const { labels: unrealisedLabels, seriesByCurrency: unrealisedByCurrency } = useMemo(() => {
     // PERFORMANCE OPTIMIZATION:
     // If the user is looking at Realised P&L (default), DO NOT compute the expensive Unrealised P&L series.
     // This series iterates through every single action of every trade and is very heavy.
     if (pnlChartType !== 'unrealised') {
-      return { labels: [], series: [] };
+      return { labels: [], seriesByCurrency: {} };
     }
 
     // Ensure getTimeRange is available from context, if not, this line will fail.
@@ -490,12 +515,26 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
   }, [sortedTrades, historicalDataMap, timeFilter, customStartDate, customEndDate, getTimeRange, pnlChartType]); // Added pnlChartType dependency
 
 
+  // Currencies the unrealised chart could show, in the same stable order used
+  // everywhere else.
+  const unrealisedCurrencies = Object.keys(unrealisedByCurrency).sort(byUsdFirst);
+  // The chart shows one currency at a time, picked by clicking a figure in the
+  // R P&L / U P&L boxes. Mixing them on one y-axis is what made a EUR line
+  // read as flat against a USD one four orders of magnitude larger: each
+  // currency needs its own scale, and the clearest way to give it one is to
+  // show it on its own.
+  const activeUnrealisedCurrency = unrealisedCurrencies.includes(chartCurrency)
+    ? chartCurrency
+    : unrealisedCurrencies[0];
+
   const unrealisedChartData = {
     labels: unrealisedLabels,
-    datasets: [
+    datasets: activeUnrealisedCurrency ? [
       {
-        label: 'Unrealised P&L',
-        data: unrealisedSeries,
+        label: unrealisedCurrencies.length > 1
+          ? `Unrealised P&L (${activeUnrealisedCurrency})`
+          : 'Unrealised P&L',
+        data: unrealisedByCurrency[activeUnrealisedCurrency] || [],
         borderColor: '#EF4444',
         backgroundColor: 'rgba(239, 68, 68, 0.1)',
         tension: 0.3,
@@ -503,9 +542,13 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
         pointRadius: 0,
         pointHoverRadius: 0,
       },
-    ],
+    ] : [],
   };
 
+
+  const displayedChartCurrency = pnlChartType === 'realised'
+    ? activeChartCurrency
+    : activeUnrealisedCurrency;
 
   const chartOptions = {
     responsive: true,
@@ -538,7 +581,9 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
           font: {
             size: 11
           },
-          callback: value => `$${value}`,
+          // The axis is in whichever currency the chart is showing, so the
+          // mark has to follow it rather than always saying dollars.
+          callback: value => `${currencyMark(displayedChartCurrency)}${value}`,
         },
         grid: { // Added to hide y-axis grid lines
           display: false
@@ -687,11 +732,24 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
         className={`${styles.statValue} ${styles.statValueStacked} ${align === 'right' ? styles.statValueStackedRight : styles.statValueStackedLeft}`}
         style={{ color: stat.color, fontSize: `${fontPx.toFixed(2)}px` }}
       >
-        {list.length === 0 ? <span>{stat.value}</span> : list.map(({ currency, amount }) => (
-          <span key={currency}>
-            {formatMoney(stat.abs ? Math.abs(amount) : amount, currency, stat.decimals ?? 2)}
-          </span>
-        ))}
+        {list.length === 0 ? <span>{stat.value}</span> : list.map(({ currency, amount }) => {
+          const text = formatMoney(stat.abs ? Math.abs(amount) : amount, currency, stat.decimals ?? 2);
+          if (!stat.onCurrency) return <span key={currency}>{text}</span>;
+          // Each figure charts its own currency. Dimming the ones that are
+          // not on the chart is the only cue that a choice is being made —
+          // with a single currency there is no choice, so nothing is dimmed.
+          const isActive = !stat.activeCurrency || stat.activeCurrency === currency;
+          return (
+            <span
+              key={currency}
+              className={`${styles.statCurrencyPick} ${isActive ? styles.statCurrencyActive : ''}`}
+              onClick={event => { event.stopPropagation(); stat.onCurrency(currency); }}
+              title={`Show ${currency} on the chart`}
+            >
+              {text}
+            </span>
+          );
+        })}
       </div>
     );
   };
@@ -773,6 +831,13 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       setPnlChartType('realised');
       if (isGraphHidden) setShowGraphPopup(true);
     },
+    // Clicking one of the figures charts that currency specifically.
+    onCurrency: code => {
+      setPnlChartType('realised');
+      setChartCurrency(code);
+      if (isGraphHidden) setShowGraphPopup(true);
+    },
+    activeCurrency: pnlChartType === 'realised' ? activeChartCurrency : null,
   };
   const unrealisedPnlStat = {
     label: 'U P&L',
@@ -784,6 +849,12 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       setPnlChartType('unrealised');
       if (isGraphHidden) setShowGraphPopup(true);
     },
+    onCurrency: code => {
+      setPnlChartType('unrealised');
+      setChartCurrency(code);
+      if (isGraphHidden) setShowGraphPopup(true);
+    },
+    activeCurrency: pnlChartType === 'unrealised' ? activeUnrealisedCurrency : null,
   };
 
   // R P&L and U P&L sit side by side, so they share a line count too.
