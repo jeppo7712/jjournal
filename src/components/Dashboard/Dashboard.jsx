@@ -6,7 +6,7 @@ import { TradeContext, parseActionDate, formatDate } from '../../context/TradeCo
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import styles from './Dashboard.module.css';
-import { sumByCurrency, formatTotals, toTotalsList } from '../../utils/currencyTotals';
+import { sumByCurrency, formatTotals, toTotalsList, totalsSign } from '../../utils/currencyTotals';
 import { formatMoney, currencyMark } from '../../utils/formatMoney';
 import { DateTime } from 'luxon';
 import { getRealisedPnL } from '../../context/TradeContext';
@@ -697,6 +697,12 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
 
   ChartJS.register(verticalLinePlugin);
 
+  const signColour = (totals) => {
+    const sign = totalsSign(totals);
+    if (sign === 'mixed') return '#A5ADBA';
+    return sign === 'positive' ? '#22C55E' : '#EF4444';
+  };
+
   const lineCountOf = (stat) => toTotalsList(stat.totals || {}).length;
 
   // A stat box is a fixed 50px with its value absolutely positioned — one
@@ -734,7 +740,15 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       >
         {list.length === 0 ? <span>{stat.value}</span> : list.map(({ currency, amount }) => {
           const text = formatMoney(stat.abs ? Math.abs(amount) : amount, currency, stat.decimals ?? 2);
-          if (!stat.onCurrency) return <span key={currency}>{text}</span>;
+          // A P&L figure is coloured by its own sign, never by the sign of
+          // whichever currency happens to be listed first — that printed a
+          // negative EUR total in green because the USD beside it was up.
+          // AVG W / AVG L are not sign-coloured: their colour says "win" or
+          // "loss", so it stays fixed.
+          const ownColor = stat.signColored
+            ? (amount >= 0 ? '#22C55E' : '#EF4444')
+            : undefined;
+          if (!stat.onCurrency) return <span key={currency} style={ownColor ? { color: ownColor } : undefined}>{text}</span>;
           // Each figure charts its own currency. Dimming the ones that are
           // not on the chart is the only cue that a choice is being made —
           // with a single currency there is no choice, so nothing is dimmed.
@@ -745,6 +759,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
               className={`${styles.statCurrencyPick} ${isActive ? styles.statCurrencyActive : ''}`}
               onClick={event => { event.stopPropagation(); stat.onCurrency(currency); }}
               title={`Show ${currency} on the chart`}
+              style={ownColor ? { color: ownColor } : undefined}
             >
               {text}
             </span>
@@ -823,10 +838,11 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     value: formatTotals(totalRealisedPnlByCurrency, { abs: true }),
     totals: totalRealisedPnlByCurrency,
     abs: true,
-    // Colour follows the leading currency's sign. With several currencies a
-    // single colour can't be right for all of them, but the values are
-    // individually labelled, so it stays a hint rather than the only signal.
-    color: (toTotalsList(totalRealisedPnlByCurrency)[0]?.amount ?? 0) >= 0 ? '#22C55E' : '#EF4444',
+    // Box-level colour, which with several currencies only shows through on
+    // anything the figures themselves don't paint. It states nothing when the
+    // currencies disagree rather than asserting the first one's sign.
+    color: signColour(totalRealisedPnlByCurrency),
+    signColored: true,
     onClick: () => {
       setPnlChartType('realised');
       if (isGraphHidden) setShowGraphPopup(true);
@@ -844,7 +860,8 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     value: formatTotals(unrealisedPnlByCurrency, { abs: true }),
     totals: unrealisedPnlByCurrency,
     abs: true,
-    color: (toTotalsList(unrealisedPnlByCurrency)[0]?.amount ?? 0) >= 0 ? '#22C55E' : '#EF4444',
+    color: signColour(unrealisedPnlByCurrency),
+    signColored: true,
     onClick: () => {
       setPnlChartType('unrealised');
       if (isGraphHidden) setShowGraphPopup(true);

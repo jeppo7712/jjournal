@@ -1,9 +1,26 @@
 import React, { useContext, useState } from 'react';
-import { sumByCurrency, formatTotals, toTotalsList } from '../../utils/currencyTotals';
+import { sumByCurrency, formatTotals, toTotalsList, totalsSign } from '../../utils/currencyTotals';
+import { formatMoney } from '../../utils/formatMoney';
 import { TradeContext } from '../../context/TradeContext';
 import styles from './Calendar.module.css';
 import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addMonths, subMonths, eachWeekOfInterval, startOfDay, endOfDay } from 'date-fns';
 import { DateTime } from 'luxon';
+
+// Each currency figure is coloured by its own sign. Colouring the whole
+// summary by its first currency told the opposite of the truth for the rest —
+// a losing EUR day showed green because the USD on it was up.
+function renderSignedTotals(totals, { abs = true } = {}) {
+  const list = toTotalsList(totals);
+  if (list.length === 0) return formatTotals(totals, { abs });
+  return list.map(({ currency, amount }, i) => (
+    <React.Fragment key={currency}>
+      {i > 0 ? ' \u00b7 ' : ''}
+      <span style={{ color: amount >= 0 ? '#22C55E' : '#EF4444' }}>
+        {formatMoney(abs ? Math.abs(amount) : amount, currency)}
+      </span>
+    </React.Fragment>
+  ));
+}
 
 const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurrentMonth, zone = 'local' }) => {
   const { trades, setTimeFilter, setCustomStartDate, setCustomEndDate, setRestrictToActionsInRange } = useContext(TradeContext);
@@ -123,15 +140,13 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
               <React.Fragment key={dateKey}>
                 <div
                   className={`${styles.dayCell} ${!isCurrentMonth ? styles.outsideMonth : ''} ${summary ? styles.clickable : ''
-                    } ${summary ? ((toTotalsList(summary.totalByCurrency)[0]?.amount ?? 0) >= 0 ? styles.positiveDay : styles.negativeDay) : ''}`}
+                    } ${summary ? (totalsSign(summary.totalByCurrency) === 'mixed' ? '' : totalsSign(summary.totalByCurrency) === 'positive' ? styles.positiveDay : styles.negativeDay) : ''}`}
                   onClick={() => summary && handleDayClick(day)}
                 >
                   <span className={styles.dayNumber}>{format(day, 'd')}</span>
                   {summary && (
                     <div className={styles.daySummary}>
-                      <span style={{ color: (toTotalsList(summary.totalByCurrency)[0]?.amount ?? 0) >= 0 ? '#22C55E' : '#EF4444' }}>
-                        {formatTotals(summary.totalByCurrency, { abs: true })}
-                      </span>
+                      <span>{renderSignedTotals(summary.totalByCurrency)}</span>
                       <span>
                         {summary.count} Trade{summary.count !== 1 ? 's' : ''}
                       </span>
@@ -141,16 +156,14 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
                 {index % 7 === 6 && (
                   <div
                     className={`${styles.weekSummaryCell} ${weekSummary && weekSummary.count > 0 ? styles.clickable : ''
-                      } ${weekSummary && weekSummary.count > 0 ? ((toTotalsList(weekSummary.totalByCurrency)[0]?.amount ?? 0) >= 0 ? styles.positiveWeek : styles.negativeWeek) : ''}`}
+                      } ${weekSummary && weekSummary.count > 0 ? (totalsSign(weekSummary.totalByCurrency) === 'mixed' ? '' : totalsSign(weekSummary.totalByCurrency) === 'positive' ? styles.positiveWeek : styles.negativeWeek) : ''}`}
                     onClick={() => weekKey && weekSummary && weekSummary.count > 0 && handleWeekClick(weekKey)}
                   >
                     {weekSummary && weekSummary.count > 0 && (
                       <div className={styles.weekSummary}>
                         <div className={styles.weekSummaryContent}>
                           <span>P&L: </span>
-                          <span style={{ color: (toTotalsList(weekSummary.totalByCurrency)[0]?.amount ?? 0) >= 0 ? '#22C55E' : '#EF4444' }}>
-                            {formatTotals(weekSummary.totalByCurrency, { abs: true })}
-                          </span>
+                          <span>{renderSignedTotals(weekSummary.totalByCurrency)}</span>
                         </div>
                         <div className={styles.weekSummaryContent}>
                           <span>Wins: </span>
@@ -191,15 +204,13 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
                   return (
                     <div
                       key={`${rowIndex}-${weekIndex}`}
-                      className={`${styles.dayCell} ${!isCurrentMonth ? styles.outsideMonth : ''} ${summary ? styles.clickable : ''} ${summary ? ((toTotalsList(summary.totalByCurrency)[0]?.amount ?? 0) >= 0 ? styles.positiveDay : styles.negativeDay) : ''}`}
+                      className={`${styles.dayCell} ${!isCurrentMonth ? styles.outsideMonth : ''} ${summary ? styles.clickable : ''} ${summary ? (totalsSign(summary.totalByCurrency) === 'mixed' ? '' : totalsSign(summary.totalByCurrency) === 'positive' ? styles.positiveDay : styles.negativeDay) : ''}`}
                       onClick={() => summary && handleDayClick(day)}
                     >
                       <span className={styles.dayNumber}>{format(day, 'd')}</span>
                       {summary && (
                         <div className={styles.daySummary}>
-                          <span style={{ color: (toTotalsList(summary.totalByCurrency)[0]?.amount ?? 0) >= 0 ? '#22C55E' : '#EF4444' }}>
-                            {formatTotals(summary.totalByCurrency, { abs: true })}
-                          </span>
+                          <span>{renderSignedTotals(summary.totalByCurrency)}</span>
                           <span>
                             {summary.count} Trade{summary.count !== 1 ? 's' : ''}
                           </span>
@@ -213,16 +224,14 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
                   return (
                     <div
                       key={`${rowIndex}-${weekIndex}`}
-                      className={`${styles.weekSummaryCell} ${weekSummary && weekSummary.count > 0 ? styles.clickable : ''} ${weekSummary && weekSummary.count > 0 ? ((toTotalsList(weekSummary.totalByCurrency)[0]?.amount ?? 0) >= 0 ? styles.positiveWeek : styles.negativeWeek) : ''}`}
+                      className={`${styles.weekSummaryCell} ${weekSummary && weekSummary.count > 0 ? styles.clickable : ''} ${weekSummary && weekSummary.count > 0 ? (totalsSign(weekSummary.totalByCurrency) === 'mixed' ? '' : totalsSign(weekSummary.totalByCurrency) === 'positive' ? styles.positiveWeek : styles.negativeWeek) : ''}`}
                       onClick={() => weekSummary && weekSummary.count > 0 && handleWeekClick(weekKey)}
                     >
                       {weekSummary && weekSummary.count > 0 && (
                         <div className={styles.weekSummary}>
                           <div className={styles.weekSummaryContent}>
                             <span>P&L: </span>
-                            <span style={{ color: (toTotalsList(weekSummary.totalByCurrency)[0]?.amount ?? 0) >= 0 ? '#22C55E' : '#EF4444' }}>
-                              {formatTotals(weekSummary.totalByCurrency, { abs: true })}
-                            </span>
+                            <span>{renderSignedTotals(weekSummary.totalByCurrency)}</span>
                           </div>
                           <div className={styles.weekSummaryContent}>
                             <span>Wins: </span>
