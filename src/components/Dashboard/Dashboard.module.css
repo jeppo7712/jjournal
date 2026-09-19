@@ -436,7 +436,7 @@
 .statValueStacked {
   display: flex;
   flex-direction: column;
-  top: 16px;
+  top: 20px;
   line-height: 1.12;
   transform: none;
   white-space: nowrap;
@@ -459,6 +459,25 @@
   text-align: left;
   max-width: calc(100% - 62px);
   overflow: hidden;
+}
+
+/* A currency figure that can be clicked to chart that currency. Inactive ones
+   are dimmed rather than hidden or given a control of their own — the figures
+   are already there, so they double as the selector and the box gains no
+   extra furniture. */
+.statCurrencyPick {
+  cursor: pointer;
+  opacity: 0.45;
+  transition: opacity 0.12s ease;
+}
+
+.statCurrencyPick:hover {
+  opacity: 0.8;
+}
+
+.statCurrencyActive,
+.statCurrencyActive:hover {
+  opacity: 1;
 }
 
 .statPctContainer {
