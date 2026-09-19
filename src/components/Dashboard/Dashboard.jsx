@@ -780,7 +780,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     ],
     [
       { label: 'AVG W', value: formatTotals(stats.avgWinByCurrency, { decimals: 0, abs: true }), totals: stats.avgWinByCurrency, decimals: 0, abs: true, pct: (stats.avgWinPct ?? 0).toFixed(0) + '%', color: '#22C55E' },
-      { label: 'AVG L', value: formatTotals(stats.avgLossByCurrency, { decimals: 0 }), totals: stats.avgLossByCurrency, decimals: 0, pct: (stats.avgLossPct ?? 0).toFixed(0) + '%', color: '#EF4444' },
+      { label: 'AVG L', value: formatTotals(stats.avgLossByCurrency, { decimals: 0, abs: true }), totals: stats.avgLossByCurrency, decimals: 0, abs: true, pct: (stats.avgLossPct ?? 0).toFixed(0) + '%', color: '#EF4444' },
     ],
   ].map((row) => {
     // Every row is one side-by-side pair, so both boxes in it share a line
