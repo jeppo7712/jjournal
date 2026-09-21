@@ -1,6 +1,6 @@
 {
   "name": "Jay's Journal",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "description": "Stock and futures trading journal and analysis application.",
   "main": "server.js",
   "scripts": {
