@@ -1,6 +1,6 @@
 # Jay's Journal
 
-A self-hosted trading journal for stocks and futures. Log trades and daily notes, chart them against real historical price data pulled from **Interactive Brokers (TWS/Flex Web Service)** and **Yahoo Finance**, and get PnL, R-multiple, streak, and other performance stats computed automatically.
+A self-hosted trading journal for stocks and futures. Vibe coded. Log trades and daily notes, chart them against real historical price data pulled from **Interactive Brokers (TWS/Flex Web Service)** and **Yahoo Finance**, and get PnL, R-multiple, streak, and other performance stats computed automatically.
 
 Everything runs on your own machine/server against your own PostgreSQL database — no third-party account required beyond IBKR (optional) and Yahoo (used automatically, no account needed).
 
