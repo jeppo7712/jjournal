@@ -653,7 +653,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
 
         // Draw P&L value (top)
         ctx.textBaseline = 'bottom';
-        const pnlText = `$${pnlValue.toFixed(2)}`;
+        const pnlText = `${currencyMark(displayedChartCurrency)}${pnlValue.toFixed(2)}`;
         const pnlY = chartArea.top - 5;
         ctx.fillText(pnlText, textXPos, pnlY);
 
