@@ -187,6 +187,13 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     `);
     logger.debug('trade_actions.exec_id present');
 
+    // Older installs have a vestigial trade_actions.currency: nothing writes
+    // it, so every row held its 'USD' default even on non-USD trades. A
+    // trade's currency comes from its symbol's settings. Dropped so the
+    // stale value can't be mistaken for a real per-action currency.
+    await client.query(`ALTER TABLE trade_actions DROP COLUMN IF EXISTS currency`);
+    logger.debug('trade_actions.currency removed (derived from symbol settings)');
+
     // Create trade_journals table
     logger.debug('Creating trade_journals table...');
     await client.query(`
