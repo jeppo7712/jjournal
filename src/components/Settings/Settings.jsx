@@ -9,6 +9,14 @@ import { findExchangePreset, findFuturesPreset } from '../../data/marketReferenc
 // Must match VALID_TIMEFRAMES / DEFAULT_TIMEFRAME_SETTINGS in
 // modules/historical-data-service.js.
 const TIMEFRAME_ORDER = ['1M', '5M', '15M', '1H', '4H', '1D', '1W'];
+
+// The historical-data picker's value is `${symbol}-${type}`. Symbols can
+// contain dashes themselves (BTC-EUR), so split on the last one: the type
+// (STK/FUT) never does.
+function splitSymbolKey(key) {
+  const i = key.lastIndexOf('-');
+  return i < 0 ? [key, undefined] : [key.slice(0, i), key.slice(i + 1)];
+}
 const DEFAULT_TIMEFRAME_SETTINGS = {
   '1M': { enabled: false },
   '5M': { enabled: true },
@@ -1014,7 +1022,7 @@ export default function Settings() {
 
   const handleDeleteHistoricalData = async () => {
     if (!selectedHistoricalSymbol) return;
-    const [symbol, type] = selectedHistoricalSymbol.split('-');
+    const [symbol, type] = splitSymbolKey(selectedHistoricalSymbol);
     if (window.confirm(`Are you sure you want to delete all historical data for ${symbol} (${type})? This action cannot be undone.`)) {
       try {
         const res = await fetch(`${apiBaseUrl}/api/historical-data?symbol=${symbol}&type=${type}`, {
@@ -1109,7 +1117,7 @@ export default function Settings() {
     const fetchHistoricalSummary = async () => {
       setIsLoadingSummary(true);
       setHistoricalSummary(null);
-      const [symbol, type] = selectedHistoricalSymbol.split('-');
+      const [symbol, type] = splitSymbolKey(selectedHistoricalSymbol);
       try {
         const res = await fetch(`${apiBaseUrl}/api/historical/summary?symbol=${symbol}&type=${type}`, {
           headers: { 'X-Account-ID': currentAccountId }
@@ -1149,7 +1157,7 @@ export default function Settings() {
 
     setIsLoadingSummary(true);
     setHistoricalSummary(null);
-    const [symbol, type] = selectedHistoricalSymbol.split('-');
+    const [symbol, type] = splitSymbolKey(selectedHistoricalSymbol);
     try {
       const res = await fetch(`${apiBaseUrl}/api/historical/summary?symbol=${symbol}&type=${type}`);
       if (!res.ok) throw new Error('Failed to refresh summary');
@@ -1166,7 +1174,7 @@ export default function Settings() {
   const handleSaveRollover = async () => {
     if (!editingRollover || !rolloverDate) return;
     setIsSaving(true);
-    const [symbol, type] = selectedHistoricalSymbol.split('-');
+    const [symbol, type] = splitSymbolKey(selectedHistoricalSymbol);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds
 
@@ -1204,7 +1212,7 @@ export default function Settings() {
 
   const handleFetchSymbolHistoricalData = async () => {
     if (!selectedHistoricalSymbol) return;
-    const [symbol, type] = selectedHistoricalSymbol.split('-');
+    const [symbol, type] = splitSymbolKey(selectedHistoricalSymbol);
 
     // Indicate to the user that the action is in progress
     setHistoricalFetchStatus(`Queuing fetch tasks for ${symbol} (${type})...`);
@@ -1247,7 +1255,7 @@ export default function Settings() {
     if (!window.confirm('Are you sure you want to delete this manual override? The system will revert to volume-based rollover for this date.')) return;
 
     setIsDeleting(true); // Set deleting state
-    const [symbol, type] = selectedHistoricalSymbol.split('-');
+    const [symbol, type] = splitSymbolKey(selectedHistoricalSymbol);
     const controller = new AbortController();
     const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds timeout
 
@@ -1361,7 +1369,7 @@ export default function Settings() {
 
   const handleRecalculateContinuous = async (timeframe) => {
     if (!selectedHistoricalSymbol) return;
-    const [symbol, type] = selectedHistoricalSymbol.split('-');
+    const [symbol, type] = splitSymbolKey(selectedHistoricalSymbol);
     alert(`Continuous series rebuild initiated for ${symbol} (${type}). The summary will refresh automatically upon completion.`);
 
     try {
@@ -1395,7 +1403,7 @@ export default function Settings() {
     return;
   }
 
-  const [symbol, type] = selectedHistoricalSymbol.split('-');
+  const [symbol, type] = splitSymbolKey(selectedHistoricalSymbol);
   if (!symbol || !type) {
     alert('Invalid selected symbol/type.');
     return;
@@ -2167,15 +2175,15 @@ export default function Settings() {
               <>
                 <HistoricalDataSummary
                   summary={historicalSummary}
-                  type={selectedHistoricalSymbol.split('-')[1]}
+                  type={splitSymbolKey(selectedHistoricalSymbol)[1]}
                   onEditRollover={handleEditRollover}
                   onExportCsv={handleExportCsv}
                 />
                 <hr style={{ margin: '2rem 0' }} />
                 <div className={styles.globalActions}>
-                  <h3>{selectedHistoricalSymbol.split('-')[0]} Data Actions</h3>
+                  <h3>{splitSymbolKey(selectedHistoricalSymbol)[0]} Data Actions</h3>
                   <div className={styles.buttonContainer} style={{ marginTop: '1rem' }}>
-                    {selectedHistoricalSymbol.split('-')[1] === 'FUT' && (
+                    {splitSymbolKey(selectedHistoricalSymbol)[1] === 'FUT' && (
                       <BubbleButton onClick={handleRecalculateContinuous} color="#2563EB" disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
                         Recalculate Continuous Series
                       </BubbleButton>
