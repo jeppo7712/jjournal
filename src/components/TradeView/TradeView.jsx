@@ -606,14 +606,22 @@ const [dataVersion, setDataVersion] = useState(0);
         // degenerate visible range, which looked like the chart randomly
         // snapping after panning. Merging (never removing, only adding/
         // upgrading to IBKR) keeps everything the user has scrolled to.
+        //
+        // Within the span this response covers, though, the server's answer
+        // is authoritative: once IBKR data exists it drops the Yahoo bars it
+        // replaces, and those don't share timestamps with IBKR's (a London
+        // 1H Yahoo bar is stamped 07:00 UTC, IBKR's 08:00), so a per-
+        // timestamp upgrade would leave the stale Yahoo bars interleaved
+        // with the new IBKR ones until the chart was reopened.
+        const spanStart = rawData.length > 0 ? rawData[0].time : null;
+        const spanEnd = rawData.length > 0 ? rawData[rawData.length - 1].time : null;
         const mergedMap = new Map();
-        chartDataRef.current.forEach(bar => mergedMap.set(bar.time, bar));
-        rawData.forEach(bar => {
-          const existing = mergedMap.get(bar.time);
-          if (!existing || (bar.source === 'IBKR' && existing.source !== 'IBKR')) {
+        chartDataRef.current.forEach(bar => {
+          if (spanStart === null || bar.time < spanStart || bar.time > spanEnd) {
             mergedMap.set(bar.time, bar);
           }
         });
+        rawData.forEach(bar => mergedMap.set(bar.time, bar));
         chartDataRef.current = Array.from(mergedMap.values()).sort((a, b) => a.time - b.time);
         setFullHistoryLoaded(true);
         setAwaitingData(false); // Ensure awaiting data is reset
