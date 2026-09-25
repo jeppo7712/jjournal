@@ -662,7 +662,14 @@ const [dataVersion, setDataVersion] = useState(0);
         newestRequestedTimeRef.current = currentMax + chunkDuration;
       }
 
-      const url = `${process.env.REACT_APP_API_URL}/api/historical/db?symbol=${encodeURIComponent(trade.symbol)}&type=${encodeURIComponent(trade.type)}&timeframe=${timeframe}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
+      // noRefresh: scrolling only reads what's stored. Without it every
+      // scroll tick past the edge of stored history was a full chart
+      // request: the server answered 202 "population tasks queued" (a
+      // non-array, so never counted as an empty chunk below, so the edge
+      // was never reached and the next tick asked again), and each request
+      // also dropped this symbol+timeframe's pending fetch tasks — including
+      // the IBKR one the initial load had queued — behind a 60s cooldown.
+      const url = `${process.env.REACT_APP_API_URL}/api/historical/db?symbol=${encodeURIComponent(trade.symbol)}&type=${encodeURIComponent(trade.type)}&timeframe=${timeframe}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&noRefresh=true`;
       const guardedFetch = guardedFetchRef.current;
       const { response, data: responseData } = await guardedFetch(url, { headers: { 'x-account-id': '1' } });
 
