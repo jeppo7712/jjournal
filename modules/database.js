@@ -194,6 +194,11 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     await client.query(`ALTER TABLE trade_actions DROP COLUMN IF EXISTS currency`);
     logger.debug('trade_actions.currency removed (derived from symbol settings)');
 
+    // Same for exchange_fee: never written (every row held its 0 default)
+    // and never read — a fill's fees are all in trade_actions.fee.
+    await client.query(`ALTER TABLE trade_actions DROP COLUMN IF EXISTS exchange_fee`);
+    logger.debug('trade_actions.exchange_fee removed (unused)');
+
     // Create trade_journals table
     logger.debug('Creating trade_journals table...');
     await client.query(`

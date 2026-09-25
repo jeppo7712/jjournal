@@ -89,13 +89,12 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
                     t.id, t.account_id, t.type, t.symbol, t.target, t.stop_loss,
                     t.tick_size, t.tick_value, t.contract_month, t.created_at, t.updated_at,
                     (
-                        -- trade_actions.exchange_fee exists on older installs
-                        -- but is vestigial: nothing writes it and
-                        -- modules/database.js doesn't create it, so its value
-                        -- is a stale default. (currency was the same and is
-                        -- now dropped by a migration; still stripped for DBs
-                        -- that haven't run it yet.) A trade's currency is
-                        -- resolved from its symbol and returned at trade
+                        -- trade_actions.currency and exchange_fee were
+                        -- vestigial columns on older installs (never written,
+                        -- only stale defaults); migrations in
+                        -- modules/database.js drop both. Still stripped for
+                        -- DBs that haven't run them yet. A trade's currency
+                        -- is resolved from its symbol and returned at trade
                         -- level below.
                         SELECT COALESCE(json_agg(
                             (to_jsonb(a) - 'currency' - 'exchange_fee') || jsonb_build_object('execId', a.exec_id)
