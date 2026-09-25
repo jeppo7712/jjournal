@@ -210,8 +210,13 @@ return res.status(400).json({ error: 'Initial margin is required for futures con
             logger.info(`[FuturesSettings] Deleted ${historicalDeleteResult.rowCount} historical data rows.`);
             broadcastStatus(uuidv4(), `Historical data for ${symbol} (${type}) deleted.`, 'info');
 
-            // 3. Delete the futures_setting
-            const { rowCount } = await pool.query('DELETE FROM futures_settings WHERE symbol=$1 AND type=$2', [symbol, type]);
+            // 3. Delete the futures_setting. On `client`, inside the same
+            // transaction: on a separate pool connection this DELETE's
+            // foreign-key check waited on the historical_data rows this
+            // transaction had just deleted but not committed, while the
+            // transaction waited on it — a deadlock Postgres can't see, so
+            // deleting any symbol with price history hung forever.
+            const { rowCount } = await client.query('DELETE FROM futures_settings WHERE symbol=$1 AND type=$2', [symbol, type]);
 
             if (rowCount === 0) {
                 await client.query('ROLLBACK');
