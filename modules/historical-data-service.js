@@ -639,7 +639,24 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
                             ? (c) => ibkrIdentity.venues.includes(String(c.primaryExch || '').toUpperCase())
                             : null;
                         // validateContract requires IBKR connection, so it must be called AFTER initializeIBKR
-                        const validatedContract = await validateContract(initialContract, taskId, cancellationSignal, broadcastStatus, acceptListing);
+                        let validatedContract;
+                        try {
+                            validatedContract = await validateContract(initialContract, taskId, cancellationSignal, broadcastStatus, acceptListing);
+                        } catch (lookupErr) {
+                            if (!translated || cancellationSignal?.aborted) throw lookupErr;
+                            // IBKR won't SMART-route some listings in their own
+                            // currency (a USD-quoted London ETF like IB01 gives
+                            // "No security definition" for SMART+USD) but does
+                            // find them with the currency left out. Ask again
+                            // that way, holding the currency check ourselves.
+                            const wantCurrency = initialContract.currency;
+                            logger.info(`[populate][${taskId}] SMART lookup of ${ibkrIdentity.symbol} in ${wantCurrency} failed (${lookupErr.message}); retrying without currency.`);
+                            validatedContract = await validateContract(
+                                { symbol: ibkrIdentity.symbol, secType: 'STK', exchange: 'SMART' },
+                                taskId, cancellationSignal, broadcastStatus,
+                                (c) => (!acceptListing || acceptListing(c)) && String(c.currency || '').toUpperCase() === wantCurrency
+                            );
+                        }
                         if (validatedContract) contractsToFetch.push(validatedContract);
                     } catch (valErr) {
                         logger.error(`[populate][${taskId}] Failed to validate contract for ${symbol} (${type}, ${contractMonth || 'N/A'}): ${valErr.message}`);
