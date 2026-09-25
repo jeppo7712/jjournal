@@ -2,6 +2,7 @@ const express = require('express');
 const router = express.Router();
 const { logger } = require('../modules/logger.js');
 const { processHoldingsAccrual } = require('../modules/holdingsAccrual.js');
+const { syncDividendLedger } = require('../modules/dividends.js');
 
 // Cash ledger + non-trade holdings (T-bills/bonds). See
 // docs/CAPITAL_TRACKING_DESIGN.md for the design this implements.
@@ -181,11 +182,16 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         const { id } = req.params;
         try {
             const { rows } = await pool.query(
-                `SELECT transfer_pair_id FROM cash_transactions WHERE id = $1 AND account_id = $2`,
+                `SELECT transfer_pair_id, linked_dividend_id FROM cash_transactions WHERE id = $1 AND account_id = $2`,
                 [id, req.accountId]
             );
             if (rows.length === 0) {
                 return res.status(404).json({ error: 'Cash transaction not found' });
+            }
+            // A dividend's ledger rows are derived from the dividend; deleting
+            // one here would just come back on the dividend's next change.
+            if (rows[0].linked_dividend_id) {
+                return res.status(400).json({ error: 'This entry belongs to a dividend — edit or remove the dividend instead' });
             }
             const pairId = rows[0].transfer_pair_id;
             await pool.query(`DELETE FROM cash_transactions WHERE id = $1`, [id]);
@@ -197,6 +203,189 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         } catch (err) {
             logger.error('Error deleting cash transaction:', err);
             res.status(500).json({ error: err.message });
+        }
+    });
+
+    // --- Dividends ---
+    // Each dividend owns its ledger rows (DIVIDEND + WITHHOLDING_TAX), rebuilt
+    // by syncDividendLedger on every change. Paper accounts don't track
+    // dividends at all.
+
+    const DIVIDEND_KINDS = ['DIVIDEND', 'PAYMENT_IN_LIEU'];
+    const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
+
+    // Validates and normalizes a create/update body; returns { error } or
+    // { values } in column order for the INSERT/UPDATE below.
+    function parseDividendBody(body) {
+        const symbol = String(body.symbol || '').trim().toUpperCase();
+        const currency = String(body.currency || '').trim().toUpperCase();
+        const kind = body.kind || 'DIVIDEND';
+        const payDate = body.pay_date;
+        const exDate = body.ex_date || null;
+        const gross = body.gross_amount;
+        const tax = body.withholding_tax === undefined || body.withholding_tax === null || body.withholding_tax === '' ? 0 : body.withholding_tax;
+
+        if (!symbol) return { error: 'symbol is required' };
+        if (!/^[A-Z]{3}$/.test(currency)) return { error: 'currency must be a 3-letter code' };
+        if (!DIVIDEND_KINDS.includes(kind)) return { error: `kind must be one of: ${DIVIDEND_KINDS.join(', ')}` };
+        if (!DATE_RE.test(String(payDate || ''))) return { error: 'pay_date (YYYY-MM-DD) is required' };
+        if (exDate !== null && !DATE_RE.test(String(exDate))) return { error: 'ex_date must be YYYY-MM-DD' };
+        if (typeof gross !== 'number' || !Number.isFinite(gross) || gross === 0) return { error: 'gross_amount (non-zero number) is required' };
+        if (typeof tax !== 'number' || !Number.isFinite(tax) || tax < 0) return { error: 'withholding_tax must be zero or a positive number' };
+        if (tax > Math.abs(gross)) return { error: 'withholding_tax cannot exceed the gross amount' };
+        return { values: [symbol, kind, currency, exDate, payDate, gross, tax, body.note ? String(body.note) : null] };
+    }
+
+    async function isVirtualAccount(accountId) {
+        const { rows } = await pool.query(`SELECT is_virtual FROM accounts WHERE id = $1`, [accountId]);
+        return rows.length === 0 ? null : rows[0].is_virtual;
+    }
+
+    // GET /dividends — rolled up across descendant accounts, same as the
+    // ledger. Dates come back as plain YYYY-MM-DD strings, not timestamps, so
+    // no client-side time zone can move them. Dismissed imports are
+    // included (flagged) so the UI can offer to restore them.
+    router.get('/dividends', async (req, res) => {
+        try {
+            const { rows } = await pool.query(
+                `WITH RECURSIVE descendants AS (
+                    SELECT id FROM accounts WHERE id = $1
+                    UNION ALL
+                    SELECT a.id FROM accounts a JOIN descendants d ON a.parent_account_id = d.id
+                )
+                SELECT dv.id, dv.account_id, a.name AS account_name, dv.symbol, dv.kind, dv.currency,
+                       to_char(dv.ex_date, 'YYYY-MM-DD') AS ex_date,
+                       to_char(dv.pay_date, 'YYYY-MM-DD') AS pay_date,
+                       dv.gross_amount, dv.withholding_tax,
+                       dv.gross_amount - dv.withholding_tax AS net_amount,
+                       dv.source, dv.edited, dv.dismissed, dv.note
+                FROM dividends dv
+                JOIN accounts a ON a.id = dv.account_id
+                WHERE dv.account_id IN (SELECT id FROM descendants)
+                ORDER BY dv.pay_date DESC, dv.id DESC`,
+                [req.accountId]
+            );
+            res.json(rows);
+        } catch (err) {
+            logger.error('Error fetching dividends:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // POST /dividends — a dividend entered by hand.
+    router.post('/dividends', async (req, res) => {
+        const parsed = parseDividendBody(req.body);
+        if (parsed.error) return res.status(400).json({ error: parsed.error });
+        const client = await pool.connect();
+        try {
+            const virtual = await isVirtualAccount(req.accountId);
+            if (virtual === null) return res.status(404).json({ error: 'Account not found' });
+            if (virtual) return res.status(400).json({ error: 'Dividends are not tracked for paper accounts' });
+
+            await client.query('BEGIN');
+            const { rows } = await client.query(
+                `INSERT INTO dividends (account_id, symbol, kind, currency, ex_date, pay_date, gross_amount, withholding_tax, note, source)
+                 VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, 'MANUAL') RETURNING id`,
+                [req.accountId, ...parsed.values]
+            );
+            await syncDividendLedger(client, rows[0].id);
+            await client.query('COMMIT');
+            broadcastStatus(uuidv4(), `Dividend recorded: ${parsed.values[0]}`, 'success');
+            res.json({ success: true, id: rows[0].id });
+        } catch (err) {
+            await client.query('ROLLBACK').catch(() => {});
+            logger.error('Error creating dividend:', err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
+        }
+    });
+
+    // PUT /dividends/:id — full update. An imported dividend changed by hand
+    // is marked edited, so later imports leave it alone.
+    router.put('/dividends/:id', async (req, res) => {
+        const parsed = parseDividendBody(req.body);
+        if (parsed.error) return res.status(400).json({ error: parsed.error });
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const { rowCount } = await client.query(
+                `UPDATE dividends SET symbol=$1, kind=$2, currency=$3, ex_date=$4, pay_date=$5,
+                    gross_amount=$6, withholding_tax=$7, note=$8,
+                    edited = (source <> 'MANUAL'), updated_at = NOW()
+                 WHERE id = $9 AND account_id = $10`,
+                [...parsed.values, req.params.id, req.accountId]
+            );
+            if (rowCount === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Dividend not found' });
+            }
+            await syncDividendLedger(client, req.params.id);
+            await client.query('COMMIT');
+            res.json({ success: true });
+        } catch (err) {
+            await client.query('ROLLBACK').catch(() => {});
+            logger.error('Error updating dividend:', err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
+        }
+    });
+
+    // DELETE /dividends/:id — a manual dividend is deleted outright (its
+    // ledger rows cascade). An imported one is only dismissed: kept without
+    // ledger rows, so the next import doesn't bring it back.
+    router.delete('/dividends/:id', async (req, res) => {
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const { rows } = await client.query(
+                `SELECT source FROM dividends WHERE id = $1 AND account_id = $2`,
+                [req.params.id, req.accountId]
+            );
+            if (rows.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Dividend not found' });
+            }
+            if (rows[0].source === 'MANUAL') {
+                await client.query(`DELETE FROM dividends WHERE id = $1`, [req.params.id]);
+            } else {
+                await client.query(`UPDATE dividends SET dismissed = true, updated_at = NOW() WHERE id = $1`, [req.params.id]);
+                await syncDividendLedger(client, req.params.id);
+            }
+            await client.query('COMMIT');
+            res.json({ success: true, dismissed: rows[0].source !== 'MANUAL' });
+        } catch (err) {
+            await client.query('ROLLBACK').catch(() => {});
+            logger.error('Error deleting dividend:', err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
+        }
+    });
+
+    // POST /dividends/:id/restore — undoes dismissing an imported dividend.
+    router.post('/dividends/:id/restore', async (req, res) => {
+        const client = await pool.connect();
+        try {
+            await client.query('BEGIN');
+            const { rowCount } = await client.query(
+                `UPDATE dividends SET dismissed = false, updated_at = NOW() WHERE id = $1 AND account_id = $2 AND dismissed`,
+                [req.params.id, req.accountId]
+            );
+            if (rowCount === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'No dismissed dividend with that id' });
+            }
+            await syncDividendLedger(client, req.params.id);
+            await client.query('COMMIT');
+            res.json({ success: true });
+        } catch (err) {
+            await client.query('ROLLBACK').catch(() => {});
+            logger.error('Error restoring dividend:', err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
         }
     });
 
