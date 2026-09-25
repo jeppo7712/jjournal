@@ -40,6 +40,7 @@ import {
   computeHourlyStats,
   computeLargestStreaks,
   computeAvgWinLoss,
+  computeHoldings,
 } from './statsUtils';
 import styles from './Stats.module.css';
 import { currencyMark } from '../../utils/formatMoney';
@@ -76,6 +77,7 @@ class StatsErrorBoundary extends React.Component {
 // on figures that are actually coloured: where a value renders in plain
 // white, the sign is the one thing telling a loss from a gain.
 const absAmount = (value) => Math.abs(Number(value)).toFixed(2);
+const pnlColor = (value) => (value === null || value === undefined || Number(value) === 0 ? undefined : Number(value) > 0 ? '#22C55E' : '#EF4444');
 
 const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilterWeek }) => {
   const { filteredItems, filter, timeFilter, symbolFilter, restrictToActionsInRange, trades: allTrades } = React.useContext(TradeContext) || { filteredItems: [], filter: [], timeFilter: null, symbolFilter: '', restrictToActionsInRange: false, trades: [] };
@@ -259,6 +261,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         tradeAnalysis: computeTradeAnalysis(trades),
         symbolStats: computeSymbolStats(trades),
         feeAnalysis: computeFeeAnalysis(trades),
+        holdings: computeHoldings(trades),
         bestPerformingAssets: computeBestPerformingAssets(trades),
         portfolioValueSeries: computePortfolioValueSeries(trades, historicalDataMap),
         returnDistribution: computeReturnDistribution(trades),
@@ -292,8 +295,9 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         tradeAnalysis: [],
         symbolStats: [],
         feeAnalysis: { totalFees: '0', avgFeesPerTrade: '0', feesPerMonth: {}, feesPerSymbol: {} },
+        holdings: { rows: [], pricesPending: false, totals: { marketValue: 0, costBasis: 0, unrealizedPnl: 0, unrealizedPct: null, realizedPnl: 0, totalPnl: 0, fees: 0 } },
         bestPerformingAssets: [],
-        portfolioValueSeries: { labels: [], series: [] },
+        portfolioValueSeries: { labels: [], series: [], realizedSeries: [] },
         returnDistribution: { labels: [], data: [] },
         winRateSeries: { labels: [], data: [] },
         tradingActivityHeatmap: { heatmap: [], maxValue: 0 },
@@ -373,6 +377,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
   const tabs = [
     { id: 'calendar', label: 'Calendar' },
     { id: 'general', label: 'General' },
+    { id: 'holdings', label: 'Holdings' },
     { id: 'advanced', label: 'Advanced Metrics' },
     { id: 'risk', label: 'Risk Metrics' },
     { id: 'tradeAnalysis', label: 'Trade Analysis' },
@@ -387,12 +392,22 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
     labels: computedStats.portfolioValueSeries.labels,
     datasets: [
       {
-        label: 'Portfolio Value',
+        label: 'Total P&L (incl. open positions)',
         data: computedStats.portfolioValueSeries.series,
         borderColor: '#3B82F6',
         backgroundColor: 'rgba(59, 130, 246, 0.1)',
         tension: 0.3,
         fill: true,
+        pointRadius: 0,
+        pointHoverRadius: 0,
+      },
+      {
+        label: 'Realised P&L',
+        data: computedStats.portfolioValueSeries.realizedSeries,
+        borderColor: '#9CA3AF',
+        borderDash: [4, 4],
+        tension: 0.3,
+        fill: false,
         pointRadius: 0,
         pointHoverRadius: 0,
       },
@@ -449,7 +464,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
     datasets: [
       {
         data: computedStats.openPositionsPie.data,
-        backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899'],
+        backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#84CC16', '#6366F1', '#A855F7', '#06B6D4'],
         borderColor: '#1e1e2e',
         borderWidth: 2,
       },
@@ -1024,9 +1039,9 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 )}
               </div>
               <div className={styles.chartContainer}>
-                <h4>Portfolio Value Over Time</h4>
+                <h4>Cumulative P&L Over Time</h4>
                 <p className={styles.chartExplanation}>
-                  This line chart shows the cumulative portfolio value over the last year, based on realised P&L from closed trades. It’s calculated by summing the daily P&L (trade returns) from the earliest trade date or 3*365 days ago, starting with prior P&L for accuracy.
+                  Cumulative P&L per day (max 3*365 days). The solid line is realised P&L (closed trades and partial sells, on the day they happened) plus the unrealised P&L of positions open at that day’s close, valued at the symbol’s daily close. The dashed line is realised P&L alone. Fees are included in both.
                 </p>
                 {isFetching ? (
                   <p>Loading historical data...</p>
@@ -1040,6 +1055,102 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
               </div>
             </div>
           )}
+          {currentTab === 'holdings' && (() => {
+            const h = computedStats.holdings;
+            const mark = currencyMark(activeCurrency);
+            const money = (v) => (v === null || v === undefined ? '—' : `${mark}${absAmount(v)}`);
+            const pct = (v) => (v === null || v === undefined ? '—' : `${Math.abs(v).toFixed(2)}%`);
+            return (
+              <div>
+                <div className={styles.statsGrid}>
+                  <div className={styles.statBox}>
+                    <div className={styles.statLabel}>Market Value</div>
+                    <div className={styles.statValue}>{money(h.totals.marketValue)}</div>
+                  </div>
+                  <div className={styles.statBox}>
+                    <div className={styles.statLabel}>Cost Basis</div>
+                    <div className={styles.statValue}>{money(h.totals.costBasis)}</div>
+                  </div>
+                  <div className={styles.statBox}>
+                    <div className={styles.statLabel}>Unrealised P&L</div>
+                    <div className={styles.statValue} style={{ color: pnlColor(h.totals.unrealizedPnl) }}>
+                      {money(h.totals.unrealizedPnl)}{h.totals.unrealizedPct !== null ? ` (${pct(h.totals.unrealizedPct)})` : ''}
+                    </div>
+                  </div>
+                  <div className={styles.statBox}>
+                    <div className={styles.statLabel}>Realised P&L</div>
+                    <div className={styles.statValue} style={{ color: pnlColor(h.totals.realizedPnl) }}>{money(h.totals.realizedPnl)}</div>
+                  </div>
+                  <div className={styles.statBox}>
+                    <div className={styles.statLabel}>Total P&L</div>
+                    <div className={styles.statValue} style={{ color: pnlColor(h.totals.totalPnl) }}>{money(h.totals.totalPnl)}</div>
+                  </div>
+                  <div className={styles.statBox}>
+                    <div className={styles.statLabel}>Fees Paid</div>
+                    <div className={styles.statValue}>{money(h.totals.fees)}</div>
+                  </div>
+                </div>
+                <p className={styles.chartExplanation}>
+                  Open positions valued at the current price. Realised P&L covers closed trades and partial sells of open ones; both P&L figures are after fees. Market value, cost basis and allocation cover stocks/ETFs only — a futures position shows its unrealised P&L but its notional isn’t counted as value.
+                  {h.pricesPending && ' Some current prices are still loading; those positions aren’t valued yet.'}
+                </p>
+
+                <div className={styles.tableSection}>
+                  <h3>Open Positions</h3>
+                  {h.rows.length > 0 ? (
+                    <table className={styles.statsTable}>
+                      <thead>
+                        <tr>
+                          <th>Symbol</th>
+                          <th>Quantity</th>
+                          <th>Avg Cost</th>
+                          <th>Price</th>
+                          <th>Market Value</th>
+                          <th>Unrealised P&L</th>
+                          <th>Unrealised %</th>
+                          <th>Realised P&L</th>
+                          <th>Fees</th>
+                          <th>Allocation</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {h.rows.map(r => (
+                          <tr key={r.symbol}>
+                            <td>{r.symbol}</td>
+                            <td>{r.quantity}</td>
+                            <td>{r.avgCost === null ? '—' : r.avgCost.toFixed(4)}</td>
+                            <td>{r.currentPrice === null ? (r.priced ? '—' : '…') : Number(r.currentPrice).toFixed(4)}</td>
+                            <td>{money(r.marketValue)}</td>
+                            <td style={{ color: pnlColor(r.unrealizedPnl) }}>{r.priced ? money(r.unrealizedPnl) : '…'}</td>
+                            <td style={{ color: pnlColor(r.unrealizedPct) }}>{pct(r.unrealizedPct)}</td>
+                            <td style={{ color: pnlColor(r.realizedPnl) }}>{money(r.realizedPnl)}</td>
+                            <td>{money(r.fees)}</td>
+                            <td>{pct(r.allocationPct)}</td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  ) : (
+                    <p>No open positions.</p>
+                  )}
+                </div>
+
+                <div className={styles.chartContainer}>
+                  <h4>Allocation by Market Value</h4>
+                  <p className={styles.chartExplanation}>
+                    Share of each open stock/ETF position in the total market value (quantity × current price).
+                  </p>
+                  {computedStats.openPositionsPie.labels.length > 0 && computedStats.openPositionsPie.data.every(v => !isNaN(v)) ? (
+                    <div className={styles.chartCanvasWrapper}>
+                      <Doughnut data={openPositionsPieData} options={pieChartOptions} />
+                    </div>
+                  ) : (
+                    <p>No priced stock/ETF positions to show.</p>
+                  )}
+                </div>
+              </div>
+            );
+          })()}
           {currentTab === 'risk' && (
             <div>
               <div className={styles.statsGrid}>
@@ -1206,6 +1317,8 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                   <thead>
                     <tr>
                       <th>Symbol</th>
+                      <th>Realised P&L</th>
+                      <th>Unrealised P&L</th>
                       <th>Total P&L</th>
                     </tr>
                   </thead>
@@ -1213,7 +1326,9 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                     {computedStats.bestPerformingAssets.map((asset, idx) => (
                       <tr key={idx}>
                         <td>{asset.symbol}</td>
-                        <td>{currencyMark(activeCurrency)}{asset.totalPnl.toFixed(2)}</td>
+                        <td style={{ color: pnlColor(asset.realizedPnl) }}>{currencyMark(activeCurrency)}{absAmount(asset.realizedPnl)}</td>
+                        <td style={{ color: pnlColor(asset.unrealizedPnl) }}>{currencyMark(activeCurrency)}{absAmount(asset.unrealizedPnl)}</td>
+                        <td style={{ color: pnlColor(asset.totalPnl) }}>{currencyMark(activeCurrency)}{absAmount(asset.totalPnl)}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1253,22 +1368,6 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                   <p>No valid data available for the win rate chart.</p>
                 )}
               </div>
-
-              <div className={styles.chartContainer}>
-                <h4>Open Positions by Symbol</h4>
-                <p className={styles.chartExplanation}>
-                  This pie chart shows the allocation of open positions by symbol, based on the absolute market value (currentReturn). It’s calculated by summing the currentReturn for open trades per symbol, reflecting portfolio diversification.
-                </p>
-                {computedStats.openPositionsPie.labels.length > 0 && computedStats.openPositionsPie.data.every(v => !isNaN(v)) ? (
-                  <div className={styles.chartCanvasWrapper}>
-                    <Doughnut data={openPositionsPieData} options={pieChartOptions} />
-                  </div>
-                ) : (
-                  <p>No valid data available for the open positions chart.</p>
-                )}
-              </div>
-
-
 
               <div className={styles.chartContainer}>
                 <h4>Trade Return vs. Hold Time</h4>

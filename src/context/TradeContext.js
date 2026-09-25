@@ -76,11 +76,16 @@ export function getTickMultiplier(trade) {
 // depends on side: BUY for LONG, SELL for SHORT). Returns the realised PnL
 // from closed portions plus whatever lots remain open (used by callers that
 // need the open cost basis for unrealised PnL, e.g. updateTradePriceData).
-function matchLotsFIFO(trade, tickMultiplier) {
+// `timeline` is the position's state after each fill (open quantity, open
+// cost, entry fee still carried by open lots, realised PnL so far, fill
+// price) — Stats uses it to value a position on any past day and to date
+// the P&L locked in by partial closes of a still-open trade.
+export function matchLotsFIFO(trade, tickMultiplier) {
   const openLots = [];
+  const timeline = [];
   let realisedPnL = 0;
   const actions = Array.isArray(trade.actions) ? trade.actions : [];
-  if (trade.side !== 'LONG' && trade.side !== 'SHORT') return { realisedPnL, openLots };
+  if (trade.side !== 'LONG' && trade.side !== 'SHORT') return { realisedPnL, openLots, timeline };
 
   const openingType = trade.side === 'LONG' ? 'BUY' : 'SELL';
   const closingType = trade.side === 'LONG' ? 'SELL' : 'BUY';
@@ -120,9 +125,17 @@ function matchLotsFIFO(trade, tickMultiplier) {
         if (lot.quantity <= 0) openLots.shift();
       }
     }
+    timeline.push({
+      dateTime: action.dateTime,
+      price: Number(action.price || 0),
+      openQty: openLots.reduce((sum, lot) => sum + lot.quantity, 0),
+      openCost: openLots.reduce((sum, lot) => sum + lot.price * lot.quantity, 0),
+      openFee: openLots.reduce((sum, lot) => sum + lot.fee, 0),
+      realisedPnL,
+    });
   });
 
-  return { realisedPnL, openLots };
+  return { realisedPnL, openLots, timeline };
 }
 
 export function getRealisedPnL(trade) {
