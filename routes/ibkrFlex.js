@@ -250,6 +250,28 @@ function filterAndMapExecutions(rawTrades, symbol, effectiveType) {
   return deduped;
 }
 
+// IBKR paper account IDs start with "D" (e.g. DU…); live ones don't. The
+// paper and real Flex settings are separate, but a query ID pasted into the
+// wrong slot would otherwise silently import one account type's fills into
+// the other. Refuses the whole pull rather than filtering, so the
+// misconfiguration gets fixed instead of half-working.
+function isPaperIbkrAccountId(accountId) {
+  return /^D/i.test(String(accountId || ''));
+}
+
+function assertAccountKind(rows, accountKind) {
+  const wantPaper = accountKind === 'paper';
+  const wrong = rows.filter(r => r.accountId && isPaperIbkrAccountId(r.accountId) !== wantPaper);
+  if (wrong.length > 0) {
+    const other = wantPaper ? 'live' : 'paper';
+    throw new Error(`The ${accountKind === 'paper' ? 'paper' : 'real'} Flex queries returned ${wrong.length} row(s) from a ${other} IBKR account — one of the ${accountKind === 'paper' ? 'paper' : 'real'} Query IDs in Settings → TWS belongs to the ${other} account. Nothing was imported.`);
+  }
+  const unchecked = rows.filter(r => !r.accountId).length;
+  if (unchecked > 0) {
+    logger.warn(`[Flex] ${unchecked} row(s) have no accountId, so paper/live could not be verified — add the Account ID field to the Flex query`);
+  }
+}
+
 /**
  * Fetches historical trades for a symbol from one or more Flex queries,
  * merges them, dedupes by execId, and shapes them to match TWS's
@@ -270,12 +292,14 @@ function filterAndMapExecutions(rawTrades, symbol, effectiveType) {
  * @param {string} effectiveType 'STK' | 'FUT'
  * @param {object} [opts]
  * @param {boolean} [opts.forceRefresh] Bypass the cache and hit IBKR directly
+ * @param {'live'|'paper'} [opts.accountKind] Refuse rows from the other kind of IBKR account
  */
 async function fetchFlexExecutions(token, queryIds, symbol, effectiveType, opts = {}) {
   const { trades, fetchedAt, fromCache, stale, failedQueryIds } = await fetchRawFlexTrades(token, queryIds, opts);
+  if (opts.accountKind) assertAccountKind(trades, opts.accountKind);
   const executions = filterAndMapExecutions(trades, symbol, effectiveType);
   logger.debug(`[Flex] ${trades.length} raw rows (${fromCache ? 'cached' : 'fresh'}) → ${executions.length} unique executions for ${symbol.toUpperCase()}`);
   return { executions, fetchedAt, fromCache, stale: !!stale, failedQueryIds: failedQueryIds || [] };
 }
 
-module.exports = { fetchFlexExecutions };
+module.exports = { fetchFlexExecutions, isPaperIbkrAccountId };

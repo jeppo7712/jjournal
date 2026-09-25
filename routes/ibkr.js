@@ -465,7 +465,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
       broadcastStatus(requestId, `Fetching trades for ${symbol} via Flex…`, 'info');
 
       const { executions, fetchedAt, fromCache, stale, failedQueryIds } = await Promise.race([
-        fetchFlexExecutions(flexToken, flexQueryIds, symbol, effectiveType, { forceRefresh: refresh === 'true' }),
+        fetchFlexExecutions(flexToken, flexQueryIds, symbol, effectiveType, { forceRefresh: refresh === 'true', accountKind: account.is_virtual ? 'paper' : 'live' }),
         timeout(90000, `Flex fetch for ${symbol} timed out`),
       ]);
       logger.debug(`[/trade-groups-flex] ${executions.length} flex executions for ${symbol} (fromCache=${fromCache}, ${suffix.toLowerCase()} account)`);
