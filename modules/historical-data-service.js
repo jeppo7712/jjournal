@@ -48,6 +48,7 @@ const { DateTime, Duration } = require('luxon');
 const { Contract, EventName } = require('@stoqey/ib'); // Import Contract and EventName
 const yahoo = require('./yahoo.js');
 const { withRetries, timeout, normalizeDate, extractIBKRTimezoneSuffix, getTimeframeDuration, parseDuration, formatDurationForIBKR, generateContractChain, validateContract, delay, generateIbReqId } = require('./utils.js');
+const { resolveIbkrIdentity } = require('./ibkrSymbols.js');
 const db = require('./database.js');
 const ibkr = require('./ibkr-conn.js');
 const { v4: uuidv4 } = require('uuid');
@@ -271,7 +272,7 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
         if (cancellationSignal.aborted) throw new Error(`Task ${taskId} cancelled at setup stage.`);
 
         const { rows: futuresSettings } = await db.getPool().query(
-            'SELECT id, symbol, exchange, type, rollover_months, timeframe_settings, currency FROM futures_settings WHERE symbol = $1 AND type = $2',
+            'SELECT id, symbol, exchange, type, rollover_months, timeframe_settings, currency, ibkr_symbol, ibkr_exchange FROM futures_settings WHERE symbol = $1 AND type = $2',
             [symbol, type]
         );
 
@@ -280,6 +281,9 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
             throw new Error(`No futures settings for ${symbol} ${type}`);
         }
         const { id: futuresSettingId, exchange, type: settingType, rollover_months, timeframe_settings: timeframeSettings, currency: symbolCurrency } = futuresSettings[0];
+        // How IBKR names this stock (see modules/ibkrSymbols.js); null means
+        // it isn't an IBKR instrument at all (e.g. a Yahoo crypto pair).
+        const ibkrIdentity = type === 'STK' ? resolveIbkrIdentity(futuresSettings[0]) : undefined;
 
         if (!VALID_TIMEFRAMES.includes(timeframe)) {
             logger.error(`[populate][${taskId}] Invalid timeframe: ${timeframe}`);
@@ -438,7 +442,11 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
         // continuous data as if it were that contract's real history.
         const performYahooFetch = needsYahooFetch && (fetchPhase === 'yahoo_only' || fetchPhase === 'full') && timeframe !== '4H' && contractMonth === null;
 
-        const performIBKRCheck = (fetchPhase === 'ibkr_only' || fetchPhase === 'full') && !(type === 'FUT' && timeframe === '1W');
+        const performIBKRCheck = (fetchPhase === 'ibkr_only' || fetchPhase === 'full') && !(type === 'FUT' && timeframe === '1W') && ibkrIdentity !== null;
+
+        if (ibkrIdentity === null && (fetchPhase === 'ibkr_only' || fetchPhase === 'full')) {
+            logger.debug(`[populate][${taskId}] Skipping IBKR for ${symbol}: not an IBKR instrument (set its IBKR symbol in Settings if it is one).`);
+        }
 
         if (type === 'FUT' && timeframe === '1W' && (fetchPhase === 'ibkr_only' || fetchPhase === 'full')) {
             logger.debug(`[populate][${taskId}] Skipping IBKR check for 1W FUT as per configuration.`);
@@ -611,15 +619,27 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
                             logger.error(`[populate][${taskId}] Invalid type/contractMonth combination for single contract fetch: type=${type}, contractMonth=${contractMonth}`);
                             throw new Error("Invalid contract details for single fetch.");
                         }
-                        const initialContract = {
-                            symbol: symbol.toUpperCase(),
-                            secType: secTypeResolved,
-                            currency: symbolCurrency || 'USD',
-                            exchange: exchangeName.toUpperCase(),
-                            ...(type === 'FUT' && contractMonth && { lastTradeDateOrContractMonth: contractMonth }),
-                        };
+                        // A non-US stock's journal symbol is Yahoo-style (XEON.DE)
+                        // and its exchange a display name (XETRA), neither of
+                        // which IBKR knows: look it up SMART-routed by IBKR's
+                        // own ticker and currency, and take the listing on the
+                        // expected exchange. US stocks and futures are looked
+                        // up as they always were.
+                        const translated = type === 'STK' && ibkrIdentity && ibkrIdentity.translated;
+                        const initialContract = translated
+                            ? { symbol: ibkrIdentity.symbol, secType: 'STK', currency: symbolCurrency || 'USD', exchange: 'SMART' }
+                            : {
+                                symbol: symbol.toUpperCase(),
+                                secType: secTypeResolved,
+                                currency: symbolCurrency || 'USD',
+                                exchange: exchangeName.toUpperCase(),
+                                ...(type === 'FUT' && contractMonth && { lastTradeDateOrContractMonth: contractMonth }),
+                            };
+                        const acceptListing = translated && ibkrIdentity.venues
+                            ? (c) => ibkrIdentity.venues.includes(String(c.primaryExch || '').toUpperCase())
+                            : null;
                         // validateContract requires IBKR connection, so it must be called AFTER initializeIBKR
-                        const validatedContract = await validateContract(initialContract, taskId, cancellationSignal, broadcastStatus);
+                        const validatedContract = await validateContract(initialContract, taskId, cancellationSignal, broadcastStatus, acceptListing);
                         if (validatedContract) contractsToFetch.push(validatedContract);
                     } catch (valErr) {
                         logger.error(`[populate][${taskId}] Failed to validate contract for ${symbol} (${type}, ${contractMonth || 'N/A'}): ${valErr.message}`);

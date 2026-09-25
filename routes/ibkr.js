@@ -6,16 +6,47 @@ const { timeout, generateIbReqId } = require('../modules/utils.js');
 const { logger } = require('../modules/logger.js');
 const { fetchFlexExecutions } = require('./ibkrFlex.js');
 const { loadConfig } = require('../modules/config.js');
+const { resolveIbkrIdentity, isSameStockListing } = require('../modules/ibkrSymbols.js');
 
 module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
 
   // ─── SHARED HELPERS ──────────────────────────────────────────────────────────
 
-  async function fetchExecutions(symbol, effectiveType) {
+  // How IBKR names a stock (XEON on IBIS2 for the journal's XEON.DE — see
+  // modules/ibkrSymbols.js). null for futures, which keep matching on the
+  // journal symbol as before. Throws for a symbol that isn't an IBKR
+  // instrument at all (e.g. a Yahoo crypto pair like BTC-EUR).
+  async function loadStockIdentity(symbol, effectiveType) {
+    if (effectiveType !== 'STK') return null;
+    const { rows } = await pool.query(
+      'SELECT symbol, type, exchange, currency, ibkr_symbol, ibkr_exchange FROM futures_settings WHERE symbol = $1 AND type = $2',
+      [symbol.toUpperCase(), effectiveType]
+    );
+    const identity = resolveIbkrIdentity(rows[0] || { symbol, type: effectiveType });
+    if (!identity) {
+      const err = new Error(`${symbol} is not an IBKR instrument — set its IBKR symbol in Settings → Symbols if it is one`);
+      err.status = 400;
+      throw err;
+    }
+    return identity;
+  }
+
+  // Whether a TWS contract (from an execution or order) is the requested
+  // instrument. Only translated (non-US) listings are checked beyond the
+  // ticker; US stocks keep the exact-ticker match they always had.
+  function contractMatches(contract, symbol, effectiveType, identity) {
+    if (!contract.secType || contract.secType.toUpperCase() !== effectiveType.toUpperCase()) return false;
+    if (identity && identity.translated) {
+      return isSameStockListing(identity, { symbol: contract.symbol, primaryExch: contract.primaryExch, currency: contract.currency });
+    }
+    return !!contract.symbol && contract.symbol.toUpperCase() === symbol.toUpperCase();
+  }
+
+  async function fetchExecutions(symbol, effectiveType, identity = null) {
     let execDetailsHandler;
     return new Promise((resolve, reject) => {
       const execFilter = {
-        symbol: symbol.toUpperCase(),
+        symbol: identity ? identity.symbol : symbol.toUpperCase(),
         secType: effectiveType.toUpperCase(),
         time: DateTime.now().setZone('UTC').minus({ days: 7 }).startOf('day').toFormat('yyyyMMdd-HH:mm:ss'),
       };
@@ -26,6 +57,9 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
       execDetailsHandler = (reqId, contract, execution) => {
         logger.debug('[DEBUG] execDetails orderId=%d parentId=%d symbol=%s side=%s qty=%d price=%d',
           execution.orderId, execution.permId, contract.symbol, execution.side, execution.shares, execution.price);
+        // The filter above only narrows by ticker; the same ticker can be a
+        // different listing (a London GDX for a US one).
+        if (identity && identity.translated && !contractMatches(contract, symbol, effectiveType, identity)) return;
         executionData.push({
           execId: execution.execId,
           orderId: execution.orderId,
@@ -64,7 +98,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
     });
   }
 
-  async function fetchCompletedOrders(symbol, effectiveType) {
+  async function fetchCompletedOrders(symbol, effectiveType, identity = null) {
     let completedOrderHandler;
     return new Promise((resolve) => {
       let orders = [];
@@ -75,10 +109,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
         logger.debug('[DEBUG] completedOrder symbol=%s orderId=%d parentId=%d action=%s type=%s status=%s',
           contract.symbol, order.orderId, order.parentId, order.action, order.orderType, orderState.status);
 
-        if (
-          contract.symbol && contract.symbol.toUpperCase() === symbol.toUpperCase() &&
-          contract.secType && contract.secType.toUpperCase() === effectiveType.toUpperCase()
-        ) {
+        if (contractMatches(contract, symbol, effectiveType, identity)) {
           const rawParentId = order.parentId;
           const parentId = (rawParentId && rawParentId !== 0) ? rawParentId : 0;
 
@@ -124,7 +155,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
   }
 
   // Use reqAllOpenOrders() to also capture manually placed TWS bracket orders
-  async function fetchOpenOrders(symbol, effectiveType) {
+  async function fetchOpenOrders(symbol, effectiveType, identity = null) {
     let openOrderHandler;
     return new Promise((resolve, reject) => {
       let orders = [];
@@ -133,10 +164,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
         logger.debug('[DEBUG] openOrder symbol=%s orderId=%d parentId=%d action=%s type=%s status=%s',
           contract.symbol, orderId, order.parentId, order.action, order.orderType, orderState.status);
 
-        if (
-          contract.symbol && contract.symbol.toUpperCase() === symbol.toUpperCase() &&
-          contract.secType && contract.secType.toUpperCase() === effectiveType.toUpperCase()
-        ) {
+        if (contractMatches(contract, symbol, effectiveType, identity)) {
           const rawParentId = order.parentId;
           const parentId = (rawParentId && rawParentId !== 0) ? rawParentId : 0;
 
@@ -366,18 +394,19 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
       return res.status(400).json({ error: 'Invalid type. Must be STK or FUT.' });
 
     try {
+      const identity = await loadStockIdentity(symbol, effectiveType);
       if (!ibkr.isIbkrConnected()) await ibkr.initializeIBKR(requestId, broadcastStatus);
 
       broadcastStatus(requestId, `Fetching trade groups for ${symbol}…`, 'info');
 
       const executions = await Promise.race([
-        fetchExecutions(symbol, effectiveType),
+        fetchExecutions(symbol, effectiveType, identity),
         timeout(35000, `Execution fetch timed out for ${symbol}`),
       ]);
       logger.debug(`[/trade-groups] ${executions.length} executions`);
 
       const completedOrders = await Promise.race([
-        fetchCompletedOrders(symbol, effectiveType),
+        fetchCompletedOrders(symbol, effectiveType, identity),
         timeout(12000, 'Completed orders fetch timed out'),
       ]).catch(err => {
         logger.warn(`[/trade-groups] completedOrders failed: ${err.message}`);
@@ -386,7 +415,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
       logger.debug(`[/trade-groups] ${completedOrders.length} completed orders`);
 
       const openOrders = await Promise.race([
-        fetchOpenOrders(symbol, effectiveType),
+        fetchOpenOrders(symbol, effectiveType, identity),
         timeout(12000, 'Open orders fetch timed out'),
       ]).catch(err => {
         logger.warn(`[/trade-groups] openOrders failed: ${err.message}`);
@@ -410,7 +439,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
     } catch (err) {
       logger.error(`[/trade-groups] ${err.message}`);
       broadcastStatus(requestId, `Failed: ${err.message}`, 'error');
-      res.status(500).json({ error: err.message });
+      res.status(err.status || 500).json({ error: err.message });
     } finally {
       if (ibkr.isIbkrConnected()) await ibkr.disconnectIBKR();
     }
@@ -462,10 +491,11 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
     }
 
     try {
+      const identity = await loadStockIdentity(symbol, effectiveType);
       broadcastStatus(requestId, `Fetching trades for ${symbol} via Flex…`, 'info');
 
       const { executions, fetchedAt, fromCache, stale, failedQueryIds } = await Promise.race([
-        fetchFlexExecutions(flexToken, flexQueryIds, symbol, effectiveType, { forceRefresh: refresh === 'true', accountKind: account.is_virtual ? 'paper' : 'live' }),
+        fetchFlexExecutions(flexToken, flexQueryIds, symbol, effectiveType, { forceRefresh: refresh === 'true', accountKind: account.is_virtual ? 'paper' : 'live', identity }),
         timeout(90000, `Flex fetch for ${symbol} timed out`),
       ]);
       logger.debug(`[/trade-groups-flex] ${executions.length} flex executions for ${symbol} (fromCache=${fromCache}, ${suffix.toLowerCase()} account)`);
@@ -499,7 +529,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
     } catch (err) {
       logger.error(`[/trade-groups-flex] ${err.message}`);
       broadcastStatus(requestId, `Failed: ${err.message}`, 'error');
-      res.status(500).json({ error: err.message });
+      res.status(err.status || 500).json({ error: err.message });
     }
   });
 
@@ -511,10 +541,11 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
     if (!['STK', 'FUT'].includes(effectiveType))
       return res.status(400).json({ error: 'Invalid type parameter. Must be STK or FUT.' });
     try {
+      const identity = await loadStockIdentity(symbol, effectiveType);
       if (!ibkr.isIbkrConnected()) await ibkr.initializeIBKR(requestId, broadcastStatus);
       broadcastStatus(requestId, `Fetching executions for ${symbol}`, 'info');
       const executions = await Promise.race([
-        fetchExecutions(symbol, effectiveType),
+        fetchExecutions(symbol, effectiveType, identity),
         timeout(30000, `IBKR execution fetch for ${symbol} timed out`),
       ]);
       broadcastStatus(requestId, `Retrieved ${executions.length} executions`, 'success');
@@ -522,7 +553,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
     } catch (err) {
       logger.error(`[/executions] ${err.message}`);
       broadcastStatus(requestId, `Failed: ${err.message}`, 'error');
-      res.status(500).json({ error: err.message });
+      res.status(err.status || 500).json({ error: err.message });
     } finally {
       if (ibkr.isIbkrConnected()) await ibkr.disconnectIBKR();
     }
@@ -536,10 +567,11 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
     if (!['STK', 'FUT'].includes(effectiveType))
       return res.status(400).json({ error: 'Invalid type parameter. Must be STK or FUT.' });
     try {
+      const identity = await loadStockIdentity(symbol, effectiveType);
       if (!ibkr.isIbkrConnected()) await ibkr.initializeIBKR(requestId, broadcastStatus);
       broadcastStatus(requestId, `Fetching open orders for ${symbol}`, 'info');
       const openOrders = await Promise.race([
-        fetchOpenOrders(symbol, effectiveType),
+        fetchOpenOrders(symbol, effectiveType, identity),
         timeout(30000, `IBKR open orders fetch timed out`),
       ]);
       broadcastStatus(requestId, `Retrieved ${openOrders.length} open orders`, 'success');
@@ -547,7 +579,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
     } catch (err) {
       logger.error(`[/open-orders] ${err.message}`);
       broadcastStatus(requestId, `Failed: ${err.message}`, 'error');
-      res.status(500).json({ error: err.message });
+      res.status(err.status || 500).json({ error: err.message });
     } finally {
       if (ibkr.isIbkrConnected()) await ibkr.disconnectIBKR();
     }

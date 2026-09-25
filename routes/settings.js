@@ -44,7 +44,8 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         try {
             const { rows } = await pool.query(`
 SELECT fs.symbol, fs.type, fs.tick_size, fs.tick_value, fs.fee, fs.exchange, fs.currency,
-       fs.rollover_months, fs.initial_margin, fs.maintenance_margin, fs.timeframe_settings, e.timezone
+       fs.rollover_months, fs.initial_margin, fs.maintenance_margin, fs.timeframe_settings,
+       fs.ibkr_symbol, fs.ibkr_exchange, e.timezone
       FROM futures_settings fs
       LEFT JOIN exchanges e ON fs.exchange = e.name
     `);
@@ -55,6 +56,10 @@ SELECT fs.symbol, fs.type, fs.tick_size, fs.tick_value, fs.fee, fs.exchange, fs.
             res.status(500).json({ error: err.message });
         }
     });
+
+    // Optional IBKR override fields: trimmed, uppercased, blank -> NULL
+    // (NULL = translate the journal symbol automatically).
+    const cleanIbkrField = (value) => String(value || '').trim().toUpperCase() || null;
 
     router.post('/futures-settings', async (req, res) => {
 const { symbol, type, tick_size, tick_value, fee, exchange, currency, rollover_months, initial_margin, maintenance_margin, timeframe_settings } = req.body;
@@ -70,8 +75,8 @@ return res.status(400).json({ error: 'Initial margin is required for futures con
 
         try {
             await pool.query(
-'INSERT INTO futures_settings (symbol, type, tick_size, tick_value, fee, exchange, currency, rollover_months, initial_margin, maintenance_margin, timeframe_settings) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)',
-[symbol, type, tick_size, tick_value, fee, exchange || null, currency || 'USD', type === 'FUT' ? rollover_months : null, initial_margin || null, maintenance_margin || null, JSON.stringify(timeframe_settings || DEFAULT_TIMEFRAME_SETTINGS)]
+'INSERT INTO futures_settings (symbol, type, tick_size, tick_value, fee, exchange, currency, rollover_months, initial_margin, maintenance_margin, timeframe_settings, ibkr_symbol, ibkr_exchange) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13)',
+[symbol, type, tick_size, tick_value, fee, exchange || null, currency || 'USD', type === 'FUT' ? rollover_months : null, initial_margin || null, maintenance_margin || null, JSON.stringify(timeframe_settings || DEFAULT_TIMEFRAME_SETTINGS), cleanIbkrField(req.body.ibkr_symbol), cleanIbkrField(req.body.ibkr_exchange)]
             );
             res.json({ success: true });
         } catch (err) {
@@ -136,8 +141,14 @@ return res.status(400).json({ error: 'Initial margin is required for futures con
             // separate pool connection it committed independently of the
             // transaction that deleted this symbol's historical data.
             const { rowCount } = await client.query(
-'UPDATE futures_settings SET symbol=$1, type=$2, tick_size=$3, tick_value=$4, fee=$5, exchange=$6, currency=$7, rollover_months=$8, initial_margin=$9, maintenance_margin=$10, timeframe_settings=$11 WHERE symbol=$12 AND type=$13',
-[symbol, type, tick_size, tick_value, fee, exchange || null, currency || 'USD', type === 'FUT' ? rollover_months : null, initial_margin || null, maintenance_margin || null, JSON.stringify(resolvedTimeframeSettings), originalSymbol, originalType]
+// ibkr_symbol/ibkr_exchange are only touched when sent, so a client that
+// doesn't know them can't wipe them.
+`UPDATE futures_settings SET symbol=$1, type=$2, tick_size=$3, tick_value=$4, fee=$5, exchange=$6, currency=$7, rollover_months=$8, initial_margin=$9, maintenance_margin=$10, timeframe_settings=$11,
+    ibkr_symbol = CASE WHEN $14 THEN $15 ELSE ibkr_symbol END,
+    ibkr_exchange = CASE WHEN $16 THEN $17 ELSE ibkr_exchange END
+ WHERE symbol=$12 AND type=$13`,
+[symbol, type, tick_size, tick_value, fee, exchange || null, currency || 'USD', type === 'FUT' ? rollover_months : null, initial_margin || null, maintenance_margin || null, JSON.stringify(resolvedTimeframeSettings), originalSymbol, originalType,
+ 'ibkr_symbol' in req.body, cleanIbkrField(req.body.ibkr_symbol), 'ibkr_exchange' in req.body, cleanIbkrField(req.body.ibkr_exchange)]
             );
             if (rowCount === 0) {
                 await client.query('ROLLBACK');

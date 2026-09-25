@@ -356,6 +356,8 @@ export default function Settings() {
     rolloverMonths: '',
     initialMargin: '',
     timeframeSettings: DEFAULT_TIMEFRAME_SETTINGS,
+    ibkrSymbol: '',
+    ibkrExchange: '',
   });
 
   const [exchangeForm, setExchangeForm] = useState({
@@ -703,6 +705,8 @@ export default function Settings() {
       rolloverMonths: setting && setting.rollover_months ? setting.rollover_months.join(',') : '',
       initialMargin: setting && setting.initial_margin != null ? setting.initial_margin.toString() : '',
       timeframeSettings: setting && setting.timeframe_settings ? setting.timeframe_settings : DEFAULT_TIMEFRAME_SETTINGS,
+      ibkrSymbol: setting && setting.ibkr_symbol ? setting.ibkr_symbol : '',
+      ibkrExchange: setting && setting.ibkr_exchange ? setting.ibkr_exchange : '',
     });
     setShowFuturesModal(true);
 
@@ -741,7 +745,7 @@ export default function Settings() {
 
   const handleFuturesFormChange = (e) => {
     const { name, value } = e.target;
-    if (name === 'symbol' || name === 'currency') {
+    if (['symbol', 'currency', 'ibkrSymbol', 'ibkrExchange'].includes(name)) {
       setForm(prev => ({ ...prev, [name]: value.toUpperCase() }));
     } else if (['tickSize', 'tickValue', 'fee', 'initialMargin'].includes(name)) {
       if (value === '' || /^\d*\.?\d*$/.test(value)) {
@@ -875,7 +879,7 @@ export default function Settings() {
   }, [isDragging]);
 
   const saveFuturesSetting = async () => {
-    const { symbol, type, tickSize, tickValue, fee, exchange, currency, rolloverMonths, initialMargin, timeframeSettings } = form;
+    const { symbol, type, tickSize, tickValue, fee, exchange, currency, rolloverMonths, initialMargin, timeframeSettings, ibkrSymbol, ibkrExchange } = form;
 
     if (!symbol || !type || !fee) {
       alert('Symbol, type, and fee are required.');
@@ -930,6 +934,8 @@ export default function Settings() {
         rollover_months: rolloverMonthsArray,
         initial_margin: type === 'FUT' ? parseFloat(initialMargin) : null,
         timeframe_settings: normalizedTimeframeSettings,
+        ibkr_symbol: type === 'STK' ? (ibkrSymbol.trim() || null) : null,
+        ibkr_exchange: type === 'STK' ? (ibkrExchange.trim() || null) : null,
         ...(editingSetting && { originalSymbol: editingSetting.symbol }),
         ...(editingSetting && { originalType: editingSetting.type }),
       };
@@ -958,6 +964,8 @@ export default function Settings() {
         rolloverMonths: '',
         initialMargin: '',
         timeframeSettings: DEFAULT_TIMEFRAME_SETTINGS,
+        ibkrSymbol: '',
+        ibkrExchange: '',
       });
     } catch (err) {
       alert('Error saving symbol setting: ' + err.message);
@@ -2501,6 +2509,34 @@ export default function Settings() {
                   title="ISO currency code this symbol is priced/traded in (e.g. USD, EUR, AED) — used for cash settlement and IBKR contract lookups, not just display."
                 />
               </div>
+              {form.type === 'STK' && (
+                <>
+                  <div className={styles.formField}>
+                    <label htmlFor="ibkrSymbol" title="Only if IBKR names this differently than worked out automatically. A Yahoo-style symbol like XEON.DE is already looked up at IBKR as XEON on Xetra.">IBKR symbol (optional)</label>
+                    <input
+                      id="ibkrSymbol"
+                      name="ibkrSymbol"
+                      value={form.ibkrSymbol}
+                      onChange={handleFuturesFormChange}
+                      className={styles.inputBubble}
+                      autoComplete="off"
+                      placeholder="automatic"
+                    />
+                  </div>
+                  <div className={styles.formField}>
+                    <label htmlFor="ibkrExchange" title="IBKR's code for the listing exchange (e.g. IBIS, AEB, LSEETF), only if the automatic one is wrong.">IBKR exchange (optional)</label>
+                    <input
+                      id="ibkrExchange"
+                      name="ibkrExchange"
+                      value={form.ibkrExchange}
+                      onChange={handleFuturesFormChange}
+                      className={styles.inputBubble}
+                      autoComplete="off"
+                      placeholder="automatic"
+                    />
+                  </div>
+                </>
+              )}
             </div>
             <hr style={{ margin: '1.5rem 0 1rem' }} />
             <div>

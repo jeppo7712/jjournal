@@ -1,5 +1,6 @@
 const { XMLParser } = require('fast-xml-parser'); // npm install fast-xml-parser --save
 const { logger } = require('../modules/logger.js');
+const { isSameStockListing } = require('../modules/ibkrSymbols.js');
 
 // ─── IBKR Flex Web Service ────────────────────────────────────────────────
 // Unlike TWS reqExecutions (only sees the current session), Flex Queries pull
@@ -110,7 +111,10 @@ async function requestFlexStatement(token, queryId) {
         ...(activityTrades ? (Array.isArray(activityTrades) ? activityTrades : [activityTrades]) : []),
         ...(confirmTrades ? (Array.isArray(confirmTrades) ? confirmTrades : [confirmTrades]) : []),
       ];
-      return combined;
+      // A query without the row-level Account ID field still says whose
+      // statement it is; carry that onto each row so the paper/live check
+      // (assertAccountKind) can always verify it.
+      return combined.map(t => (t.accountId || !s?.accountId ? t : { ...t, accountId: s.accountId }));
     });
 
     logger.debug(`[Flex] query ${queryId} statement ready, ${allTrades.length} raw trade rows`);
@@ -193,8 +197,12 @@ async function fetchRawFlexTrades(token, queryIds, { forceRefresh = false } = {}
 }
 
 // Filters + maps raw Flex trade rows down to one symbol's executions,
-// shaped to match TWS's fetchExecutions() output.
-function filterAndMapExecutions(rawTrades, symbol, effectiveType) {
+// shaped to match TWS's fetchExecutions() output. `identity` (from
+// modules/ibkrSymbols.js) is how IBKR names a stock: Flex reports XEON on
+// IBIS2 for a journal symbol XEON.DE, so stocks are matched on that bare
+// ticker plus listing exchange and currency — the exact ticker alone would
+// also take e.g. a London GDX line for a US GDX.
+function filterAndMapExecutions(rawTrades, symbol, effectiveType, identity = null) {
   const upperSymbol = symbol.toUpperCase();
 
   // Futures come back with the FULL contract symbol in `symbol`
@@ -202,6 +210,7 @@ function filterAndMapExecutions(rawTrades, symbol, effectiveType) {
   // Match on: exact symbol, symbol starting with the root, or a separate
   // underlyingSymbol field if the query happens to include it.
   const matchesSymbol = (t) => {
+    if (effectiveType === 'STK' && identity) return isSameStockListing(identity, t);
     const rawSymbol = String(t.symbol || '').toUpperCase();
     const underlying = String(t.underlyingSymbol || '').toUpperCase();
     return rawSymbol === upperSymbol || rawSymbol.startsWith(upperSymbol) || underlying === upperSymbol;
@@ -217,7 +226,10 @@ function filterAndMapExecutions(rawTrades, symbol, effectiveType) {
   const filtered = rawTrades.filter(t => matchesSymbol(t) && matchesType(t));
 
   if (filtered.length === 0 && rawTrades.length > 0) {
-    logger.warn(`[Flex] 0/${rawTrades.length} rows matched symbol=${upperSymbol} type=${effectiveType} — sample row: ${JSON.stringify(rawTrades[0])}`);
+    // Only what's needed to see why nothing matched: a whole raw row carries
+    // the account number and every figure of that trade.
+    const seen = [...new Set(rawTrades.map(t => `${t.symbol}@${t.listingExchange || '?'}/${t.currency || '?'}`))].slice(0, 30);
+    logger.warn(`[Flex] 0/${rawTrades.length} rows matched symbol=${upperSymbol} type=${effectiveType}${identity ? ` (IBKR ${identity.symbol} ${identity.currency || ''} on ${identity.venues ? identity.venues.join('/') : 'any venue'})` : ''} — symbols present: ${seen.join(', ')}`);
   }
 
   const mapped = filtered.map(t => {
@@ -268,7 +280,7 @@ function assertAccountKind(rows, accountKind) {
   }
   const unchecked = rows.filter(r => !r.accountId).length;
   if (unchecked > 0) {
-    logger.warn(`[Flex] ${unchecked} row(s) have no accountId, so paper/live could not be verified — add the Account ID field to the Flex query`);
+    throw new Error(`${unchecked} Flex row(s) carry no IBKR account ID, so it can't be verified they belong to a ${accountKind} account. Nothing was imported — add the Account ID field to the Flex query.`);
   }
 }
 
@@ -293,11 +305,12 @@ function assertAccountKind(rows, accountKind) {
  * @param {object} [opts]
  * @param {boolean} [opts.forceRefresh] Bypass the cache and hit IBKR directly
  * @param {'live'|'paper'} [opts.accountKind] Refuse rows from the other kind of IBKR account
+ * @param {object} [opts.identity] How IBKR names this stock (modules/ibkrSymbols.js)
  */
 async function fetchFlexExecutions(token, queryIds, symbol, effectiveType, opts = {}) {
   const { trades, fetchedAt, fromCache, stale, failedQueryIds } = await fetchRawFlexTrades(token, queryIds, opts);
   if (opts.accountKind) assertAccountKind(trades, opts.accountKind);
-  const executions = filterAndMapExecutions(trades, symbol, effectiveType);
+  const executions = filterAndMapExecutions(trades, symbol, effectiveType, opts.identity || null);
   logger.debug(`[Flex] ${trades.length} raw rows (${fromCache ? 'cached' : 'fresh'}) → ${executions.length} unique executions for ${symbol.toUpperCase()}`);
   return { executions, fetchedAt, fromCache, stale: !!stale, failedQueryIds: failedQueryIds || [] };
 }

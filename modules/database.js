@@ -455,6 +455,14 @@ UNIQUE (symbol, type)
     await client.query(`ALTER TABLE futures_settings ADD COLUMN IF NOT EXISTS currency VARCHAR NOT NULL DEFAULT 'USD'`);
     logger.debug('futures_settings.currency ready');
 
+    // How IBKR names this symbol, when it differs from the journal's
+    // (Yahoo-style) symbol and the automatic translation in
+    // modules/ibkrSymbols.js gets it wrong. Both NULL = translate
+    // automatically, which covers the usual cases (XEON.DE -> XEON on Xetra).
+    await client.query(`ALTER TABLE futures_settings ADD COLUMN IF NOT EXISTS ibkr_symbol VARCHAR`);
+    await client.query(`ALTER TABLE futures_settings ADD COLUMN IF NOT EXISTS ibkr_exchange VARCHAR`);
+    logger.debug('futures_settings.ibkr_symbol/ibkr_exchange ready');
+
     // Set default rollover_months for existing FUT rows
     await client.query(`
   UPDATE futures_settings 
