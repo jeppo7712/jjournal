@@ -105,7 +105,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
 
     // POST /accounts
     router.post('/', async (req, res) => {
-        const { name, parent_account_id, is_virtual, custodian, custodian_is_us } = req.body;
+        const { name, parent_account_id, is_virtual, custodian, custodian_is_us, broker_account_id } = req.body;
         if (!name) {
             broadcastStatus(uuidv4(), 'Account name is required', 'error');
             return res.status(400).json({ error: 'Name is required' });
@@ -118,13 +118,16 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
             const effectiveCustodianIsUs = inherited ? inherited.custodian_is_us : normalizeCustodianIsUs(custodian_is_us);
 
             const { rows } = await pool.query(
-                'INSERT INTO accounts (name, parent_account_id, is_virtual, custodian, custodian_is_us) VALUES ($1, $2, $3, $4, $5) RETURNING id',
-                [name, parentId, effectiveIsVirtual, effectiveCustodian, effectiveCustodianIsUs]
+                'INSERT INTO accounts (name, parent_account_id, is_virtual, custodian, custodian_is_us, broker_account_id) VALUES ($1, $2, $3, $4, $5, $6) RETURNING id',
+                [name, parentId, effectiveIsVirtual, effectiveCustodian, effectiveCustodianIsUs,
+                 parentId ? null : (String(broker_account_id || '').trim().toUpperCase() || null)]
             );
             broadcastStatus(uuidv4(), `Created account: ${name}`, 'success');
             res.json({ success: true, id: rows[0].id });
         } catch (err) {
-            if (err.code === '23505') {
+            if (err.code === '23505' && /broker_account_id/.test(err.constraint || err.message)) {
+                res.status(409).json({ error: 'That broker account ID is already mapped to another account' });
+            } else if (err.code === '23505') {
                 broadcastStatus(uuidv4(), 'Account name already exists', 'error');
                 res.status(409).json({ error: 'Account name already exists' });
             } else {
@@ -161,15 +164,23 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
             const effectiveCustodian = inherited ? inherited.custodian : (custodian || null);
             const effectiveCustodianIsUs = inherited ? inherited.custodian_is_us : normalizeCustodianIsUs(custodian_is_us);
 
+            // broker_account_id is only touched when the caller sends it, so
+            // an older client that doesn't know the field can't wipe it. A
+            // child account never carries one: it's a split of its parent's
+            // broker account, which is where the mapping lives.
+            const brokerIdSent = Object.prototype.hasOwnProperty.call(req.body, 'broker_account_id');
+            const brokerAccountId = parentId ? null : (String(req.body.broker_account_id || '').trim().toUpperCase() || null);
+
             const { rowCount } = await pool.query(
                 `UPDATE accounts SET name=$1,
                     parent_account_id = $2,
                     is_virtual = $3,
                     custodian = $4,
                     custodian_is_us = $5,
+                    broker_account_id = CASE WHEN $7 OR $2::int IS NOT NULL THEN $8 ELSE broker_account_id END,
                     updated_at=NOW()
                  WHERE id=$6`,
-                [name, parentId, effectiveIsVirtual, effectiveCustodian, effectiveCustodianIsUs, id]
+                [name, parentId, effectiveIsVirtual, effectiveCustodian, effectiveCustodianIsUs, id, brokerIdSent, brokerAccountId]
             );
             if (rowCount === 0) {
                 broadcastStatus(uuidv4(), `Account ID ${id} not found`, 'error');
@@ -185,6 +196,12 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
             broadcastStatus(uuidv4(), `Updated account ID ${id} to ${name}`, 'success');
             res.json({ success: true });
         } catch (err) {
+            if (err.code === '23505' && /broker_account_id/.test(err.constraint || err.message)) {
+                return res.status(409).json({ error: 'That broker account ID is already mapped to another account' });
+            }
+            if (err.code === '23505') {
+                return res.status(409).json({ error: 'Account name already exists' });
+            }
             broadcastStatus(uuidv4(), `Error updating account: ${err.message}`, 'error');
             logger.error('Error updating account:', err);
             res.status(500).json({ error: err.message });

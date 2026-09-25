@@ -353,7 +353,8 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     await client.query(`
       ALTER TABLE cash_transactions ADD CONSTRAINT check_cash_transaction_type CHECK (type IN (
         'DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT',
-        'TRADE_SETTLEMENT', 'INTEREST', 'OTHER', 'EXCHANGE_IN', 'EXCHANGE_OUT'
+        'TRADE_SETTLEMENT', 'INTEREST', 'OTHER', 'EXCHANGE_IN', 'EXCHANGE_OUT',
+        'DIVIDEND', 'WITHHOLDING_TAX'
       ))
     `);
     logger.debug('cash_transactions type constraint up to date');
@@ -373,6 +374,59 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     await client.query(`CREATE INDEX IF NOT EXISTS idx_cash_transactions_trade ON cash_transactions (linked_trade_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_holdings_account ON holdings (account_id)`);
     logger.debug('Capital tracking indexes ready');
+
+    // --- Dividends. One row per dividend payment (or payment in lieu, for a
+    // short or lent position); its cash effect is derived from it as a
+    // DIVIDEND ledger row (gross) plus a WITHHOLDING_TAX row (−tax), same
+    // "record is the truth, ledger rows follow it" pattern as trade
+    // settlement. See docs/CAPITAL_TRACKING_DESIGN.md.
+    logger.debug('Creating dividends table...');
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS dividends (
+        id SERIAL PRIMARY KEY,
+        account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        symbol VARCHAR NOT NULL,
+        kind VARCHAR NOT NULL DEFAULT 'DIVIDEND', -- DIVIDEND | PAYMENT_IN_LIEU
+        currency VARCHAR NOT NULL,
+        ex_date DATE,
+        pay_date DATE NOT NULL,
+        -- Signed like the ledger: a dividend owed on a short position is
+        -- negative. withholding_tax is the amount withheld (positive), so
+        -- net = gross_amount - withholding_tax.
+        gross_amount NUMERIC NOT NULL,
+        withholding_tax NUMERIC NOT NULL DEFAULT 0,
+        source VARCHAR NOT NULL DEFAULT 'MANUAL', -- MANUAL | IBKR
+        -- An imported row the user changed by hand; imports never overwrite it.
+        edited BOOLEAN NOT NULL DEFAULT false,
+        -- An imported row the user removed. Kept (with no ledger rows) so the
+        -- next import doesn't bring it back; restorable.
+        dismissed BOOLEAN NOT NULL DEFAULT false,
+        -- Broker-side identity for deduplicating imports (IBKR: the
+        -- corporate action ID shared by a dividend and its tax rows).
+        external_id VARCHAR,
+        note TEXT,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        CONSTRAINT check_dividend_kind CHECK (kind IN ('DIVIDEND', 'PAYMENT_IN_LIEU')),
+        CONSTRAINT check_dividend_source CHECK (source IN ('MANUAL', 'IBKR'))
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_dividends_account ON dividends (account_id, pay_date)`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_dividends_external ON dividends (source, external_id) WHERE external_id IS NOT NULL`);
+    await client.query(`
+      ALTER TABLE cash_transactions
+        ADD COLUMN IF NOT EXISTS linked_dividend_id INTEGER REFERENCES dividends(id) ON DELETE CASCADE
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_cash_transactions_dividend ON cash_transactions (linked_dividend_id)`);
+    logger.debug('Dividends table ready');
+
+    // Maps a journal account to the broker account it mirrors (e.g. an IBKR
+    // account number), so imported cash activity lands on the right journal
+    // account. Only meaningful on a top-level account: children are splits
+    // of the same broker account and resolve through their parent.
+    await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS broker_account_id VARCHAR`);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_broker_account_id ON accounts (broker_account_id) WHERE broker_account_id IS NOT NULL`);
+    logger.debug('accounts.broker_account_id ready');
 
     logger.debug('Creating futures_settings table...');
     await client.query(`

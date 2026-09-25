@@ -426,3 +426,36 @@ genuinely submit `null`), all become read-only the moment a parent is
 chosen, displaying the parent's own live values (looked up from the
 already-fetched `accounts` list) rather than whatever the form happens to
 hold — an honest preview of what will actually be saved.
+
+## Dividends
+
+A dividend is its own record in `dividends`, and its cash effect is
+derived from it, the same way trade settlement works: a `DIVIDEND`
+ledger row for the gross amount and, when tax was withheld, a
+`WITHHOLDING_TAX` row for minus that tax, both dated on the pay date.
+`syncDividendLedger` (`modules/dividends.js`) rebuilds both rows from
+scratch on every change, so the ledger can't drift from the dividend.
+Those rows can't be deleted from the ledger on their own.
+
+- **Tax is recorded, not computed.** Withholding depends on the paying
+  company's country, treaties, and the broker's own handling (including
+  later refunds), so no rate setting tries to predict it. Manual entries
+  take the withheld amount as typed; imports take what the broker reports.
+- **Signed like the ledger.** A payment in lieu of a dividend owed on a
+  short position is a negative gross amount.
+- **Imports never fight manual changes.** `source` says where a row came
+  from. Editing an imported row sets `edited`, and imports leave it alone
+  from then on; deleting an imported row only sets `dismissed` (no ledger
+  rows, restorable), so the next import doesn't bring it back.
+  `(source, external_id)` is unique, so the same broker record can't be
+  imported twice.
+- **Paper accounts don't track dividends.**
+- **Broker account mapping.** `accounts.broker_account_id` records which
+  broker account (e.g. an IBKR account number) a top-level journal account
+  mirrors, so imported cash activity lands on the right one. Child accounts
+  never carry one; they resolve through their parent.
+
+Planned next: an IBKR Flex import of dividends and withholding tax
+(Cash Transactions section), live accounts only, booking only cash
+movements dated after tracking was switched on — earlier activity is
+already reflected in the ledger's balances and must not be booked twice.

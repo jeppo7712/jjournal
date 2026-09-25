@@ -17,6 +17,19 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
+// 'YYYY-MM-DD' -> locale date, without going through UTC midnight (which
+// shows the previous day west of Greenwich).
+function formatISODate(iso) {
+  if (!iso) return '—';
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString();
+}
+
+const EMPTY_DIVIDEND_FORM = {
+  symbol: '', kind: 'DIVIDEND', currency: 'USD', pay_date: todayISO(), ex_date: '',
+  gross_amount: '', withholding_tax: '', note: '',
+};
+
 // Cash ledger + non-trade holdings (T-bills/bonds) for the current account.
 // See docs/CAPITAL_TRACKING_DESIGN.md for the design. Deliberately does NOT
 // collapse different-currency balances into one number — summing them
@@ -28,7 +41,7 @@ const Capital = () => {
   // accounts[...].cash_balances and this same holdings list) update live
   // the moment something changes here, instead of staying stale until a
   // page reload.
-  const { accounts, currentAccountId, holdings, refreshHoldings, refreshAccounts } = useContext(TradeContext);
+  const { accounts, currentAccountId, holdings, refreshHoldings, refreshAccounts, futuresSettings } = useContext(TradeContext);
 
   const [transactions, setTransactions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -49,6 +62,10 @@ const Capital = () => {
     maturity_date: '', coupon_rate: '', coupon_frequency: '', notes: '',
   });
   const [showHoldingDetail, setShowHoldingDetail] = useState(false);
+  const [dividends, setDividends] = useState([]);
+  const [dividendForm, setDividendForm] = useState(EMPTY_DIVIDEND_FORM);
+  const [editingDividendId, setEditingDividendId] = useState(null);
+  const [showDismissed, setShowDismissed] = useState(false);
   const [checkingAccrual, setCheckingAccrual] = useState(false);
 
   const fetchAll = useCallback(async () => {
@@ -57,13 +74,15 @@ const Capital = () => {
     setError(null);
     try {
       const headers = { 'X-Account-ID': currentAccountId };
-      const [txRes] = await Promise.all([
+      const [txRes, divRes] = await Promise.all([
         fetch(`${apiBaseUrl}/api/cash-transactions`, { headers }),
+        fetch(`${apiBaseUrl}/api/dividends`, { headers }),
         refreshHoldings(),
         refreshAccounts(), // keeps the Balance card (and Navigation's Cash/Total Portfolio) live
       ]);
-      if (!txRes.ok) throw new Error('Failed to load capital data');
+      if (!txRes.ok || !divRes.ok) throw new Error('Failed to load capital data');
       setTransactions(await txRes.json());
+      setDividends(await divRes.json());
     } catch (err) {
       setError(err.message);
     } finally {
@@ -134,6 +153,74 @@ const Capital = () => {
     try {
       const res = await fetch(`${apiBaseUrl}/api/cash-transactions/${id}`, { method: 'DELETE', headers: { 'X-Account-ID': currentAccountId } });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete');
+      fetchAll();
+    } catch (err) { alert(err.message); }
+  };
+
+  // Typing a symbol that has a stock setting pre-fills its currency; the
+  // field stays editable, since a dividend can be paid in a different
+  // currency than the shares trade in.
+  const onDividendSymbolChange = (value) => {
+    const symbol = value.toUpperCase();
+    const setting = (futuresSettings || []).find(fs => fs.type === 'STK' && fs.symbol === symbol);
+    setDividendForm(p => ({ ...p, symbol, ...(setting?.currency ? { currency: setting.currency } : {}) }));
+  };
+
+  const resetDividendForm = () => {
+    setEditingDividendId(null);
+    setDividendForm(prev => ({ ...EMPTY_DIVIDEND_FORM, currency: prev.currency }));
+  };
+
+  const editDividend = (d) => {
+    setEditingDividendId(d.id);
+    setDividendForm({
+      symbol: d.symbol, kind: d.kind, currency: d.currency, pay_date: d.pay_date, ex_date: d.ex_date || '',
+      gross_amount: String(Number(d.gross_amount)), withholding_tax: Number(d.withholding_tax) ? String(Number(d.withholding_tax)) : '',
+      note: d.note || '',
+    });
+  };
+
+  const submitDividend = async (e) => {
+    e.preventDefault();
+    const gross = Number(dividendForm.gross_amount);
+    const tax = dividendForm.withholding_tax === '' ? 0 : Number(dividendForm.withholding_tax);
+    if (!dividendForm.symbol.trim()) { alert('Enter a symbol.'); return; }
+    if (!gross) { alert('Enter the gross amount.'); return; }
+    if (tax < 0 || tax > Math.abs(gross)) { alert('Tax withheld must be between 0 and the gross amount.'); return; }
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/dividends${editingDividendId ? `/${editingDividendId}` : ''}`, {
+        method: editingDividendId ? 'PUT' : 'POST',
+        headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
+        body: JSON.stringify({
+          ...dividendForm,
+          ex_date: dividendForm.ex_date || null,
+          gross_amount: gross,
+          withholding_tax: tax,
+        }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to save dividend');
+      resetDividendForm();
+      fetchAll();
+    } catch (err) { alert(err.message); }
+  };
+
+  const deleteDividend = async (d) => {
+    const msg = d.source === 'MANUAL'
+      ? `Delete this ${d.symbol} dividend? Its ledger entries are removed too.`
+      : `Remove this imported ${d.symbol} dividend? Its ledger entries are removed and it won't be imported again (you can restore it).`;
+    if (!window.confirm(msg)) return;
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/dividends/${d.id}`, { method: 'DELETE', headers: { 'X-Account-ID': currentAccountId } });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete');
+      if (editingDividendId === d.id) resetDividendForm();
+      fetchAll();
+    } catch (err) { alert(err.message); }
+  };
+
+  const restoreDividend = async (d) => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/dividends/${d.id}/restore`, { method: 'POST', headers: { 'X-Account-ID': currentAccountId } });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to restore');
       fetchAll();
     } catch (err) { alert(err.message); }
   };
@@ -227,6 +314,10 @@ const Capital = () => {
     .filter(a => String(a.parent_account_id) === String(currentAccountId))
     .map(a => a.name);
   const hasChildAccounts = childAccountNames.length > 0;
+
+  const dismissedCount = dividends.filter(d => d.dismissed).length;
+  const visibleDividends = dividends.filter(d => showDismissed || !d.dismissed);
+  const formNet = (Number(dividendForm.gross_amount) || 0) - (Number(dividendForm.withholding_tax) || 0);
 
   return (
     <div className={styles.page}>
@@ -389,6 +480,122 @@ const Capital = () => {
         )}
       </div>
 
+      {!isVirtualAccount && (
+        <div className={styles.section}>
+          <div className={styles.sectionHeaderRow}>
+            <h3 className={styles.sectionTitle}>Dividends</h3>
+            {dismissedCount > 0 && (
+              <button type="button" className={styles.secondaryBtn} onClick={() => setShowDismissed(v => !v)}>
+                {showDismissed ? 'Hide removed' : `Show removed (${dismissedCount})`}
+              </button>
+            )}
+          </div>
+          <p className={styles.hint} style={{ margin: '-8px 0 16px' }}>
+            Each dividend books its gross amount and any tax withheld to the ledger, on the pay date.
+          </p>
+          <form onSubmit={submitDividend} className={styles.formGrid}>
+            <div className={`${styles.formField} ${styles.formFieldWide}`}>
+              <label>Type</label>
+              <div className={styles.typeToggleGroup}>
+                {[['DIVIDEND', 'Dividend'], ['PAYMENT_IN_LIEU', 'Payment in lieu']].map(([k, label]) => (
+                  <button
+                    key={k}
+                    type="button"
+                    onClick={() => setDividendForm(p => ({ ...p, kind: k }))}
+                    className={`${styles.typeToggleBtn} ${dividendForm.kind === k ? styles.typeToggleBtnActive : ''}`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className={styles.formField}>
+              <label>Symbol</label>
+              <input value={dividendForm.symbol} onChange={e => onDividendSymbolChange(e.target.value)} />
+            </div>
+            <div className={styles.formField}>
+              <label>Currency</label>
+              <input value={dividendForm.currency} onChange={e => setDividendForm(p => ({ ...p, currency: e.target.value.toUpperCase() }))} maxLength={3} />
+            </div>
+            <div className={styles.formField}>
+              <label>Pay date</label>
+              <input type="date" value={dividendForm.pay_date} onChange={e => setDividendForm(p => ({ ...p, pay_date: e.target.value }))} />
+            </div>
+            <div className={styles.formField}>
+              <label>Ex-date</label>
+              <input type="date" value={dividendForm.ex_date} onChange={e => setDividendForm(p => ({ ...p, ex_date: e.target.value }))} />
+            </div>
+            <div className={styles.formField}>
+              <label title="Before tax. Negative for a dividend owed on a short position.">Gross amount</label>
+              <input type="number" step="0.01" value={dividendForm.gross_amount} onChange={e => setDividendForm(p => ({ ...p, gross_amount: e.target.value }))} />
+            </div>
+            <div className={styles.formField}>
+              <label>Tax withheld</label>
+              <input type="number" step="0.01" min="0" value={dividendForm.withholding_tax} onChange={e => setDividendForm(p => ({ ...p, withholding_tax: e.target.value }))} placeholder="0" />
+            </div>
+            <div className={`${styles.formField} ${styles.formFieldWide}`}>
+              <label>Note</label>
+              <input value={dividendForm.note} onChange={e => setDividendForm(p => ({ ...p, note: e.target.value }))} placeholder="optional" />
+            </div>
+            <div className={styles.formActions}>
+              <span style={{ fontSize: '0.85rem', color: '#A5ADBA' }}>
+                Net: <span className={formNet >= 0 ? styles.positive : styles.negative}>{formNet.toFixed(2)} {dividendForm.currency}</span>
+              </span>
+              <span>
+                {editingDividendId && (
+                  <button type="button" className={styles.secondaryBtn} onClick={resetDividendForm} style={{ marginRight: '8px' }}>Cancel</button>
+                )}
+                <button type="submit" className={styles.primaryBtn}>{editingDividendId ? 'Save changes' : 'Add Dividend'}</button>
+              </span>
+            </div>
+          </form>
+
+          <div className={styles.tableWrap} style={{ marginTop: '20px' }}>
+            <table className={styles.table}>
+              <thead>
+                <tr>
+                  <th>Pay date</th>
+                  {hasChildAccounts && <th>Account</th>}
+                  <th>Symbol</th><th>Gross</th><th>Tax</th><th>Net</th><th>Source</th><th></th>
+                </tr>
+              </thead>
+              <tbody>
+                {visibleDividends.map(d => {
+                  const isOwnAccount = String(d.account_id) === String(currentAccountId);
+                  const net = Number(d.net_amount);
+                  return (
+                    <tr key={d.id} className={d.dismissed ? styles.mutedCell : undefined}>
+                      <td>{formatISODate(d.pay_date)}</td>
+                      {hasChildAccounts && <td className={!isOwnAccount ? styles.mutedCell : undefined}>{d.account_name}</td>}
+                      <td>{d.symbol}{d.kind === 'PAYMENT_IN_LIEU' && <span className={styles.mutedCell}> (in lieu)</span>}</td>
+                      <td>{Number(d.gross_amount).toFixed(2)} {d.currency}</td>
+                      <td>{Number(d.withholding_tax) ? `${Number(d.withholding_tax).toFixed(2)} ${d.currency}` : '—'}</td>
+                      <td className={net >= 0 ? styles.positive : styles.negative}>{net.toFixed(2)} {d.currency}</td>
+                      <td>{d.source === 'MANUAL' ? 'Manual' : `${d.source}${d.edited ? ' (edited)' : ''}`}{d.dismissed ? ' — removed' : ''}</td>
+                      <td>
+                        {!isOwnAccount ? (
+                          <span className={styles.mutedCell} title={`Belongs to ${d.account_name} — switch to it to manage this`}>switch to manage</span>
+                        ) : d.dismissed ? (
+                          <button onClick={() => restoreDividend(d)} className={styles.redeemBtn}>Restore</button>
+                        ) : (
+                          <>
+                            <button onClick={() => editDividend(d)} className={styles.redeemBtn}>Edit</button>
+                            <button onClick={() => deleteDividend(d)} className={styles.iconBtn} title="Delete">×</button>
+                          </>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+                {visibleDividends.length === 0 && (
+                  <tr><td colSpan={hasChildAccounts ? 8 : 7} className={styles.emptyRow}>No dividends yet.</td></tr>
+                )}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
       <div className={styles.section}>
         <h3 className={styles.sectionTitle}>Ledger</h3>
         {loading ? <p className={styles.emptyState}>Loading…</p> : (
@@ -404,6 +611,10 @@ const Capital = () => {
               <tbody>
                 {transactions.map(tx => {
                   const isOwnAccount = String(tx.account_id) === String(currentAccountId);
+                  // Dividend rows are derived from their dividend (see the
+                  // Dividends section) and can't be deleted on their own.
+                  const isDividendRow = !!tx.linked_dividend_id;
+                  const canDelete = isOwnAccount && !isDividendRow;
                   return (
                     <tr key={tx.id}>
                       <td>{new Date(tx.date_time).toLocaleDateString()}</td>
@@ -416,9 +627,10 @@ const Capital = () => {
                       <td>
                         <button
                           className={styles.iconBtn}
-                          onClick={() => isOwnAccount && deleteTransaction(tx.id)}
-                          disabled={!isOwnAccount}
-                          title={isOwnAccount ? 'Delete' : `Belongs to ${tx.account_name} — switch to it to delete this`}
+                          onClick={() => canDelete && deleteTransaction(tx.id)}
+                          disabled={!canDelete}
+                          title={isDividendRow ? 'Part of a dividend — edit or remove it under Dividends'
+                            : isOwnAccount ? 'Delete' : `Belongs to ${tx.account_name} — switch to it to delete this`}
                         >
                           ×
                         </button>
