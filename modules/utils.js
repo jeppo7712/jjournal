@@ -193,7 +193,10 @@ function formatDurationForIBKR(duration) {
     return "1 S"; // Default for zero or negative duration
 }
 
-async function validateContract(contract, taskId, cancellationSignal = null, broadcastStatus) {
+// `accept` (optional) picks among several matches: IBKR returns one
+// contract per listing for a SMART-routed stock lookup, and only the first
+// one it accepts is returned. Without it, the first match wins, as before.
+async function validateContract(contract, taskId, cancellationSignal = null, broadcastStatus, accept = null) {
     return new Promise((resolve, reject) => {
         const ibApi = ibkr.getIbApi();
         if (!ibApi) {
@@ -243,7 +246,7 @@ async function validateContract(contract, taskId, cancellationSignal = null, bro
         }, 20000);
 
         const specificContractDetailsHandler = (id, contractDetails) => {
-            if (id === ibReqId) {
+            if (id === ibReqId && (!accept || accept(contractDetails.contract))) {
                 // logger.info(`[Historical][validateContract][${taskId}] Contract validated (ibReqId ${ibReqId}): ${JSON.stringify(contractDetails.contract)}`);
                 cleanupAndAction(resolve, contractDetails.contract);
             }
