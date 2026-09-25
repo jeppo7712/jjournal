@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon';
 import { currencyMark } from '../../utils/formatMoney';
+import { matchLotsFIFO, getTickMultiplier } from '../../context/TradeContext';
 
 // The Stats page scopes itself to exactly one currency before calling into
 // here (see activeCurrency in Stats.jsx) — these ratios and distributions
@@ -8,6 +9,49 @@ import { currencyMark } from '../../utils/formatMoney';
 // read off the set itself rather than threaded through ~28 signatures.
 // Falls back to USD for an empty set, where there's nothing to label anyway.
 const markFor = (trades) => currencyMark((Array.isArray(trades) && trades[0] && trades[0].currency) || 'USD');
+
+const toDT = (value) => {
+  if (!value) return null;
+  if (DateTime.isDateTime(value)) return value;
+  if (value instanceof Date) return DateTime.fromJSDate(value);
+  return DateTime.fromISO(String(value));
+};
+
+const tradeFees = (t) => (t.buyFee || 0) + (t.sellFee || 0);
+
+// Long-term positions are mostly OPEN trades, and the trade-outcome stats
+// (win rate, profit factor, streaks...) rightly ignore them. But money
+// still moves while a trade is open: selling part of a position locks in
+// P&L even though the trade stays OPEN. These are those partial closes,
+// one event per closing fill, dated when it happened.
+export const computePartialRealizations = (trades) => {
+  const events = [];
+  trades.forEach(t => {
+    if (t.status !== 'OPEN') return;
+    const { timeline } = matchLotsFIFO(t, getTickMultiplier(t));
+    let previous = 0;
+    timeline.forEach(step => {
+      const amount = step.realisedPnL - previous;
+      previous = step.realisedPnL;
+      const date = toDT(step.dateTime);
+      if (Math.abs(amount) > 1e-9 && date && date.isValid) {
+        events.push({ date, amount, symbol: t.symbol });
+      }
+    });
+  });
+  return events;
+};
+
+// Every realised P&L event: a closed trade's return on its closing date,
+// plus the partial closes of still-open trades above. What date-bucketed
+// P&L (days, months) is built from.
+const realizationEvents = (trades) => {
+  const events = trades
+    .filter(t => t.status !== 'OPEN')
+    .map(t => ({ date: toDT(t.lastActionDate), amount: t.return || 0, symbol: t.symbol }))
+    .filter(e => e.date && e.date.isValid);
+  return events.concat(computePartialRealizations(trades));
+};
 
 
 // General Performance Stats
@@ -24,7 +68,9 @@ export const computeGeneralStats = (trades) => {
   const totalPnl = closedTrades.reduce((sum, t) => sum + (t.return || 0), 0);
   const avgPnl = totalTrades > 0 ? (totalPnl / totalTrades).toFixed(2) : 'N/A';
   const profitFactor = computeProfitFactor(closedTrades);
-  const totalFees = closedTrades.reduce((sum, t) => sum + (t.buyFee || 0) + (t.sellFee || 0), 0).toFixed(2);
+  // All fees paid, open trades included — see computeFeeAnalysis.
+  const totalFees = trades.reduce((sum, t) => sum + tradeFees(t), 0).toFixed(2);
+  const partialPnl = computePartialRealizations(trades).reduce((sum, e) => sum + e.amount, 0);
 
   return [
     { label: 'Total Trades', value: totalTrades },
@@ -35,6 +81,9 @@ export const computeGeneralStats = (trades) => {
     { label: 'Total P&L', value: `${markFor(trades)}${totalPnl.toFixed(2)}` },
     { label: 'Avg P&L per Trade', value: `${markFor(trades)}${avgPnl}` },
     { label: 'Total Fees', value: `${markFor(trades)}${totalFees}` },
+    ...(Math.abs(partialPnl) > 1e-9
+      ? [{ label: 'P&L from Partial Sells', value: `${markFor(trades)}${partialPnl.toFixed(2)}` }]
+      : []),
   ];
 };
 
@@ -74,6 +123,7 @@ export const computeTradeAnalysis = (trades) => {
 export const computeSymbolStats = (trades) => {
   const closedTrades = trades.filter(t => t.status !== 'OPEN');
   const grouped = groupBySymbol(closedTrades);
+  const allBySymbol = groupBySymbol(trades);
   return Object.keys(grouped).map(symbol => {
     const symbolTrades = grouped[symbol];
     const totalPnl = symbolTrades.reduce((sum, t) => sum + (t.return || 0), 0);
@@ -81,7 +131,7 @@ export const computeSymbolStats = (trades) => {
     const symbolWins = symbolTrades.filter(t => t.status === 'WIN').length;
     const symbolDecided = symbolWins + symbolTrades.filter(t => t.status === 'LOSS').length;
     const winRate = symbolDecided > 0 ? (symbolWins / symbolDecided * 100).toFixed(2) : 'N/A';
-    const totalFees = symbolTrades.reduce((sum, t) => sum + (t.buyFee || 0) + (t.sellFee || 0), 0).toFixed(2);
+    const totalFees = allBySymbol[symbol].reduce((sum, t) => sum + tradeFees(t), 0).toFixed(2);
 
     return {
       symbol,
@@ -95,12 +145,15 @@ export const computeSymbolStats = (trades) => {
 };
 
 // Fee Analysis
+// Open trades count too: a fee is paid when the fill happens, not when the
+// position closes, so an account holding only open positions has still
+// paid real fees. (Fees as % of P&L below stays closed-only — it compares
+// against realized P&L.)
 export const computeFeeAnalysis = (trades) => {
-  const closedTrades = trades.filter(t => t.status !== 'OPEN');
-  const totalFees = closedTrades.reduce((sum, t) => sum + (t.buyFee || 0) + (t.sellFee || 0), 0);
-  const avgFeesPerTrade = closedTrades.length > 0 ? (totalFees / closedTrades.length).toFixed(2) : 'N/A';
-  const feesPerMonth = computeFeesPerMonth(closedTrades);
-  const feesPerSymbol = computeFeesPerSymbol(closedTrades);
+  const totalFees = trades.reduce((sum, t) => sum + (t.buyFee || 0) + (t.sellFee || 0), 0);
+  const avgFeesPerTrade = trades.length > 0 ? (totalFees / trades.length).toFixed(2) : 'N/A';
+  const feesPerMonth = computeFeesPerMonth(trades);
+  const feesPerSymbol = computeFeesPerSymbol(trades);
 
   return {
     totalFees: totalFees.toFixed(2),
@@ -205,12 +258,18 @@ const groupBySymbol = (trades) => {
   }, {});
 };
 
+// By each fill's own date: a position built up over months paid its fees
+// in those months, not all in the month of its latest fill.
 const computeFeesPerMonth = (trades) => {
   const feesByMonth = {};
   trades.forEach(t => {
-    const month = DateTime.fromISO(t.lastActionDate).toFormat('yyyy-MM');
-    const fees = (t.buyFee || 0) + (t.sellFee || 0);
-    feesByMonth[month] = (feesByMonth[month] || 0) + fees;
+    (Array.isArray(t.actions) ? t.actions : []).forEach(a => {
+      const fee = Number(a.fee || 0);
+      const date = toDT(a.dateTime);
+      if (!fee || !date || !date.isValid) return;
+      const month = date.toFormat('yyyy-MM');
+      feesByMonth[month] = (feesByMonth[month] || 0) + fee;
+    });
   });
   return feesByMonth;
 };
@@ -257,15 +316,86 @@ export const computeOpenSymbolStats = (trades) => {
   });
 };
 
+// Every symbol, ranked by what it has made overall: realised P&L (closed
+// trades and partial sells) plus the unrealised P&L of what's still held.
+// Closed-trades-only would rank a long-held winner that was never sold at 0.
 export const computeBestPerformingAssets = (trades) => {
-  const closedTrades = trades.filter(t => t.status !== 'OPEN');
-  const grouped = groupBySymbol(closedTrades);
-  const symbolPnl = Object.keys(grouped).map(symbol => {
-    const symbolTrades = grouped[symbol];
-    const totalPnl = symbolTrades.reduce((sum, t) => sum + (t.return || 0), 0);
-    return { symbol, totalPnl };
+  const bySymbol = {};
+  const row = (symbol) => (bySymbol[symbol] = bySymbol[symbol] || { symbol, realizedPnl: 0, unrealizedPnl: 0 });
+  realizationEvents(trades).forEach(e => { row(e.symbol).realizedPnl += e.amount; });
+  trades.forEach(t => {
+    if (t.status === 'OPEN') row(t.symbol).unrealizedPnl += t.currentReturn || 0;
   });
-  return symbolPnl.sort((a, b) => b.totalPnl - a.totalPnl).slice(0, 5); // Top 5
+  return Object.values(bySymbol)
+    .map(r => ({ ...r, totalPnl: r.realizedPnl + r.unrealizedPnl }))
+    .sort((a, b) => b.totalPnl - a.totalPnl);
+};
+
+// Open positions per symbol, valued at the current price. Market value is
+// only meaningful for stocks/ETFs (a futures position's notional isn't
+// money you hold), so futures show their unrealised P&L but carry no value
+// or allocation share. `pricesPending` while live prices are still loading.
+export const computeHoldings = (trades) => {
+  const openTrades = trades.filter(t => t.status === 'OPEN' && t.symbol);
+  const realizedBySymbol = {};
+  realizationEvents(trades).forEach(e => {
+    realizedBySymbol[e.symbol] = (realizedBySymbol[e.symbol] || 0) + e.amount;
+  });
+  const feesBySymbol = {};
+  trades.forEach(t => { feesBySymbol[t.symbol] = (feesBySymbol[t.symbol] || 0) + tradeFees(t); });
+
+  const bySymbol = {};
+  let pricesPending = false;
+  openTrades.forEach(t => {
+    const r = bySymbol[t.symbol] = bySymbol[t.symbol] || {
+      symbol: t.symbol, type: t.type, quantity: 0, costBasis: 0, openCost: 0,
+      marketValue: t.type === 'STK' ? 0 : null, unrealizedPnl: 0, currentPrice: null, priced: true,
+    };
+    const multiplier = getTickMultiplier(t);
+    const signedQty = (t.side === 'SHORT' ? -1 : 1) * Number(t.position || 0);
+    r.quantity += signedQty;
+    const sideSign = t.side === 'SHORT' ? -1 : 1;
+    r.openCost += Number(t.entryTotal || 0) * sideSign;
+    r.costBasis += Number(t.entryTotal || 0) * multiplier * sideSign;
+    if (t.currentPrice === null || t.currentPrice === undefined) {
+      r.priced = false;
+      pricesPending = true;
+      return;
+    }
+    r.currentPrice = t.currentPrice;
+    r.unrealizedPnl += t.currentReturn || 0;
+    if (r.marketValue !== null) r.marketValue += signedQty * t.currentPrice * multiplier;
+  });
+
+  const rows = Object.values(bySymbol).map(r => ({
+    ...r,
+    avgCost: r.quantity ? r.openCost / r.quantity : null,
+    unrealizedPct: r.type === 'STK' && r.costBasis ? (r.unrealizedPnl / Math.abs(r.costBasis)) * 100 : null,
+    realizedPnl: realizedBySymbol[r.symbol] || 0,
+    fees: feesBySymbol[r.symbol] || 0,
+  }));
+  const totalMarketValue = rows.reduce((sum, r) => sum + (r.marketValue || 0), 0);
+  rows.forEach(r => {
+    r.allocationPct = r.marketValue !== null && totalMarketValue ? (r.marketValue / totalMarketValue) * 100 : null;
+  });
+  rows.sort((a, b) => (b.marketValue ?? -Infinity) - (a.marketValue ?? -Infinity));
+
+  const stockCost = rows.filter(r => r.type === 'STK').reduce((sum, r) => sum + r.costBasis, 0);
+  const unrealizedPnl = rows.reduce((sum, r) => sum + r.unrealizedPnl, 0);
+  const realizedPnl = realizationEvents(trades).reduce((sum, e) => sum + e.amount, 0);
+  return {
+    rows,
+    pricesPending,
+    totals: {
+      marketValue: totalMarketValue,
+      costBasis: stockCost,
+      unrealizedPnl,
+      unrealizedPct: stockCost ? (rows.filter(r => r.type === 'STK').reduce((sum, r) => sum + r.unrealizedPnl, 0) / Math.abs(stockCost)) * 100 : null,
+      realizedPnl,
+      totalPnl: realizedPnl + unrealizedPnl,
+      fees: trades.reduce((sum, t) => sum + tradeFees(t), 0),
+    },
+  };
 };
 
 // Compute Distribution of Trade Returns
@@ -328,21 +458,12 @@ export const computeTradingActivityHeatmap = (trades, zone = 'local') => {
   return { heatmap, maxValue };
 };
 
-// Compute Pie Chart of Open Positions
+// Allocation of open stock/ETF positions by current market value (quantity
+// x current price). Used to be sized by |unrealised P&L|, which made a
+// position at break-even invisible and a small losing one look large.
 export const computeOpenPositionsPie = (trades) => {
-  const openTrades = trades.filter(t => t.status === 'OPEN');
-  if (!openTrades.length) return { labels: [], data: [] };
-
-  const grouped = openTrades.reduce((acc, t) => {
-    const symbol = t.symbol || 'Unknown';
-    const marketValue = Math.abs(t.currentReturn || 0); // Simplified, adjust if using quantity * price
-    acc[symbol] = (acc[symbol] || 0) + marketValue;
-    return acc;
-  }, {});
-
-  const labels = Object.keys(grouped);
-  const data = Object.values(grouped);
-  return { labels, data };
+  const rows = computeHoldings(trades).rows.filter(r => r.marketValue !== null && r.marketValue > 0);
+  return { labels: rows.map(r => r.symbol), data: rows.map(r => r.marketValue) };
 };
 
 // Compute Top Winning and Losing Trades
@@ -407,40 +528,75 @@ export const computeReturnVsHoldTime = (trades) => {
   return { data };
 };
 
-// Existing functions (only showing computePortfolioValueSeries for brevity, others unchanged)
+// Cumulative P&L per day over the last 3 years (at most): realised P&L so
+// far plus the unrealised P&L of whatever was open at that day's close,
+// valued at the symbol's daily close (historicalDataMap). Realised-only
+// used to leave an account of long-held positions flat at 0 until something
+// was sold. Each trade's position is replayed fill by fill (matchLotsFIFO's
+// timeline), so a trade held over several days is valued on each of them
+// and a partial sell realises P&L on the day it happened. Without a close
+// for a day, the last known close — or the last fill price — is used.
 export const computePortfolioValueSeries = (trades, historicalDataMap) => {
-  if (!trades.length) return { labels: [], series: [] };
+  if (!trades.length) return { labels: [], series: [], realizedSeries: [] };
 
   const today = DateTime.now().startOf('day');
-  const maxDays = 3*365;
+  const maxDays = 3 * 365;
   const firstDate = trades
-    .map(t => DateTime.fromISO(t.firstActionDate))
+    .map(t => toDT(t.firstActionDate))
+    .filter(dt => dt && dt.isValid)
     .reduce((min, dt) => (dt < min ? dt : min), today)
     .startOf('day');
   const startDate = firstDate > today.minus({ days: maxDays }) ? firstDate : today.minus({ days: maxDays });
   const days = Math.ceil(today.diff(startDate, 'days').days) + 1;
 
+  const replays = trades.map(t => {
+    const multiplier = getTickMultiplier(t);
+    const steps = matchLotsFIFO(t, multiplier).timeline
+      .map(step => ({ ...step, at: toDT(step.dateTime) }))
+      .filter(step => step.at && step.at.isValid);
+    return { trade: t, multiplier, sign: t.side === 'SHORT' ? -1 : 1, steps, next: 0 };
+  });
+  // Trades whose side can't be replayed (no fills) still count their
+  // return on the closing date, as before.
+  const unreplayable = trades.filter((t, i) => replays[i].steps.length === 0 && t.status !== 'OPEN');
+
+  const lastClose = {};
   const labels = [];
   const series = [];
-  let cumulativePnl = 0;
-
-  cumulativePnl = trades
-    .filter(t => t.lastActionDate && DateTime.fromISO(t.lastActionDate) < startDate)
-    .reduce((sum, t) => sum + (t.return || 0), 0);
+  const realizedSeries = [];
 
   for (let i = 0; i < days; i++) {
     const date = startDate.plus({ days: i });
     const dateISO = date.toISODate();
-    labels.push(date.toFormat('dd/MM/yyyy'));
+    const dayEnd = date.endOf('day');
+    let realized = 0;
+    let unrealized = 0;
 
-    const dailyPnl = trades
-      .filter(t => t.lastActionDate && DateTime.fromISO(t.lastActionDate).toISODate() === dateISO)
-      .reduce((sum, t) => sum + (t.return || 0), 0);
-    cumulativePnl += dailyPnl;
-    series.push(cumulativePnl);
+    replays.forEach(r => {
+      while (r.next < r.steps.length && r.steps[r.next].at <= dayEnd) r.next++;
+      if (r.next === 0) return;
+      const state = r.steps[r.next - 1];
+      realized += state.realisedPnL;
+      if (state.openQty <= 1e-9) return;
+
+      const symbol = r.trade.symbol;
+      const closes = historicalDataMap && historicalDataMap[symbol];
+      const close = closes && closes.get ? closes.get(dateISO) : undefined;
+      if (typeof close === 'number' && !isNaN(close)) lastClose[symbol] = close;
+      const price = lastClose[symbol] ?? state.price;
+      unrealized += r.sign * (price * state.openQty - state.openCost) * r.multiplier - state.openFee;
+    });
+    unreplayable.forEach(t => {
+      const closedAt = toDT(t.lastActionDate);
+      if (closedAt && closedAt <= dayEnd) realized += t.return || 0;
+    });
+
+    labels.push(date.toFormat('dd/MM/yyyy'));
+    realizedSeries.push(realized);
+    series.push(realized + unrealized);
   }
 
-  return { labels, series };
+  return { labels, series, realizedSeries };
 };
 
 export const computeReturnPercentageSeries = (trades, historicalDataMap) => {
@@ -626,13 +782,13 @@ export const computeRecoveryFactor = (trades) => {
 
 // Compute best and worst days
 export const computeBestWorstDays = (trades) => {
-  const closedTrades = trades.filter(t => t.status !== 'OPEN');
-  if (closedTrades.length === 0) return { bestDay: null, worstDay: null, bestAmount: 0, worstAmount: 0 };
-  
+  const events = realizationEvents(trades);
+  if (events.length === 0) return { bestDay: 'N/A', worstDay: 'N/A', bestAmount: '0.00', worstAmount: '0.00' };
+
   const dailyPnL = {};
-  closedTrades.forEach(t => {
-    const date = DateTime.fromISO(t.lastActionDate).toISODate();
-    dailyPnL[date] = (dailyPnL[date] || 0) + (t.return || 0);
+  events.forEach(e => {
+    const date = e.date.toISODate();
+    dailyPnL[date] = (dailyPnL[date] || 0) + e.amount;
   });
   
   const days = Object.entries(dailyPnL);
@@ -648,42 +804,45 @@ export const computeBestWorstDays = (trades) => {
 };
 
 // Compute monthly P&L summary
+// P&L includes partial sells of still-open trades (in the month they were
+// sold); the win/loss/trade counts stay about closed trades only.
 export const computeMonthlyPnLSummary = (trades) => {
   const closedTrades = trades.filter(t => t.status !== 'OPEN');
-  if (closedTrades.length === 0) return [];
-  
+  const partials = computePartialRealizations(trades);
+  if (closedTrades.length === 0 && partials.length === 0) return [];
+
   const monthlyData = {};
+  const bucket = (month) => (monthlyData[month] = monthlyData[month] || { pnl: 0, wins: 0, losses: 0, trades: 0 });
   closedTrades.forEach(t => {
-    const month = DateTime.fromISO(t.lastActionDate).toFormat('yyyy-MM');
-    const pnl = t.return || 0;
-    if (!monthlyData[month]) {
-      monthlyData[month] = { pnl: 0, wins: 0, losses: 0, trades: 0 };
-    }
-    monthlyData[month].pnl += pnl;
-    monthlyData[month].trades += 1;
-    if (t.status === 'WIN') monthlyData[month].wins += 1;
-    if (t.status === 'LOSS') monthlyData[month].losses += 1;
+    const date = toDT(t.lastActionDate);
+    if (!date || !date.isValid) return;
+    const m = bucket(date.toFormat('yyyy-MM'));
+    m.pnl += t.return || 0;
+    m.trades += 1;
+    if (t.status === 'WIN') m.wins += 1;
+    if (t.status === 'LOSS') m.losses += 1;
   });
-  
-  return Object.entries(monthlyData).map(([month, data]) => ({
+  partials.forEach(e => { bucket(e.date.toFormat('yyyy-MM')).pnl += e.amount; });
+
+  return Object.entries(monthlyData).sort(([a], [b]) => a.localeCompare(b)).map(([month, data]) => ({
     month,
     pnl: data.pnl.toFixed(2),
     wins: data.wins,
     losses: data.losses,
     trades: data.trades,
-    winRate: ((data.wins / data.trades) * 100).toFixed(1),
+    winRate: data.wins + data.losses > 0 ? ((data.wins / (data.wins + data.losses)) * 100).toFixed(1) : '—',
   }));
 };
 
 // Compute daily P&L distribution stats
 export const computeDailyPnLStats = (trades) => {
-  const closedTrades = trades.filter(t => t.status !== 'OPEN');
-  if (closedTrades.length === 0) return { avgDailyPnL: 'N/A', bestDailyPnL: 'N/A', worstDailyPnL: 'N/A' };
-  
+  const events = realizationEvents(trades);
+  if (events.length === 0) return { avgDailyPnL: 'N/A', bestDailyPnL: 'N/A', worstDailyPnL: 'N/A' };
+
   const dailyPnL = {};
-  closedTrades.forEach(t => {
-    const date = DateTime.fromISO(t.lastActionDate).toISODate();
-    dailyPnL[date] = (dailyPnL[date] || 0) + (t.return || 0);
+  events.forEach(e => {
+    const date = e.date.toISODate();
+    dailyPnL[date] = (dailyPnL[date] || 0) + e.amount;
   });
   
   const pnlValues = Object.values(dailyPnL);
