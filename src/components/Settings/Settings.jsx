@@ -344,7 +344,7 @@ export default function Settings() {
   // the form's "not set" sentinel (a native <select> value must be a
   // string), converted to true/false/null right before the request goes
   // out. See saveAccountForm.
-  const [accountForm, setAccountForm] = useState({ name: '', parent_account_id: '', is_virtual: false, custodian: '', custodian_is_us: '' });
+  const [accountForm, setAccountForm] = useState({ name: '', parent_account_id: '', is_virtual: false, custodian: '', custodian_is_us: '', broker_account_id: '' });
   const [form, setForm] = useState({
     symbol: '',
     type: 'FUT',
@@ -617,6 +617,7 @@ export default function Settings() {
       custodian_is_us: account && account.custodian_is_us !== null && account.custodian_is_us !== undefined
         ? String(account.custodian_is_us)
         : '',
+      broker_account_id: account ? (account.broker_account_id || '') : '',
     });
     setShowAccountModal(true);
   };
@@ -641,6 +642,7 @@ export default function Settings() {
           // anyway when parent_account_id is set, inheriting the parent's
           // values instead — see routes/accounts.js.
           custodian_is_us: accountForm.custodian_is_us === 'true' ? true : accountForm.custodian_is_us === 'false' ? false : null,
+          broker_account_id: accountForm.broker_account_id.trim() || null,
         }),
       });
       if (!res.ok) {
@@ -1828,6 +1830,20 @@ export default function Settings() {
                           <option value="true">US entity</option>
                           <option value="false">Non-US entity</option>
                         </select>
+                      </div>
+                      <div className={styles.formField}>
+                        <label htmlFor="accountBrokerId" title="The broker's own account number this journal account mirrors (for IBKR, the one shown in Client Portal). Imported cash activity such as dividends is booked on the journal account mapped to it.">
+                          Broker account ID{inherited && <span style={{ opacity: 0.6 }}> — uses {parentAccount.name}'s</span>}
+                        </label>
+                        <input
+                          id="accountBrokerId"
+                          value={inherited ? (parentAccount.broker_account_id || '') : accountForm.broker_account_id}
+                          disabled={inherited}
+                          placeholder="optional, e.g. U1234567"
+                          onChange={e => setAccountForm(prev => ({ ...prev, broker_account_id: e.target.value.toUpperCase() }))}
+                          className={styles.inputBubble}
+                          autoComplete="off"
+                        />
                       </div>
                     </>
                   );
