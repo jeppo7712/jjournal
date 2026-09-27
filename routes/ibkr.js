@@ -4,13 +4,40 @@ const { EventName } = require('@stoqey/ib');
 const { DateTime } = require('luxon');
 const { timeout, generateIbReqId } = require('../modules/utils.js');
 const { logger } = require('../modules/logger.js');
-const { fetchFlexExecutions } = require('./ibkrFlex.js');
+const { fetchFlexExecutions, isPaperIbkrAccountId } = require('./ibkrFlex.js');
 const { loadConfig } = require('../modules/config.js');
 const { resolveIbkrIdentity, isSameStockListing } = require('../modules/ibkrSymbols.js');
 
 module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
 
   // ─── SHARED HELPERS ──────────────────────────────────────────────────────────
+
+  // The TWS session this router talks to is logged into one IBKR login, and
+  // its executions/orders are that login's. Refuse when that's the other
+  // kind (paper vs. live) than the journal account being imported into —
+  // e.g. importing into a real account while TWS runs a paper login would
+  // otherwise quietly bring in paper fills. Same rule as the Flex import's
+  // account check (routes/ibkrFlex.js). Without a selected journal account
+  // there's nothing to compare against, so nothing is checked.
+  async function assertSessionMatchesAccount(accountId) {
+    if (!accountId) return;
+    const { rows } = await pool.query('SELECT is_virtual FROM accounts WHERE id = $1', [accountId]);
+    if (rows.length === 0) return;
+    const wantPaper = !!rows[0].is_virtual;
+
+    const managed = await ibkr.getManagedAccounts();
+    if (managed.length === 0) {
+      const err = new Error("TWS didn't report which IBKR account it's logged into, so it can't be checked against this journal account. Nothing was fetched.");
+      err.status = 409;
+      throw err;
+    }
+    const sessionPaper = managed.every(isPaperIbkrAccountId);
+    if (sessionPaper !== wantPaper) {
+      const err = new Error(`TWS is logged into a ${sessionPaper ? 'paper' : 'live'} IBKR account, but this journal account is ${wantPaper ? 'paper' : 'real'}. Log TWS into the matching account, or switch journal account. Nothing was fetched.`);
+      err.status = 409;
+      throw err;
+    }
+  }
 
   // How IBKR names a stock (XEON on IBIS2 for the journal's XEON.DE — see
   // modules/ibkrSymbols.js). null for futures, which keep matching on the
@@ -396,6 +423,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
     try {
       const identity = await loadStockIdentity(symbol, effectiveType);
       if (!ibkr.isIbkrConnected()) await ibkr.initializeIBKR(requestId, broadcastStatus);
+      await assertSessionMatchesAccount(req.accountId);
 
       broadcastStatus(requestId, `Fetching trade groups for ${symbol}…`, 'info');
 
@@ -543,6 +571,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
     try {
       const identity = await loadStockIdentity(symbol, effectiveType);
       if (!ibkr.isIbkrConnected()) await ibkr.initializeIBKR(requestId, broadcastStatus);
+      await assertSessionMatchesAccount(req.accountId);
       broadcastStatus(requestId, `Fetching executions for ${symbol}`, 'info');
       const executions = await Promise.race([
         fetchExecutions(symbol, effectiveType, identity),
@@ -569,6 +598,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
     try {
       const identity = await loadStockIdentity(symbol, effectiveType);
       if (!ibkr.isIbkrConnected()) await ibkr.initializeIBKR(requestId, broadcastStatus);
+      await assertSessionMatchesAccount(req.accountId);
       broadcastStatus(requestId, `Fetching open orders for ${symbol}`, 'info');
       const openOrders = await Promise.race([
         fetchOpenOrders(symbol, effectiveType, identity),

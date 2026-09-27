@@ -50,7 +50,10 @@ const yahoo = require('./yahoo.js');
 const { withRetries, timeout, normalizeDate, extractIBKRTimezoneSuffix, getTimeframeDuration, parseDuration, formatDurationForIBKR, generateContractChain, validateContract, delay, generateIbReqId } = require('./utils.js');
 const { resolveIbkrIdentity } = require('./ibkrSymbols.js');
 const db = require('./database.js');
-const ibkr = require('./ibkr-conn.js');
+// Historical bars and contract lookups go over the data connection, which
+// may be a headless IB Gateway rather than the user's own TWS (see
+// modules/ibkr-conn.js).
+const ibkr = require('./ibkr-conn.js').data;
 const { v4: uuidv4 } = require('uuid');
 const WebSocket = require('ws');
 const { logger } = require('./logger.js');

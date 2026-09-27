@@ -1,6 +1,8 @@
 const { DateTime, Duration } = require('luxon');
 const { EventName } = require('@stoqey/ib'); // Need EventName for validateContract
-const ibkr = require('./ibkr-conn.js'); // Need ibkr for validateContract
+// Contract lookups serve historical data, so they use the data connection
+// (see modules/ibkr-conn.js).
+const ibkr = require('./ibkr-conn.js').data;
 const { logger } = require('./logger.js');
 
 
