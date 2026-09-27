@@ -322,6 +322,7 @@ export default function Settings() {
       { host: '', port: '7497' },
       { host: '', port: '7497' }
     ],
+    ibkrDataAddress: { host: '', port: '4004' },
     // Separate Flex credentials per paper-vs-real — see
     // docs/CAPITAL_TRACKING_DESIGN.md and routes/ibkr.js. Which set a given
     // Flex fetch uses is decided by the account's own is_virtual, not a
@@ -458,6 +459,10 @@ export default function Settings() {
             { host: '', port: '7497' },
             { host: '', port: '7497' }
           ],
+          ibkrDataAddress: {
+            host: data.ibkrDataAddresses?.[0]?.host || '',
+            port: String(data.ibkrDataAddresses?.[0]?.port || '4004'),
+          },
           ibkrFlexQueryIdActivityReal: data.ibkrFlexQueryIdActivityReal || '',
           ibkrFlexQueryIdTradeConfReal: data.ibkrFlexQueryIdTradeConfReal || '',
           ibkrFlexQueryIdActivityPaper: data.ibkrFlexQueryIdActivityPaper || '',
@@ -553,6 +558,12 @@ export default function Settings() {
           host: addr.host || '',
           port: addr.port ? parseInt(addr.port, 10) : 7497
         }));
+      }
+      if (settings.ibkrDataAddress) {
+        body.ibkrDataAddresses = [{
+          host: (settings.ibkrDataAddress.host || '').trim(),
+          port: settings.ibkrDataAddress.port ? parseInt(settings.ibkrDataAddress.port, 10) : 4004,
+        }];
       }
       if (Object.keys(body).length === 0) {
         alert('No changes to save.');
@@ -2039,6 +2050,40 @@ export default function Settings() {
                   className={styles.inputBubble}
                   autoComplete="off"
                   placeholder="7497"
+                  min="1024"
+                  max="65535"
+                />
+              </div>
+            </div>
+            <h3 style={{ marginTop: '28px' }}>Historical Data Connection (Optional)</h3>
+            <p style={{ color: '#9CA3AF', fontSize: '0.82rem', marginTop: -8, marginBottom: 14 }}>
+              Where historical bars and contract lookups come from — e.g. a headless IB Gateway that
+              is always running, so charts don't need TWS open. Any login with market data works,
+              including a paper login. Leave the address empty to use the TWS addresses above.
+              Trade imports from TWS always use the addresses above.
+            </p>
+            <div className={styles.formGrid}>
+              <div className={styles.formField}>
+                <label htmlFor="ibkrDataHost">Address</label>
+                <input
+                  id="ibkrDataHost"
+                  value={settings.ibkrDataAddress.host}
+                  onChange={(e) => setSettings(prev => ({ ...prev, ibkrDataAddress: { ...prev.ibkrDataAddress, host: e.target.value } }))}
+                  className={styles.inputBubble}
+                  autoComplete="off"
+                  placeholder="e.g., ib-gateway"
+                />
+              </div>
+              <div className={styles.formField}>
+                <label htmlFor="ibkrDataPort">Port</label>
+                <input
+                  id="ibkrDataPort"
+                  type="number"
+                  value={settings.ibkrDataAddress.port}
+                  onChange={(e) => setSettings(prev => ({ ...prev, ibkrDataAddress: { ...prev.ibkrDataAddress, port: e.target.value } }))}
+                  className={styles.inputBubble}
+                  autoComplete="off"
+                  placeholder="4004"
                   min="1024"
                   max="65535"
                 />
