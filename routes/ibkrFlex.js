@@ -1,6 +1,6 @@
 const { XMLParser } = require('fast-xml-parser'); // npm install fast-xml-parser --save
 const { logger } = require('../modules/logger.js');
-const { isSameStockListing } = require('../modules/ibkrSymbols.js');
+const { isSameStockListing, futuresContractMonth } = require('../modules/ibkrSymbols.js');
 
 // ─── IBKR Flex Web Service ────────────────────────────────────────────────
 // Unlike TWS reqExecutions (only sees the current session), Flex Queries pull
@@ -245,6 +245,9 @@ function filterAndMapExecutions(rawTrades, symbol, effectiveType, identity = nul
         quantity: Math.abs(Number(t.quantity)),
         price: Number(t.tradePrice ?? t.price),
         commission: Math.abs(Number(t.ibCommission ?? t.commission ?? 0)),
+        contractMonth: effectiveType === 'FUT'
+          ? futuresContractMonth({ localSymbol: t.localSymbol, symbol: t.symbol, expiry: t.expiry }, t.tradeDate || t.dateTime)
+          : null,
       };
     });
 
