@@ -102,4 +102,44 @@ function isSameStockListing(identity, { symbol, underlyingSymbol, listingExchang
     return true;
 }
 
-module.exports = { resolveIbkrIdentity, isSameStockListing, MARKET_VENUES };
+// Futures month codes, as in a contract's local symbol (MNQZ6 = Dec 2026).
+const MONTH_CODES = { F: 1, G: 2, H: 3, J: 4, K: 5, M: 6, N: 7, Q: 8, U: 9, V: 10, X: 11, Z: 12 };
+
+/**
+ * A futures fill's contract month as YYYYMM, the format trades.contract_month
+ * and the historical-data code use. Read from the contract code in the local
+ * symbol (MGCZ6), because the expiry date isn't always in the contract month:
+ * a December gold contract stops trading in late November. The expiry is only
+ * the fallback. A one-digit year is resolved to the earliest matching year
+ * that isn't more than a year before the fill.
+ *
+ * @param {object} fields  { localSymbol, symbol, expiry } — whichever the
+ *   source has; expiry as YYYYMMDD or YYYYMM
+ * @param {string|Date} [fillTime]  when the fill happened (defaults to now)
+ * @returns {string|null}
+ */
+function futuresContractMonth({ localSymbol, symbol, expiry } = {}, fillTime = null) {
+    const fillYear = (() => {
+        const match = String(fillTime || '').match(/^(\d{4})/);
+        return match ? Number(match[1]) : new Date().getUTCFullYear();
+    })();
+    for (const candidate of [localSymbol, symbol]) {
+        const match = String(candidate || '').toUpperCase().replace(/\s+/g, '').match(/([FGHJKMNQUVXZ])(\d{1,2})$/);
+        if (!match) continue;
+        const month = MONTH_CODES[match[1]];
+        let year;
+        if (match[2].length === 2) {
+            year = 2000 + Number(match[2]);
+        } else {
+            // Earliest year ending in that digit that isn't more than a
+            // year before the fill (a contract can't trade after expiry).
+            year = fillYear - (fillYear % 10) - 10 + Number(match[2]);
+            while (year < fillYear - 1) year += 10;
+        }
+        return `${year}${String(month).padStart(2, '0')}`;
+    }
+    const digits = String(expiry || '').replace(/\D/g, '');
+    return digits.length >= 6 ? digits.slice(0, 6) : null;
+}
+
+module.exports = { resolveIbkrIdentity, isSameStockListing, futuresContractMonth, MARKET_VENUES };
