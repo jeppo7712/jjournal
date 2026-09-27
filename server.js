@@ -286,7 +286,11 @@ apiRouter.get('/config/status', async (req, res) => {
       databaseUrl: config.databaseUrl || null,
       port: config.port || PORT,
       ibkrAddresses: config.ibkrAddresses || [{ host: '', port: 7497 }, { host: '', port: 7497 }],
+      // Optional separate connection for historical data (e.g. a headless
+      // IB Gateway) — empty means the TWS addresses above are used.
+      ibkrDataAddresses: config.ibkrDataAddresses || [{ host: '', port: 4004 }],
       ibkrConnected: ibkr.isIbkrConnected(),
+      ibkrDataConnected: ibkr.data.isIbkrConnected(),
       status: db.getIsConnected() ? 'Connected' : config.databaseUrl ? 'Connection failed' : 'Not configured',
       // Paper and real accounts use separate Flex credentials — see
       // modules/config.js. Token values themselves are never sent to the
@@ -341,7 +345,7 @@ apiRouter.get('/config/logs', async (req, res) => {
 
 apiRouter.post('/config', async (req, res) => {
   const {
-    databaseUrl, port, ibkrAddresses,
+    databaseUrl, port, ibkrAddresses, ibkrDataAddresses,
     ibkrFlexTokenReal, ibkrFlexQueryIdActivityReal, ibkrFlexQueryIdTradeConfReal,
     ibkrFlexTokenPaper, ibkrFlexQueryIdActivityPaper, ibkrFlexQueryIdTradeConfPaper,
     tradingViewWebhookSecret,
@@ -377,6 +381,7 @@ apiRouter.post('/config', async (req, res) => {
 
     // Other settings that don't require a restart
     if (ibkrAddresses) config.ibkrAddresses = ibkrAddresses;
+    if (ibkrDataAddresses) config.ibkrDataAddresses = ibkrDataAddresses;
     if (ibkrFlexTokenReal !== undefined) config.ibkrFlexTokenReal = ibkrFlexTokenReal;
     if (ibkrFlexQueryIdActivityReal !== undefined) config.ibkrFlexQueryIdActivityReal = ibkrFlexQueryIdActivityReal;
     if (ibkrFlexQueryIdTradeConfReal !== undefined) config.ibkrFlexQueryIdTradeConfReal = ibkrFlexQueryIdTradeConfReal;
