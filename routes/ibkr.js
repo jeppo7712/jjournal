@@ -6,7 +6,7 @@ const { timeout, generateIbReqId } = require('../modules/utils.js');
 const { logger } = require('../modules/logger.js');
 const { fetchFlexExecutions, isPaperIbkrAccountId } = require('./ibkrFlex.js');
 const { loadConfig } = require('../modules/config.js');
-const { resolveIbkrIdentity, isSameStockListing } = require('../modules/ibkrSymbols.js');
+const { resolveIbkrIdentity, isSameStockListing, futuresContractMonth } = require('../modules/ibkrSymbols.js');
 
 module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
 
@@ -96,6 +96,9 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
           quantity: execution.shares,
           price: execution.price,
           commission: ibkr.commissionMap.get(execution.execId) || execution.commission || 0,
+          contractMonth: effectiveType.toUpperCase() === 'FUT'
+            ? futuresContractMonth({ localSymbol: contract.localSymbol, expiry: contract.lastTradeDateOrContractMonth }, execution.time)
+            : null,
         });
       };
 

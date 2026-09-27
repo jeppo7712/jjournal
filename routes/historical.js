@@ -260,14 +260,11 @@ module.exports = (db, taskManager, historicalDataService, broadcastStatus, uuidv
 
             logger.debug(`[API/PopulateAll:${manualRunId}] Adding tasks for ${allSymbols.length} symbols.`);
             for (const { symbol, type, timeframe_settings } of allSymbols) {
-                let contractMonthsToProcess = [null]; // Default for STK and continuous FUT
-                if (type === 'FUT') {
-                    const { rows: tradeRows } = await db.getPool().query(
-                        'SELECT DISTINCT contract_month FROM trades WHERE symbol = $1 AND type = $2 AND contract_month IS NOT NULL',
-                        [symbol, type]
-                    );
-                    contractMonthsToProcess = [null, ...new Set(tradeRows.map(row => row.contract_month))];
-                }
+                // Continuous only: a futures symbol's continuous series is
+                // built from each of its contracts, which it fetches itself.
+                // Queuing every contract month found on trades as well (now
+                // that imports record it) would fetch those contracts twice.
+                const contractMonthsToProcess = [null];
 
                 const enabledTimeframes = getEnabledTimeframes(timeframe_settings);
                 for (const contractMonth of contractMonthsToProcess) {
@@ -317,14 +314,8 @@ module.exports = (db, taskManager, historicalDataService, broadcastStatus, uuidv
 
             const { symbol: dbSymbol, type: dbType, timeframe_settings } = symbolSettings[0];
 
-            let contractMonthsToProcess = [null]; // Default for STK and continuous FUT
-            if (dbType === 'FUT') {
-                const { rows: tradeRows } = await db.getPool().query(
-                    'SELECT DISTINCT contract_month FROM trades WHERE symbol = $1 AND type = $2 AND contract_month IS NOT NULL',
-                    [dbSymbol, dbType]
-                );
-                contractMonthsToProcess = [null, ...new Set(tradeRows.map(row => row.contract_month))];
-            }
+            // Continuous only — see populate-all above.
+            const contractMonthsToProcess = [null];
 
             const enabledTimeframes = getEnabledTimeframes(timeframe_settings);
             for (const contractMonth of contractMonthsToProcess) {

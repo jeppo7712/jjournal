@@ -627,7 +627,18 @@ export default function TradeModal({ trade, onClose }) {
       quantity: exec.quantity,
       price: exec.price.toString(),
       fee: exec.commission.toString(),
+      contractMonth: exec.contractMonth || null,
     };
+  };
+
+  // A futures trade takes the contract month (YYYYMM) of the fills imported
+  // into it, so it's known which contract was traded, not just the root
+  // symbol. Only fills an empty field — a month already set (by an earlier
+  // import or by hand) is kept.
+  const adoptContractMonth = (execs) => {
+    const month = execs.map(e => e.contractMonth).find(Boolean);
+    if (!month) return;
+    setForm(prev => (prev.type === 'FUT' && !prev.contract_month ? { ...prev, contract_month: month } : prev));
   };
 
   const fetchIBKRData = async (historical = false, forceRefresh = false) => {
@@ -702,6 +713,7 @@ export default function TradeModal({ trade, onClose }) {
       execId: item.execId, // persisted so future fetches can recognize this exec as already imported
     };
     setActions(prev => [...prev, newAction]);
+    adoptContractMonth([item]);
     setTouched(prev => [...prev, { quantity: true, price: true, fee: true, dateTime: true }]);
     setTempTimeInputs(prev => [
       ...prev,
@@ -741,6 +753,7 @@ export default function TradeModal({ trade, onClose }) {
     }));
 
     setActions(newActions);
+    adoptContractMonth(allExecs);
     setTouched(newActions.map(() => ({ quantity: true, price: true, fee: true, dateTime: true })));
     setTempTimeInputs(newActions.map(a => a.dateTime.toFormat('HH:mm')));
     // Ensure refs array is correct length
