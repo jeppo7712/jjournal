@@ -319,6 +319,26 @@ export default function TradeView({ trade, onClose, onEdit }) {
   // data (or Yahoo-only data) has nothing to back-adjust, so showing it then
   // would be a button that visibly does nothing when clicked.
   const [hasRolloverToAdjust, setHasRolloverToAdjust] = useState(false);
+  // The futures contract the trade was actually filled in (YYYYMM, recorded
+  // on import), if known. The continuous series switches contract at each
+  // rollover, so near one it can show a different contract than the fills
+  // were in, with the markers off by the spread between the two. With the
+  // traded contract known:
+  // - Continuous off: the chart shows that contract's own series, so the
+  //   fills sit on the prices they were actually filled at.
+  // - Continuous on: the back-adjusted continuous series as before, with
+  //   markers/levels also shifted by the gap between the displayed bar's
+  //   contract and the traded one (contractSpreadMapRef).
+  // Without it (older trades, manual ones) the chart behaves as before.
+  const tradedContract = trade?.type === 'FUT' && /^\d{6}$/.test(String(trade?.contract_month || ''))
+    ? String(trade.contract_month)
+    : null;
+  // Set when the traded contract has no bars around the trade (e.g. no IBKR
+  // data for it); the chart then falls back to the continuous series.
+  const [contractSeriesUnavailable, setContractSeriesUnavailable] = useState(false);
+  const useTradedContractSeries = !!tradedContract && !showBackAdjustedLines && !contractSeriesUnavailable;
+  const tradedContractClosesRef = useRef(new Map());
+  const contractSpreadMapRef = useRef(new Map());
   const [awaitingData, setAwaitingData] = useState(false); // New state to track pending data
   const guardedFetchRef = useRef(createSimpleGuardedFetch());
   const isInitializedRef = useRef(false);
@@ -455,6 +475,7 @@ const [dataVersion, setDataVersion] = useState(0);
   setAwaitingData(false);
 
     let url = `${process.env.REACT_APP_API_URL}/api/historical/db?symbol=${encodeURIComponent(trade.symbol)}&type=${encodeURIComponent(trade.type)}&timeframe=${timeframe}`;
+    if (useTradedContractSeries) url += `&contractMonth=${encodeURIComponent(tradedContract)}`;
 
     // --- New logic to define the prioritized window ---
     if (isInitialLoad) {
@@ -502,6 +523,14 @@ const [dataVersion, setDataVersion] = useState(0);
 
       if (!response.ok) {
         throw new Error(responseData.error || responseData.message || `HTTP error! status: ${response.status}`);
+      }
+
+      // The traded contract has nothing stored around the trade: fall back to
+      // the continuous series (this state change re-runs the chart setup).
+      const noBars = !Array.isArray(responseData) || responseData.length === 0;
+      if (useTradedContractSeries && isInitialLoad && noBars) {
+        setContractSeriesUnavailable(true);
+        return;
       }
 
       // Specifically check for the "task queued" message object that the server sends with a 202 status.
@@ -635,7 +664,7 @@ const [dataVersion, setDataVersion] = useState(0);
       setChartLoading(false);
       setAwaitingData(false);
     }
-  }, [showChart, trade, timeframe, displayTimezone, exchangeTimezone, pricePrecision]);
+  }, [showChart, trade, timeframe, displayTimezone, exchangeTimezone, pricePrecision, useTradedContractSeries, tradedContract]);
 
   // Extends the loaded range further backward or forward, fetching just the
   // next chunk beyond whatever's currently loaded and merging it in — this
@@ -677,7 +706,7 @@ const [dataVersion, setDataVersion] = useState(0);
       // was never reached and the next tick asked again), and each request
       // also dropped this symbol+timeframe's pending fetch tasks — including
       // the IBKR one the initial load had queued — behind a 60s cooldown.
-      const url = `${process.env.REACT_APP_API_URL}/api/historical/db?symbol=${encodeURIComponent(trade.symbol)}&type=${encodeURIComponent(trade.type)}&timeframe=${timeframe}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&noRefresh=true`;
+      const url = `${process.env.REACT_APP_API_URL}/api/historical/db?symbol=${encodeURIComponent(trade.symbol)}&type=${encodeURIComponent(trade.type)}&timeframe=${timeframe}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&noRefresh=true${useTradedContractSeries ? `&contractMonth=${encodeURIComponent(tradedContract)}` : ''}`;
       const guardedFetch = guardedFetchRef.current;
       const { response, data: responseData } = await guardedFetch(url, { headers: { 'x-account-id': '1' } });
 
@@ -745,7 +774,7 @@ const [dataVersion, setDataVersion] = useState(0);
     } finally {
       isFetchingMoreRef.current = false;
     }
-  }, [trade, timeframe]);
+  }, [trade, timeframe, useTradedContractSeries, tradedContract]);
 
   useEffect(() => {
     if (chartLoading) {
@@ -764,6 +793,33 @@ const [dataVersion, setDataVersion] = useState(0);
         const { adjustedBars, adjustmentMap } = getBackAdjustmentInfo(chartDataRef.current);
         processedData = adjustedBars;
         adjustmentMapRef.current = adjustmentMap;
+      }
+
+      // Where a continuous bar comes from another contract than the one the
+      // trade was filled in, a fill price needs the gap between the two
+      // contracts added to line up with it (none where they're the same
+      // contract, so nothing changes away from rollovers). One gap per
+      // contract — the median of the bar-by-bar differences — rather than
+      // each bar's own, which wobbles hour to hour and made the levels jagged.
+      contractSpreadMapRef.current = new Map();
+      if (showBackAdjustedLines && tradedContract && tradedContractClosesRef.current.size > 0) {
+        const diffsByContract = new Map();
+        chartDataRef.current.forEach(bar => {
+          if (!bar.contractMonth || bar.contractMonth === tradedContract) return;
+          const tradedClose = tradedContractClosesRef.current.get(bar.time);
+          if (tradedClose === undefined) return;
+          if (!diffsByContract.has(bar.contractMonth)) diffsByContract.set(bar.contractMonth, []);
+          diffsByContract.get(bar.contractMonth).push(bar.close - tradedClose);
+        });
+        const gapByContract = new Map();
+        diffsByContract.forEach((diffs, contractMonth) => {
+          const sorted = [...diffs].sort((a, b) => a - b);
+          const mid = Math.floor(sorted.length / 2);
+          gapByContract.set(contractMonth, sorted.length % 2 ? sorted[mid] : (sorted[mid - 1] + sorted[mid]) / 2);
+        });
+        chartDataRef.current.forEach(bar => {
+          if (gapByContract.has(bar.contractMonth)) contractSpreadMapRef.current.set(bar.time, gapByContract.get(bar.contractMonth));
+        });
       }
       
       const styledChartData = processedData.map(bar => {
@@ -828,7 +884,9 @@ const [dataVersion, setDataVersion] = useState(0);
               else barTime = styledChartData[barIndex - 1].time;
               
               // Apply adjustment to the price if needed
-              const adjustment = showBackAdjustedLines ? (adjustmentMapRef.current.get(barTime) || 0) : 0;
+              const adjustment = showBackAdjustedLines
+                ? (adjustmentMapRef.current.get(barTime) || 0) + (contractSpreadMapRef.current.get(barTime) || 0)
+                : 0;
               const adjustedPrice = Number(action.price) + adjustment;
 
               return {
@@ -1169,7 +1227,11 @@ useEffect(() => {
       setChartLoading(false);
       setError(null);
       setHasChartDataBars(false);
-      setHasRolloverToAdjust(false); // Reset on chart close
+      // hasRolloverToAdjust is NOT reset here: this cleanup also runs when the
+      // Continuous switch reloads the series (useTradedContractSeries), and the
+      // rollover check below wouldn't re-run to set it back — the switch
+      // vanished right after being turned on. That check resets it itself
+      // when the chart closes or the symbol/timeframe changes.
       debouncedFetchChartData.cancel(); // Also cancel any pending debounced calls on cleanup
     };
     // displayTimezone/exchangeTimezone deliberately excluded — they're only
@@ -1180,7 +1242,45 @@ useEffect(() => {
     // re-fetch + re-parse froze the whole tab for a purely cosmetic label
     // change. See the dedicated effect below, which keeps the chart's own
     // time formatting in sync without tearing anything down.
-  }, [showChart, trade?.symbol, timeframe]);
+    // useTradedContractSeries: flipping between the traded contract's own
+    // series and the continuous one is a different series, not a transform
+    // of the loaded one, so it reloads like a timeframe change does.
+  }, [showChart, trade?.symbol, timeframe, useTradedContractSeries]);
+
+  // A new trade or timeframe gets a fresh try at its traded contract's
+  // series, and forgets the previous one's closes.
+  useEffect(() => {
+    setContractSeriesUnavailable(false);
+    tradedContractClosesRef.current = new Map();
+  }, [trade?.id, tradedContract, timeframe]);
+
+  // Continuous view of a trade with a known contract: the traded contract's
+  // closes around the fills, to line markers/levels up with continuous bars
+  // that come from another contract (see contractSpreadMapRef). Read-only
+  // (noRefresh) — it only uses what's stored.
+  useEffect(() => {
+    if (!showChart || !tradedContract || !showBackAdjustedLines || !Array.isArray(trade?.actions) || trade.actions.length === 0) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const times = trade.actions.map(a => DateTime.fromISO(a.dateTime).toSeconds()).filter(t => !isNaN(t));
+        if (times.length === 0) return;
+        const padding = 200 * getBarDurationInSeconds(timeframe);
+        const startDate = DateTime.fromSeconds(Math.min(...times) - padding).toISO();
+        const endDate = DateTime.fromSeconds(Math.max(...times) + padding).toISO();
+        const url = `${process.env.REACT_APP_API_URL}/api/historical/db?symbol=${encodeURIComponent(trade.symbol)}&type=FUT&timeframe=${timeframe}&contractMonth=${encodeURIComponent(tradedContract)}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}&noRefresh=true`;
+        const res = await fetch(url, { headers: { 'x-account-id': '1' } });
+        if (cancelled || !res.ok) return;
+        const bars = await res.json();
+        if (cancelled || !Array.isArray(bars)) return;
+        tradedContractClosesRef.current = new Map(bars.map(b => [Math.floor(new Date(b.time).getTime() / 1000), Number(b.close)]));
+        setDataVersion(prev => prev + 1);
+      } catch (err) {
+        console.error('[TradeView] Error fetching traded contract closes:', err);
+      }
+    })();
+    return () => { cancelled = true; };
+  }, [showChart, tradedContract, showBackAdjustedLines, trade?.symbol, trade?.actions, timeframe]);
 
   // Whether to show rollover markers / the "Continuous" toggle at all —
   // checked independently of what's actually loaded into the chart. The main
@@ -1312,7 +1412,11 @@ useEffect(() => {
           lineWidth: 1,
           lineStyle: 2, // Dashed
           lineType: LineType.WithSteps,
-          lastValueVisible: false,
+          // Like the Avg Entry/Exit lines: an axis tag, but no full-width
+          // line at the last value — in the continuous view that drew a
+          // second, straight "SL" line away from the stepped one.
+          priceLineVisible: false,
+          lastValueVisible: true,
           axisLabelVisible: true,
           title: 'SL',
         });
@@ -1338,7 +1442,7 @@ useEffect(() => {
             .filter(bar => bar.time >= slStartTime && bar.time <= slEndTime)
             .map(bar => ({
               time: bar.time,
-                value: slPrice + (adjMap.get(bar.time) || 0),
+                value: slPrice + (adjMap.get(bar.time) || 0) + (contractSpreadMapRef.current.get(bar.time) || 0),
             }));
           } else {
             // FIX: For the default view, explicitly create points for each bar in the segment.
@@ -1353,7 +1457,7 @@ useEffect(() => {
           
           // Ensure the very first point is present, covering edge cases.
           if (slData.length === 0 || slData[0].time > slStartTime) {
-              const startValue = showAdjusted ? slPrice + (adjMap.get(slStartTime) || 0) : slPrice;
+              const startValue = showAdjusted ? slPrice + (adjMap.get(slStartTime) || 0) + (contractSpreadMapRef.current.get(slStartTime) || 0) : slPrice;
               slData.unshift({ time: slStartTime, value: startValue });
           }
 
@@ -1479,8 +1583,10 @@ useEffect(() => {
   
       if (showBackAdjustedLines) {
         const adjMap = adjustmentMapRef.current;
-        avgPriceSeriesRef.current.setData(uniqueLineData.map(p => ({ ...p, value: p.value + (adjMap.get(p.time) || 0) })));
-        avgExitPriceSeriesRef.current.setData(uniqueExitLineData.map(p => ({ ...p, value: p.value + (adjMap.get(p.time) || 0) })));
+        const spreadMap = contractSpreadMapRef.current;
+        const shift = (t) => (adjMap.get(t) || 0) + (spreadMap.get(t) || 0);
+        avgPriceSeriesRef.current.setData(uniqueLineData.map(p => ({ ...p, value: p.value + shift(p.time) })));
+        avgExitPriceSeriesRef.current.setData(uniqueExitLineData.map(p => ({ ...p, value: p.value + shift(p.time) })));
       } else {
         avgPriceSeriesRef.current.setData(uniqueLineData);
         avgExitPriceSeriesRef.current.setData(uniqueExitLineData);
@@ -1980,6 +2086,18 @@ useEffect(() => {
                   >
                     Continuous
                   </button>
+                )}
+                {tradedContract && !showBackAdjustedLines && (
+                  <span
+                    style={{ color: '#A5ADBA', fontSize: '0.85em' }}
+                    title={contractSeriesUnavailable
+                      ? 'No stored data for the traded contract around this trade, so the continuous series is shown instead.'
+                      : 'The chart shows the contract this trade was filled in.'}
+                  >
+                    {contractSeriesUnavailable
+                      ? `${DateTime.fromFormat(tradedContract, 'yyyyMM').toFormat('LLL-yy')} n/a · continuous`
+                      : `Contract ${DateTime.fromFormat(tradedContract, 'yyyyMM').toFormat('LLL-yy')}`}
+                  </span>
                 )}
                 <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
                   <span style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>
