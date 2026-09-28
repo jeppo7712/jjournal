@@ -671,20 +671,35 @@ export default function TradeModal({ trade, onClose }) {
         trades.flatMap(t => (t.actions || []).map(a => a.execId).filter(Boolean))
       );
 
-      // Process each bracket group — attach processed executions
-      const groups = (data.bracketGroups || []).map(group => ({
-        ...group,
-        entryExecutions: group.entryExecutions.map(e => processRawExec(e, historical)),
-        tpExecutions:    group.tpExecutions.map(e => processRawExec(e, historical)),
-        slExecutions:    group.slExecutions.map(e => processRawExec(e, historical)),
-        otherChildren:   (group.otherChildren || []).map(c => ({
-          ...c,
-          executions: c.executions.map(e => processRawExec(e, historical)),
-        })),
-        // flag: all entry execs are already in the journal
-        alreadyLogged: group.entryExecutions.length > 0 &&
-          group.entryExecutions.every(e => existingExecIds.has(e.execId)),
-      }));
+      // Process each bracket group — attach processed executions, each
+      // flagged if it's already in the journal (inJournal).
+      const withJournalFlag = (e) => ({ ...processRawExec(e, historical), inJournal: existingExecIds.has(e.execId) });
+      const groups = (data.bracketGroups || []).map(group => {
+        const entryExecutions = group.entryExecutions.map(withJournalFlag);
+        const tpExecutions = group.tpExecutions.map(withJournalFlag);
+        const slExecutions = group.slExecutions.map(withJournalFlag);
+        const allExecs = [...entryExecutions, ...tpExecutions, ...slExecutions];
+        const newExecCount = allExecs.filter(e => !e.inJournal).length;
+        return {
+          ...group,
+          entryExecutions,
+          tpExecutions,
+          slExecutions,
+          otherChildren:   (group.otherChildren || []).map(c => ({
+            ...c,
+            executions: c.executions.map(withJournalFlag),
+          })),
+          newExecCount,
+          // Some fills already in the journal, some not — e.g. a long-held
+          // position that was imported before and has since been added to
+          // or partly sold. Only its new fills get added (handleApplyTrade).
+          partlyLogged: newExecCount > 0 && newExecCount < allExecs.length,
+          // Every fill — entries AND exits — is already in the journal. Used
+          // to be entries only, which hid a position whose new fill was a
+          // (partial) exit.
+          alreadyLogged: allExecs.length > 0 && newExecCount === 0,
+        };
+      });
 
       // Orphan executions (no bracket order data available)
       const orphans = (data.orphanExecutions || [])
@@ -741,6 +756,14 @@ export default function TradeModal({ trade, onClose }) {
     ];
 
     if (allExecs.length === 0) return;
+
+    // Part of this position is already in the journal: add only the fills
+    // that aren't, after the trade's existing actions. Replacing them all
+    // would also throw away any edits made to the imported ones.
+    if (group.partlyLogged) {
+      allExecs.filter(e => !e.inJournal && !addedIbkrItemIds.has(e.execId)).forEach(handleAddAsAction);
+      return;
+    }
 
     // Build action rows from executions
     const newActions = allExecs.map(exec => ({
@@ -1521,7 +1544,7 @@ export default function TradeModal({ trade, onClose }) {
               {!ibkrLoading && ibkrGroups.filter(g => showAlreadyImported || !g.alreadyLogged).map((group) => {
                 const isExpanded = expandedGroups.has(group.parentOrderId);
                 const allGroupExecs = [...group.entryExecutions, ...group.tpExecutions, ...group.slExecutions];
-                const alreadyApplied = allGroupExecs.length > 0 && allGroupExecs.every(e => addedIbkrItemIds.has(e.execId));
+                const alreadyApplied = allGroupExecs.length > 0 && allGroupExecs.every(e => e.inJournal || addedIbkrItemIds.has(e.execId));
 
                 const resultColor = {
                   TP_HIT:        '#10B981',
@@ -1573,6 +1596,12 @@ export default function TradeModal({ trade, onClose }) {
                         {resultLabel}
                       </span>
 
+                      {group.partlyLogged && (
+                        <span style={{ background: '#10B98122', color: '#10B981', borderRadius: 6, padding: '2px 8px', fontSize: '0.75rem', fontWeight: 600 }}>
+                          {group.newExecCount} new
+                        </span>
+                      )}
+
                       {/* Bracket type */}
                       {group.type === 'bracket' && (
                         <span style={{ color: '#6B7280', fontSize: '0.72rem', background: '#1a1d27', borderRadius: 4, padding: '2px 6px' }}>BRACKET</span>
@@ -1607,9 +1636,23 @@ export default function TradeModal({ trade, onClose }) {
                           <div style={{ marginBottom: 8 }}>
                             <div style={{ color: '#9CA3AF', marginBottom: 4, fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Entry execution{group.entryExecutions.length > 1 ? 's' : ''}</div>
                             {group.entryExecutions.map(e => (
-                              <div key={e.execId} style={{ display: 'flex', justifyContent: 'space-between', color: '#E5E7EB', padding: '3px 0' }}>
+                              <div key={e.execId} style={{ display: 'flex', justifyContent: 'space-between', color: e.inJournal ? '#6B7280' : '#E5E7EB', padding: '3px 0' }}>
                                 <span>{e.action} {e.quantity} @ <b>{e.price}</b> — {e.dateTime.toFormat('LLL d, HH:mm:ss')}</span>
-                                <span style={{ color: '#9CA3AF' }}>fee: ${e.fee}</span>
+                                <span style={{ color: '#9CA3AF' }}>{e.inJournal ? '✓ in journal · ' : ''}fee: ${e.fee}</span>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+
+                        {/* Exit executions of a position-based group (no
+                            TP/SL orders to show them under) */}
+                        {group.type === 'position-based' && group.tpExecutions.length > 0 && (
+                          <div style={{ marginBottom: 8 }}>
+                            <div style={{ color: '#9CA3AF', marginBottom: 4, fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Exit execution{group.tpExecutions.length > 1 ? 's' : ''}</div>
+                            {group.tpExecutions.map(e => (
+                              <div key={e.execId} style={{ display: 'flex', justifyContent: 'space-between', color: e.inJournal ? '#6B7280' : '#E5E7EB', padding: '3px 0' }}>
+                                <span>{e.action} {e.quantity} @ <b>{e.price}</b> — {e.dateTime.toFormat('LLL d, HH:mm:ss')}</span>
+                                <span style={{ color: '#9CA3AF' }}>{e.inJournal ? '✓ in journal · ' : ''}fee: ${e.fee}</span>
                               </div>
                             ))}
                           </div>
@@ -1663,12 +1706,16 @@ export default function TradeModal({ trade, onClose }) {
                                 color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontWeight: 600, fontSize: '0.82rem'
                               }}
                             >
-                              {alreadyApplied ? '✓ Applied' : '⚡ Apply Trade'}
+                              {alreadyApplied
+                                ? '✓ Applied'
+                                : group.partlyLogged
+                                  ? `⚡ Add ${group.newExecCount} new fill${group.newExecCount !== 1 ? 's' : ''}`
+                                  : '⚡ Apply Trade'}
                             </button>
                           )}
 
                           {/* Add individual entry executions */}
-                          {group.entryExecutions.map(e => (
+                          {group.entryExecutions.filter(e => !e.inJournal).map(e => (
                             <button key={e.execId}
                               onClick={() => handleAddAsAction(e)}
                               style={{ padding: '6px 12px', background: addedIbkrItemIds.has(e.execId) ? '#374151' : '#3B82F6', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: '0.78rem' }}
@@ -1678,17 +1725,17 @@ export default function TradeModal({ trade, onClose }) {
                           ))}
 
                           {/* Add TP exit */}
-                          {group.tpExecutions.map(e => (
+                          {group.tpExecutions.filter(e => !e.inJournal).map(e => (
                             <button key={e.execId}
                               onClick={() => handleAddAsAction(e)}
                               style={{ padding: '6px 12px', background: addedIbkrItemIds.has(e.execId) ? '#374151' : '#10B981', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: '0.78rem' }}
                             >
-                              {addedIbkrItemIds.has(e.execId) ? '✓' : '+'} TP Exit
+                              {addedIbkrItemIds.has(e.execId) ? '✓' : '+'} {group.type === 'position-based' ? `Exit ${e.dateTime.toFormat('HH:mm')}` : 'TP Exit'}
                             </button>
                           ))}
 
                           {/* Add SL exit */}
-                          {group.slExecutions.map(e => (
+                          {group.slExecutions.filter(e => !e.inJournal).map(e => (
                             <button key={e.execId}
                               onClick={() => handleAddAsAction(e)}
                               style={{ padding: '6px 12px', background: addedIbkrItemIds.has(e.execId) ? '#374151' : '#EF4444', color: '#fff', border: 'none', borderRadius: 7, cursor: 'pointer', fontSize: '0.78rem' }}
