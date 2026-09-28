@@ -553,7 +553,6 @@ UNIQUE (symbol, type)
     logger.debug('Creating historical_data table...');
     await client.query(`
       CREATE TABLE IF NOT EXISTS historical_data (
-        id SERIAL PRIMARY KEY,
         futures_setting_id INTEGER NOT NULL,
         contract_month VARCHAR,
         time TIMESTAMP WITH TIME ZONE NOT NULL,
@@ -606,12 +605,16 @@ UNIQUE (symbol, type)
 `);
     logger.debug('historical_data_source_idx created successfully');
 
-    logger.debug('Creating idx_historical_data_recency...');
-    await client.query(`
-CREATE INDEX IF NOT EXISTS idx_historical_data_recency
-ON historical_data (futures_setting_id, timeframe, source, time DESC);
-`);
-    logger.debug('idx_historical_data_recency created successfully');
+    // idx_historical_data_recency was the same columns as
+    // historical_data_source_idx with time DESC. A btree reads backwards just
+    // as well, so it only cost disk space (over 1 GB on a well-filled table).
+    await client.query(`DROP INDEX IF EXISTS idx_historical_data_recency`);
+
+    // The serial id (and its primary-key index) was never used: bars are
+    // identified by historical_data_unique_idx. Dropping it saves 4 bytes per
+    // row plus the index, which on tens of millions of bars is gigabytes.
+    // The space comes back on the next table rewrite (VACUUM FULL).
+    await client.query(`ALTER TABLE historical_data DROP COLUMN IF EXISTS id`);
 
     // Every chart request for a futures symbol without an explicit
     // contract_month (i.e. every normal TradeView/TradeFormChart request)
