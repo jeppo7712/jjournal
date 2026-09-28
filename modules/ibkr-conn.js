@@ -141,8 +141,20 @@ function createConnection({ name, clientId, resolveAddresses }) {
               rejectPromise(new Error(`Connection attempt to ${host}:${port} timed out after 15 seconds.`));
             }, 15000);
 
+            const onConnectError = (err, code) => {
+              clearTimeout(connectionTimeout);
+              const errorMsg = `Failed to connect to TWS at ${host}:${port}: ${err.message} (Code: ${code})`;
+              broadcastStatus(requestId, errorMsg, 'error');
+              logger.error(`${tag} ${errorMsg}`);
+              rejectPromise(new Error(errorMsg));
+            };
+
             currentAttemptIbApi.once(EventName.connected, () => {
               clearTimeout(connectionTimeout);
+              // Once connected, errors belong to the persistent handler below;
+              // left attached, this one would report the first request error
+              // (e.g. a missing futures month) as a failed connection.
+              currentAttemptIbApi.off(EventName.error, onConnectError);
               broadcastStatus(requestId, `Connected to Interactive Brokers API at ${host}:${port}`, 'success');
               logger.info(`✅ ${tag} Connected to Interactive Brokers API at ${host}:${port}`);
               ibApi = currentAttemptIbApi;
@@ -181,13 +193,7 @@ function createConnection({ name, clientId, resolveAddresses }) {
               resolvePromise();
             });
 
-            currentAttemptIbApi.once(EventName.error, (err, code) => {
-              clearTimeout(connectionTimeout);
-              const errorMsg = `Failed to connect to TWS at ${host}:${port}: ${err.message} (Code: ${code})`;
-              broadcastStatus(requestId, errorMsg, 'error');
-              logger.error(`${tag} ${errorMsg}`);
-              rejectPromise(new Error(errorMsg));
-            });
+            currentAttemptIbApi.once(EventName.error, onConnectError);
             currentAttemptIbApi.connect(clientId);
           });
           return;
