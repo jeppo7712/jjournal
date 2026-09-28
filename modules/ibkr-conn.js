@@ -46,6 +46,14 @@ function createConnection({ name, clientId, resolveAddresses }) {
   let disconnectionLock = null;
   let managedAccounts = [];
   const commissionMap = new Map();
+  // Requests whose caller handles "No security definition" (code 200) itself
+  // and reports it with context — contract lookups (validateContract), where
+  // the futures contract-chain scan asks about many months that don't exist.
+  // The persistent error handler only logs those at debug level instead of
+  // flooding the log and status feed with one "Connection Error" per month.
+  const selfReportedRequestIds = new Set();
+  const expectSelfReportedErrors = (reqId) => selfReportedRequestIds.add(reqId);
+  const releaseSelfReportedErrors = (reqId) => selfReportedRequestIds.delete(reqId);
 
   function getIbApi() {
     return ibApi;
@@ -151,6 +159,10 @@ function createConnection({ name, clientId, resolveAddresses }) {
 
               // Setup persistent error handler
               ibApi.on(EventName.error, (err, code, localRequestId) => {
+                if (code === 200 && selfReportedRequestIds.has(localRequestId)) {
+                  logger.debug(`${tag} No security definition for ReqId ${localRequestId} (reported by the lookup itself).`);
+                  return;
+                }
                 const errSourceId = localRequestId || requestId || `ibkr-${name}`;
                 logger.error(`${tag} [Persistent Error Handler] Error: ${err.message} (Code: ${code}, ReqId: ${localRequestId})`);
                 broadcastStatus(errSourceId, `IBKR Connection Error: ${err.message} (Code: ${code})`, 'error');
@@ -242,6 +254,8 @@ function createConnection({ name, clientId, resolveAddresses }) {
     getIbApi,
     isIbkrConnected,
     getManagedAccounts,
+    expectSelfReportedErrors,
+    releaseSelfReportedErrors,
     commissionMap, // Exporting map for use in execution routes
   };
 }

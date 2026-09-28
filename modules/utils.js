@@ -207,12 +207,17 @@ async function validateContract(contract, taskId, cancellationSignal = null, bro
 
         const ibReqId = generateIbReqId();
         let resolvedOrRejected = false;
+        // This lookup reports a missing contract itself (it rejects, and the
+        // caller logs it with context), so the connection's general error
+        // handler needn't also log it — see expectSelfReportedErrors.
+        ibkr.expectSelfReportedErrors(ibReqId);
 
         let validationTimeout;
 
         const cleanupAndAction = (action, value) => {
             if (resolvedOrRejected) return;
             resolvedOrRejected = true;
+            ibkr.releaseSelfReportedErrors(ibReqId);
 
             clearTimeout(validationTimeout);
             if (cancellationSignal) {
@@ -235,6 +240,7 @@ async function validateContract(contract, taskId, cancellationSignal = null, bro
         };
 
         if (cancellationSignal?.aborted) {
+            ibkr.releaseSelfReportedErrors(ibReqId);
             return reject(new Error(`Contract validation for task ${taskId} (ibReqId ${ibReqId}) already cancelled before starting.`));
         }
        
