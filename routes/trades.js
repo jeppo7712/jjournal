@@ -4,6 +4,36 @@ const router = express.Router();
 const { logger } = require('../modules/logger.js');
 const { getTickMultiplier, computeFuturesRealizedPnLPerAction, resolveTradeCurrency } = require('../modules/tradeCalculations.js');
 
+// A trade's ticked checklist, or null. Labels are kept as they were when
+// ticked (the account's list may change later); `removed` hides the
+// checklist for this trade while keeping the ticks in case it's restored.
+function normalizeChecklist(checklist) {
+    if (!checklist || typeof checklist !== 'object') return null;
+    const items = (list) => (Array.isArray(list) ? list : [])
+        .filter(item => item && String(item.label ?? '').trim())
+        .slice(0, 50)
+        .map(item => ({ label: String(item.label).trim().slice(0, 200), checked: !!item.checked }));
+    return { entry: items(checklist.entry), exit: items(checklist.exit), removed: !!checklist.removed };
+}
+
+// Creates or updates a trade's journal row, leaving the AI analysis
+// columns (written by the external API) untouched.
+async function saveJournal(client, tradeId, journal) {
+    const checklist = normalizeChecklist(journal.checklist);
+    await client.query(
+        `INSERT INTO trade_journals (trade_id, tags, notes_html, confidence, execution_rating, checklist)
+         VALUES ($1, $2, $3, $4, $5, $6)
+         ON CONFLICT (trade_id) DO UPDATE SET
+            tags = EXCLUDED.tags,
+            notes_html = EXCLUDED.notes_html,
+            confidence = EXCLUDED.confidence,
+            execution_rating = EXCLUDED.execution_rating,
+            checklist = EXCLUDED.checklist`,
+        [tradeId, journal.tags, journal.notes_html, journal.confidence, journal.execution_rating || null,
+         checklist ? JSON.stringify(checklist) : null]
+    );
+}
+
 module.exports = (pool, upload, broadcastStatus, uuidv4) => {
 
     // Auto-settles a trade's actions to the cash ledger as ONE row per
@@ -215,13 +245,7 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
             }
 
             // Insert journal if present
-            if (journal) {
-                await client.query(
-                    `INSERT INTO trade_journals (trade_id, tags, notes_html, confidence, execution_rating)
-        VALUES ($1, $2, $3, $4, $5)`,
-                    [tradeId, journal.tags, journal.notes_html, journal.confidence, journal.execution_rating || null]
-                );
-            }
+            if (journal) await saveJournal(client, tradeId, journal);
 
             // Update attachments to link to trade
             if (attachments && attachments.length) {
@@ -325,15 +349,10 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
                 await settleTradeActionsToCash(client, id, accountId, type, symbol, actions, tickSize, tickValue);
             }
 
-            // Re-insert journal (delete existing, then insert new if present)
-            await client.query(`DELETE FROM trade_journals WHERE trade_id=$1`, [id]);
-            if (journal) {
-                await client.query(
-                    `INSERT INTO trade_journals (trade_id, tags, notes_html, confidence, execution_rating)
-           VALUES ($1, $2, $3, $4, $5)`,
-                    [id, journal.tags, journal.notes_html, journal.confidence, journal.execution_rating || null]
-                );
-            }
+            // Update the journal in place. It used to be deleted and
+            // re-inserted with only the form's fields, which also wiped the
+            // AI analysis stored on the same row (see routes/external.js).
+            if (journal) await saveJournal(client, id, journal);
 
             // --- IMPROVED ATTACHMENT MANAGEMENT FOR TRADES ---
 

@@ -220,6 +220,15 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     await client.query(`ALTER TABLE trade_journals ADD COLUMN IF NOT EXISTS ai_analysis TEXT`);
     await client.query(`ALTER TABLE trade_journals ADD COLUMN IF NOT EXISTS ai_analysis_source VARCHAR`);
     await client.query(`ALTER TABLE trade_journals ADD COLUMN IF NOT EXISTS ai_analysis_updated_at TIMESTAMP WITH TIME ZONE`);
+
+    // Trade checklists. Each account keeps its own Entry/Exit lists
+    // ({ entry: [label], exit: [label] }), since the rules differ per trading
+    // style. A trade stores what was ticked with the labels as they were
+    // then ({ entry: [{label, checked}], exit: [...], removed }), so editing
+    // an account's list never rewrites older trades. NULL on a trade means
+    // nothing was ticked or removed yet.
+    await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS checklists JSONB NOT NULL DEFAULT '{"entry": [], "exit": []}'::jsonb`);
+    await client.query(`ALTER TABLE trade_journals ADD COLUMN IF NOT EXISTS checklist JSONB`);
     logger.debug('trade_journals.ai_analysis columns ready');
 
     // The external API upserts a trade's AI analysis by trade_id (ON CONFLICT),
