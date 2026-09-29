@@ -208,6 +208,33 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         }
     });
 
+    // PUT /accounts/:id/checklists — the account's Entry/Exit checklist
+    // items (see the checklists column in modules/database.js). Separate
+    // from PUT /accounts/:id so the account form can't overwrite them.
+    router.put('/:id/checklists', async (req, res) => {
+        const { id } = req.params;
+        const clean = (list) => {
+            if (!Array.isArray(list)) return [];
+            const seen = new Set();
+            return list
+                .map(item => String(item ?? '').trim().slice(0, 200))
+                .filter(item => item && !seen.has(item) && seen.add(item))
+                .slice(0, 50);
+        };
+        const checklists = { entry: clean(req.body?.entry), exit: clean(req.body?.exit) };
+        try {
+            const { rowCount } = await pool.query(
+                'UPDATE accounts SET checklists = $1, updated_at = NOW() WHERE id = $2',
+                [JSON.stringify(checklists), id]
+            );
+            if (rowCount === 0) return res.status(404).json({ error: 'Account not found' });
+            res.json({ success: true, checklists });
+        } catch (err) {
+            logger.error('Error saving checklists:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     // DELETE /accounts/:id
     router.delete('/:id', async (req, res) => {
         const { id } = req.params;

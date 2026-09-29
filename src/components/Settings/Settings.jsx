@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import styles from './Settings.module.css';
 import { TradeContext, TRADE_LIST_COLUMNS } from '../../context/TradeContext';
+import ChecklistSettings from './ChecklistSettings';
 import { useStatus } from '../../context/StatusContext';
 import { DateTime } from 'luxon';
 import { FaPencilAlt, FaTrash } from 'react-icons/fa'; // Example using react-icons
@@ -1587,6 +1588,13 @@ export default function Settings() {
           Accounts
         </button>
         <button
+          className={`${styles.tabButton} ${activeTab === 'checklists' ? styles.activeTab : ''} ${!dbStatus?.isConnected ? styles.disabledTab : ''}`}
+          onClick={() => setActiveTab('checklists')}
+          disabled={!dbStatus?.isConnected}
+        >
+          Checklists
+        </button>
+        <button
           className={`${styles.tabButton} ${activeTab === 'tws' ? styles.activeTab : ''} ${!dbStatus?.isConnected ? styles.disabledTab : ''}`}
           onClick={() => setActiveTab('tws')}
           disabled={!dbStatus?.isConnected}
@@ -1705,6 +1713,9 @@ export default function Settings() {
               rows={20}
             />
           </div>
+        )}
+        {activeTab === 'checklists' && dbStatus?.isConnected && (
+          <ChecklistSettings styles={styles} apiBaseUrl={apiBaseUrl} />
         )}
         {activeTab === 'accounts' && dbStatus?.isConnected && (
           <div className={styles.accountsTab}>
