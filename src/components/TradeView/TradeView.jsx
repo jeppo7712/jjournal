@@ -1,4 +1,5 @@
 import React, { useRef, useLayoutEffect, useState, useEffect, useContext, useCallback, useMemo } from 'react';
+import TradeChecklist from '../TradeModal/TradeChecklist';
 import { TradeContext, calculateRisk, getEnabledTimeframesForSetting } from '../../context/TradeContext';
 import { DateTime } from 'luxon';
 import { sanitizeNotesHtml } from '../../utils/sanitizeHtml';
@@ -1799,6 +1800,8 @@ useEffect(() => {
               </legend>
             )}
             <div className={styles.notesWrapper}>
+              {/* What was ticked on the account's checklist (read-only) */}
+              <TradeChecklist readOnly value={trade.journal?.checklist || null} />
               {/* Notes content */}
               {trade.journal?.notes_html && (
                 <div

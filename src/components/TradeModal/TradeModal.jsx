@@ -1,6 +1,7 @@
 import React, { useContext, useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactQuill from 'react-quill';
+import TradeChecklist from './TradeChecklist';
 import { useDropzone } from 'react-dropzone';
 import 'react-quill/dist/quill.snow.css';
 import { TradeContext, calculateRisk, getEnabledTimeframesForSetting } from '../../context/TradeContext';
@@ -141,7 +142,7 @@ function StarRating({ value, onChange, max = 5 }) {
 }
 
 export default function TradeModal({ trade, onClose }) {
-  const { refreshTrades, currentAccountId, futuresSettings, trades } = useContext(TradeContext);
+  const { refreshTrades, currentAccountId, futuresSettings, trades, accounts } = useContext(TradeContext);
   const isEditMode = !!trade;
 
   const defaultSettings = futuresSettings.find(s => s.symbol === 'DEFAULT') || {};
@@ -251,6 +252,10 @@ export default function TradeModal({ trade, onClose }) {
   const [notes, setNotes] = useState(isEditMode ? (trade.journal?.notes_html || '') : '');
   const [confidence, setConfidence] = useState(isEditMode ? (trade.journal?.confidence || 0) : 0);
   const [executionRating, setExecutionRating] = useState(isEditMode ? (trade.journal?.execution_rating || 0) : 0);
+  // What this trade ticked (see TradeChecklist); null until something is.
+  const [checklist, setChecklist] = useState(isEditMode ? (trade.journal?.checklist || null) : null);
+  const initialChecklist = useRef(isEditMode ? JSON.stringify(trade.journal?.checklist || null) : 'null');
+  const checklistTemplate = (accounts || []).find(a => String(a.id) === String(trade?.account_id || currentAccountId))?.checklists;
   const [attachments, setAttachments] = useState(
     isEditMode
       ? (trade.attachments || []).map(att => ({
@@ -838,7 +843,7 @@ export default function TradeModal({ trade, onClose }) {
         ...a,
         dateTime: a.dateTime.isValid ? a.dateTime.toISO() : DateTime.now().setZone(exchangeTimezone).toISO(),
       })),
-      journal: { tags, notes_html: notes, confidence, execution_rating: executionRating },
+      journal: { tags, notes_html: notes, confidence, execution_rating: executionRating, checklist },
       attachments: attachments.map(a => ({ attachment_id: a.attachment_id }))
     };
     const url = isEditMode
@@ -876,7 +881,8 @@ export default function TradeModal({ trade, onClose }) {
   }
 
   const handleRequestClose = () => {
-    if (isFormDirty(form, actions, tags, notes, confidence, executionRating, attachments, initialState.current, isEditMode)) {
+    if (isFormDirty(form, actions, tags, notes, confidence, executionRating, attachments, initialState.current, isEditMode)
+      || JSON.stringify(checklist) !== initialChecklist.current) {
       setShowUnsavedPopup(true);
     } else {
       onClose();
@@ -1223,6 +1229,7 @@ export default function TradeModal({ trade, onClose }) {
                   autoComplete="off"
                 />
               </div>
+              <TradeChecklist template={checklistTemplate} value={checklist} onChange={setChecklist} />
               <div className={styles.formFieldFull}>
                 <label htmlFor="notes">Notes</label>
                 <div className={styles.notesEditor}>
