@@ -25,6 +25,27 @@ function describeTradingViewLight(status) {
     : { color: '#d97706', title: `TradingView: no bars for ${age} (last ${what}). Fine while the market is closed; otherwise check the alert.` };
 }
 
+// The HIS light: whether IBKR answers historical-data requests. Green when
+// the latest request got an answer, amber after one failure (can be a
+// one-off), red once several in a row failed (e.g. the gateway stopped
+// answering), grey before any request since the server started. Hidden when
+// no IBKR data connection is set up and IBKR never answered.
+function describeIbkrDataLight(status) {
+  if (!status || (!status.configured && !status.lastSuccessAt)) return null;
+  const at = iso => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null);
+  const lastOk = status.lastSuccessAt ? `last answer ${at(status.lastSuccessAt)}` : 'no answer yet';
+  if (status.consecutiveFailures >= 2) {
+    return { color: '#b32424', title: `IBKR historical data: ${status.consecutiveFailures} requests in a row failed (${lastOk}). Last error: ${status.lastError}. Restarting IB Gateway usually fixes this.` };
+  }
+  if (status.consecutiveFailures === 1) {
+    return { color: '#d97706', title: `IBKR historical data: the last request failed (${lastOk}). Last error: ${status.lastError}` };
+  }
+  if (status.lastSuccessAt) {
+    return { color: '#0d8050', title: `IBKR historical data: answering (${lastOk})` };
+  }
+  return { color: '#6b7280', title: 'IBKR historical data: no requests since the server started' };
+}
+
 const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
   const { stats, accounts, currentAccountId, setCurrentAccountId, trades, fetchProcessedTradesForAccount, holdings } = useContext(TradeContext);
   const { statusLogs } = useStatus();
@@ -47,6 +68,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
   const statusPopupRef = useRef(null); //
   const statusBoxTriggerRef = useRef(null); // Renamed for clarity, ref for the status trigger area //
   const [tradingViewStatus, setTradingViewStatus] = useState(null);
+  const [ibkrDataStatus, setIbkrDataStatus] = useState(null);
 
   useEffect(() => {
     // WebSocket connection is handled by StatusProvider.
@@ -60,6 +82,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
         const data = await response.json();
         setIsDatabaseConnected(data.isConnected);
         setTradingViewStatus(data.tradingView || null);
+        setIbkrDataStatus(data.ibkrData || null);
       } catch (err) {
         console.error('Error fetching database status:', err);
         setIsDatabaseConnected(false);
@@ -207,6 +230,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
   };
 
   const tradingViewLight = describeTradingViewLight(tradingViewStatus);
+  const ibkrDataLight = describeIbkrDataLight(ibkrDataStatus);
 
   const handleStatusTriggerClick = () => {
     setShowStatusPopup(true);
@@ -361,6 +385,12 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
         <div className={styles.statusHeader}>
           <span className={styles.statusLabel}>Status</span>
           <div className={styles.statusLights}>
+            {ibkrDataLight && (
+              <span className={styles.statusLight} title={ibkrDataLight.title}>
+                <span className={styles.statusLightLabel}>HIS</span>
+                <div className={styles.statusIndicator} style={{ backgroundColor: ibkrDataLight.color }}></div>
+              </span>
+            )}
             {tradingViewLight && (
               <span className={styles.statusLight} title={tradingViewLight.title}>
                 <span className={styles.statusLightLabel}>TV</span>
