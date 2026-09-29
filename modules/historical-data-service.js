@@ -47,7 +47,16 @@ It shall be possible for a requester to request data for a specific period.
 const { DateTime, Duration } = require('luxon');
 const { Contract, EventName } = require('@stoqey/ib'); // Import Contract and EventName
 const yahoo = require('./yahoo.js');
-const { withRetries, timeout, normalizeDate, extractIBKRTimezoneSuffix, getTimeframeDuration, parseDuration, formatDurationForIBKR, generateContractChain, validateContract, delay, generateIbReqId } = require('./utils.js');
+const { withRetries, normalizeDate, extractIBKRTimezoneSuffix, getTimeframeDuration, parseDuration, formatDurationForIBKR, generateContractChain, validateContract, delay, generateIbReqId } = require('./utils.js');
+
+// Days covered by an IBKR duration string ("1800 S", "2 D", "1 W", "1 M",
+// "1 Y"); never throws, unlike parseDuration, which knows no seconds.
+function ibkrDurationDays(duration) {
+    const [value, unit] = String(duration || '').trim().split(/\s+/);
+    const n = parseInt(value, 10) || 1;
+    const perUnit = { S: 1 / 86400, D: 1, W: 7, M: 30, Y: 365 };
+    return n * (perUnit[unit] ?? 1);
+}
 const { resolveIbkrIdentity } = require('./ibkrSymbols.js');
 const db = require('./database.js');
 // Historical bars and contract lookups go over the data connection, which
@@ -866,18 +875,21 @@ async function fetchHistoricalDataFromIBKR(validatedContract, duration, barSize,
         logger.info(`[Historical][${taskId}] Requesting IBKR historical data for conId ${validatedContract.conId}: duration=${duration}, barSize=${barSize}, endDateTime=${endDateTime || "'' (Current Time)"}`);
         broadcastStatus(taskId, `Requesting historical data from TWS for ${validatedContract.symbol} (${timeframe})`, 'info');
 
-        // OPTIMIZATION: Dynamic timeout based on requested duration
-        const durationInSeconds = parseDuration(duration)?.days * 86400 || 3600; // Simplified calculation
-        const adaptiveTimeout = Math.max(60000, durationInSeconds * 100); // Base 1 min, plus 100ms per day
+        // How long to wait for IBKR's answer: a minute plus 2 s per requested
+        // day, at most 5 minutes. IBKR normally answers in seconds; when it
+        // doesn't (e.g. the gateway sits on a request), the whole fetch queue
+        // waits behind this one, so it must give up in minutes, not hours.
+        const requestTimeoutMs = Math.min(5 * 60000, 60000 + ibkrDurationDays(duration) * 2000);
 
-        const bars = await Promise.race([
-            new Promise((resolve, reject) => {
+        const bars = await new Promise((resolve, reject) => {
                 const ibReqId = generateIbReqId(); // IBKR's internal request ID for this data fetch
                 let resolvedOrRejected = false; // Flag to prevent multiple resolutions/rejections
+                let requestTimer = null;
 
                 const cleanupAndAction = (action, value) => {
                     if (resolvedOrRejected) return;
                     resolvedOrRejected = true;
+                    clearTimeout(requestTimer);
 
                     // Remove specific listeners for this reqId
                     if (ibkr.isIbkrConnected()) {
@@ -1015,9 +1027,18 @@ async function fetchHistoricalDataFromIBKR(validatedContract, duration, barSize,
                     false,    // keepUpToDate (false for historical, true for streaming updates)
                     []        // chartOptions (pass-through for API)
                 );
-            }),
-            timeout(adaptiveTimeout, `Historical data request (task ${taskId}) timed out after ${adaptiveTimeout / 1000} seconds`)
-        ]);
+
+                // On timeout, cancel the request at IBKR too, so it doesn't
+                // keep counting against the gateway's pacing limits.
+                requestTimer = setTimeout(() => {
+                    if (resolvedOrRejected) return;
+                    try {
+                        const ibApi = ibkr.getIbApi();
+                        if (ibApi) ibApi.cancelHistoricalData(ibReqId);
+                    } catch (e) { /* the rejection below is what matters */ }
+                    cleanupAndAction(reject, new Error(`Historical data request (task ${taskId}, ibReqId ${ibReqId}) timed out after ${requestTimeoutMs / 1000} seconds`));
+                }, requestTimeoutMs);
+            });
 
         logger.info(`[Historical][${taskId}] Returning ${bars.length} bars from IBKR for conId ${validatedContract?.conId}`);
         return bars;
