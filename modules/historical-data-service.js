@@ -47,6 +47,7 @@ It shall be possible for a requester to request data for a specific period.
 const { DateTime, Duration } = require('luxon');
 const { Contract, EventName } = require('@stoqey/ib'); // Import Contract and EventName
 const yahoo = require('./yahoo.js');
+const ibkrDataStatus = require('./ibkr-data-status.js');
 const { withRetries, normalizeDate, extractIBKRTimezoneSuffix, getTimeframeDuration, parseDuration, formatDurationForIBKR, generateContractChain, validateContract, delay, generateIbReqId } = require('./utils.js');
 
 // Days covered by an IBKR duration string ("1800 S", "2 D", "1 W", "1 M",
@@ -1041,10 +1042,13 @@ async function fetchHistoricalDataFromIBKR(validatedContract, duration, barSize,
             });
 
         logger.info(`[Historical][${taskId}] Returning ${bars.length} bars from IBKR for conId ${validatedContract?.conId}`);
+        ibkrDataStatus.recordSuccess();
         return bars;
 
     } catch (err) {
         logger.error(`[Historical][${taskId}] Error in fetchHistoricalDataFromIBKR for conId ${validatedContract?.conId}: ${err.message}`);
+        // A task we cancelled ourselves says nothing about IBKR's health.
+        if (!(cancellationSignal && cancellationSignal.aborted)) ibkrDataStatus.recordFailure(err.message);
         // Check for error codes or messages that indicate a disconnect
         const errStr = err.message.toLowerCase();
         const disconnectIndicators = ["connection broken", "socket closed", "not connected", "connection reset", "connectivity between IBKR and TWS has been lost"];

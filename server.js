@@ -218,6 +218,7 @@ app.use('/api/external/v1', externalRouter);
 // just this path), so it has its own secret-based auth rather than relying
 // on "trusted network" like the rest of the external API.
 const tradingViewStatus = require('./modules/tradingview-status.js');
+const ibkrDataStatus = require('./modules/ibkr-data-status.js');
 const tradingViewWebhookRouter = require('./routes/tradingview-webhook.js')(db, configManager, broadcastStatus, uuidv4, wss, WebSocket);
 app.use('/api/webhooks', tradingViewWebhookRouter);
 
@@ -308,6 +309,12 @@ apiRouter.get('/config/status', async (req, res) => {
       tradingView: {
         configured: !!config.tradingViewWebhookSecret,
         lastBar: tradingViewStatus.getLastBar(),
+      },
+      // For the HIS light: how the latest IBKR historical-data requests
+      // ended. Shown when a data connection is set up or IBKR has answered.
+      ibkrData: {
+        configured: (config.ibkrDataAddresses || []).some(a => a && a.host && a.port),
+        ...ibkrDataStatus.getStatus(),
       },
     });
   } catch (err) {
