@@ -2,6 +2,8 @@
 // navigation. The data connection can be up while the gateway sits on every
 // request (e.g. after it reconnects to IBKR's servers), which nothing else
 // reports; this records how the latest requests actually ended.
+const gatewayCommand = require('./ibkr-gateway-command.js');
+
 const status = {
   lastSuccessAt: null,
   lastFailureAt: null,
@@ -18,10 +20,15 @@ function recordFailure(message) {
   status.lastFailureAt = new Date().toISOString();
   status.lastError = String(message || 'Unknown error').slice(0, 300);
   status.consecutiveFailures += 1;
+  // Two in a row is past a one-off; ask the gateway to reconnect its data
+  // connections (only does anything when a command address is configured).
+  if (status.consecutiveFailures >= 2) {
+    gatewayCommand.requestDataReconnect(`${status.consecutiveFailures} failed requests in a row`).catch(() => {});
+  }
 }
 
 function getStatus() {
-  return { ...status };
+  return { ...status, lastReconnect: gatewayCommand.getLastReconnect() };
 }
 
 module.exports = { recordSuccess, recordFailure, getStatus };
