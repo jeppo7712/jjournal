@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { logger } = require('../modules/logger.js');
+const tradingViewStatus = require('../modules/tradingview-status.js');
 
 // Receives live bars pushed from a TradingView alert webhook (e.g. a
 // 1-minute chart with an alert firing "once per bar close"). TradingView's
@@ -75,6 +76,8 @@ module.exports = (db, configManager, broadcastStatus, uuidv4, wss, WebSocket) =>
                 // would otherwise reject outright rather than coerce.
                 [futuresSettingId, time, open, high, low, close, Math.round(Number(volume) || 0), timeframe]
             );
+
+            tradingViewStatus.recordBar({ symbol: upperSymbol, timeframe, time });
 
             wss.clients.forEach(wsClient => {
                 if (wsClient.readyState === WebSocket.OPEN) {

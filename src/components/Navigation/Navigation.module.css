@@ -161,6 +161,23 @@
   border-radius: 50%;
 }
 
+.statusLights {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.statusLight {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.statusLightLabel {
+  font-size: 10px;
+  opacity: 0.7;
+}
+
 .logList { /* For the mini log list inside integratedStatusSection */
   display: flex;
   flex-direction: column;

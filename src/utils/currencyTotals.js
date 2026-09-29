@@ -97,13 +97,14 @@ export function currencyCount(totals) {
 
 // "$1234.56" for one currency (identical to the previous inline style),
 // "$1234.56 · €88.20" once there are several. An empty map renders as zero
-// in USD, matching what an empty sum displayed before.
+// in `emptyCurrency` (USD unless the caller knows better, e.g. the currency
+// the dashboard is showing), matching what an empty sum displayed before.
 //
 // `abs` applies Math.abs to each value, for the call sites that convey sign
 // through colour rather than a minus sign.
-export function formatTotals(totals, { decimals = 2, abs = false } = {}) {
+export function formatTotals(totals, { decimals = 2, abs = false, emptyCurrency } = {}) {
   const list = toTotalsList(totals);
-  if (list.length === 0) return formatMoney(0, DEFAULT_CURRENCY, decimals);
+  if (list.length === 0) return formatMoney(0, emptyCurrency || DEFAULT_CURRENCY, decimals);
   return list
     .map(({ currency, amount }) => formatMoney(abs ? Math.abs(amount) : amount, currency, decimals))
     .join(' · ');
