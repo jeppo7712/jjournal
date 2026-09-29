@@ -323,6 +323,7 @@ export default function Settings() {
       { host: '', port: '7497' }
     ],
     ibkrDataAddress: { host: '', port: '4004' },
+    ibkrGatewayCommandAddress: { host: '', port: '7462' },
     // Separate Flex credentials per paper-vs-real — see
     // docs/CAPITAL_TRACKING_DESIGN.md and routes/ibkr.js. Which set a given
     // Flex fetch uses is decided by the account's own is_virtual, not a
@@ -463,6 +464,10 @@ export default function Settings() {
             host: data.ibkrDataAddresses?.[0]?.host || '',
             port: String(data.ibkrDataAddresses?.[0]?.port || '4004'),
           },
+          ibkrGatewayCommandAddress: {
+            host: data.ibkrGatewayCommandAddress?.host || '',
+            port: String(data.ibkrGatewayCommandAddress?.port || '7462'),
+          },
           ibkrFlexQueryIdActivityReal: data.ibkrFlexQueryIdActivityReal || '',
           ibkrFlexQueryIdTradeConfReal: data.ibkrFlexQueryIdTradeConfReal || '',
           ibkrFlexQueryIdActivityPaper: data.ibkrFlexQueryIdActivityPaper || '',
@@ -564,6 +569,13 @@ export default function Settings() {
           host: (settings.ibkrDataAddress.host || '').trim(),
           port: settings.ibkrDataAddress.port ? parseInt(settings.ibkrDataAddress.port, 10) : 4004,
         }];
+      }
+      if (settings.ibkrGatewayCommandAddress) {
+        // An empty address switches the auto-reconnect off.
+        const host = (settings.ibkrGatewayCommandAddress.host || '').trim();
+        body.ibkrGatewayCommandAddress = host
+          ? { host, port: settings.ibkrGatewayCommandAddress.port ? parseInt(settings.ibkrGatewayCommandAddress.port, 10) : 7462 }
+          : null;
       }
       if (Object.keys(body).length === 0) {
         alert('No changes to save.');
@@ -2084,6 +2096,40 @@ export default function Settings() {
                   className={styles.inputBubble}
                   autoComplete="off"
                   placeholder="4004"
+                  min="1024"
+                  max="65535"
+                />
+              </div>
+            </div>
+            <h4 style={{ marginTop: '20px', marginBottom: 6 }}>Gateway auto-reconnect (Optional)</h4>
+            <p style={{ color: '#9CA3AF', fontSize: '0.82rem', marginTop: 0, marginBottom: 14 }}>
+              IB Gateway can stay connected while no longer answering historical-data requests
+              (the HIS light turns red). If it runs with IBC's command server enabled, the journal
+              then asks it to reconnect (RECONNECTDATA), at most every 15 minutes. Enter IBC's
+              command server here; leave empty to switch this off. See docs/SETUP.md for the IBC side.
+            </p>
+            <div className={styles.formGrid}>
+              <div className={styles.formField}>
+                <label htmlFor="ibkrGatewayCommandHost">Command server address</label>
+                <input
+                  id="ibkrGatewayCommandHost"
+                  value={settings.ibkrGatewayCommandAddress.host}
+                  onChange={(e) => setSettings(prev => ({ ...prev, ibkrGatewayCommandAddress: { ...prev.ibkrGatewayCommandAddress, host: e.target.value } }))}
+                  className={styles.inputBubble}
+                  autoComplete="off"
+                  placeholder="e.g., ib-gateway"
+                />
+              </div>
+              <div className={styles.formField}>
+                <label htmlFor="ibkrGatewayCommandPort">Port</label>
+                <input
+                  id="ibkrGatewayCommandPort"
+                  type="number"
+                  value={settings.ibkrGatewayCommandAddress.port}
+                  onChange={(e) => setSettings(prev => ({ ...prev, ibkrGatewayCommandAddress: { ...prev.ibkrGatewayCommandAddress, port: e.target.value } }))}
+                  className={styles.inputBubble}
+                  autoComplete="off"
+                  placeholder="7462"
                   min="1024"
                   max="65535"
                 />
