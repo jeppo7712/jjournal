@@ -292,6 +292,9 @@ apiRouter.get('/config/status', async (req, res) => {
       // Optional separate connection for historical data (e.g. a headless
       // IB Gateway) — empty means the TWS addresses above are used.
       ibkrDataAddresses: config.ibkrDataAddresses || [{ host: '', port: 4004 }],
+      // Optional IBC command server for the auto-reconnect (see
+      // modules/ibkr-gateway-command.js); null when not set.
+      ibkrGatewayCommandAddress: config.ibkrGatewayCommandAddress || null,
       ibkrConnected: ibkr.isIbkrConnected(),
       ibkrDataConnected: ibkr.data.isIbkrConnected(),
       status: db.getIsConnected() ? 'Connected' : config.databaseUrl ? 'Connection failed' : 'Not configured',
@@ -360,7 +363,7 @@ apiRouter.get('/config/logs', async (req, res) => {
 
 apiRouter.post('/config', async (req, res) => {
   const {
-    databaseUrl, port, ibkrAddresses, ibkrDataAddresses,
+    databaseUrl, port, ibkrAddresses, ibkrDataAddresses, ibkrGatewayCommandAddress,
     ibkrFlexTokenReal, ibkrFlexQueryIdActivityReal, ibkrFlexQueryIdTradeConfReal,
     ibkrFlexTokenPaper, ibkrFlexQueryIdActivityPaper, ibkrFlexQueryIdTradeConfPaper,
     tradingViewWebhookSecret,
@@ -397,6 +400,10 @@ apiRouter.post('/config', async (req, res) => {
     // Other settings that don't require a restart
     if (ibkrAddresses) config.ibkrAddresses = ibkrAddresses;
     if (ibkrDataAddresses) config.ibkrDataAddresses = ibkrDataAddresses;
+    if (ibkrGatewayCommandAddress !== undefined) {
+      if (ibkrGatewayCommandAddress && ibkrGatewayCommandAddress.host) config.ibkrGatewayCommandAddress = ibkrGatewayCommandAddress;
+      else delete config.ibkrGatewayCommandAddress;
+    }
     if (ibkrFlexTokenReal !== undefined) config.ibkrFlexTokenReal = ibkrFlexTokenReal;
     if (ibkrFlexQueryIdActivityReal !== undefined) config.ibkrFlexQueryIdActivityReal = ibkrFlexQueryIdActivityReal;
     if (ibkrFlexQueryIdTradeConfReal !== undefined) config.ibkrFlexQueryIdTradeConfReal = ibkrFlexQueryIdTradeConfReal;
