@@ -153,6 +153,7 @@ async function startServer(newPort) {
 
     if (config.databaseUrl && config.databaseUrl.startsWith('postgresql://')) {
       await db.connectDatabase(config.databaseUrl, broadcastStatus, uuidv4);
+      if (db.getIsConnected()) await tradingViewStatus.seedFromDatabase(db.getPool());
     } else {
       broadcastStatus(uuidv4(), 'No valid database URL configured', 'warning');
       logger.warn('⚠️ No valid database URL configured. Waiting for configuration via /api/config');
@@ -216,6 +217,7 @@ app.use('/api/external/v1', externalRouter);
 // app meant to be reachable from the public internet (a tunnel scoped to
 // just this path), so it has its own secret-based auth rather than relying
 // on "trusted network" like the rest of the external API.
+const tradingViewStatus = require('./modules/tradingview-status.js');
 const tradingViewWebhookRouter = require('./routes/tradingview-webhook.js')(db, configManager, broadcastStatus, uuidv4, wss, WebSocket);
 app.use('/api/webhooks', tradingViewWebhookRouter);
 
@@ -300,7 +302,13 @@ apiRouter.get('/config/status', async (req, res) => {
       ibkrFlexTokenRealSet: !!config.ibkrFlexTokenReal,
       ibkrFlexQueryIdActivityPaper: config.ibkrFlexQueryIdActivityPaper || '',
       ibkrFlexQueryIdTradeConfPaper: config.ibkrFlexQueryIdTradeConfPaper || '',
-      ibkrFlexTokenPaperSet: !!config.ibkrFlexTokenPaper
+      ibkrFlexTokenPaperSet: !!config.ibkrFlexTokenPaper,
+      // For the TradingView light in the navigation: whether the webhook is
+      // set up at all, and when it last delivered a bar.
+      tradingView: {
+        configured: !!config.tradingViewWebhookSecret,
+        lastBar: tradingViewStatus.getLastBar(),
+      },
     });
   } catch (err) {
     broadcastStatus(uuidv4(), `Error fetching config status: ${err.message}`, 'error');

@@ -15,6 +15,13 @@ import { debounce } from 'lodash';
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
 
+// "-€1.16" for the P&L chart: two decimals (axis steps like -0.4 otherwise
+// print as -0.4000000000000001) and the minus before the currency mark.
+const signedMoney = (value, currency) => {
+  const n = Number(value) || 0;
+  return `${n < 0 ? '-' : ''}${currencyMark(currency)}${Math.abs(n).toFixed(2)}`;
+};
+
 const formatCustomDate = (date) => {
   if (!date) return '';
   const dt = typeof date === 'string' ? DateTime.fromISO(date) : DateTime.fromJSDate(date);
@@ -583,7 +590,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
           },
           // The axis is in whichever currency the chart is showing, so the
           // mark has to follow it rather than always saying dollars.
-          callback: value => `${currencyMark(displayedChartCurrency)}${value}`,
+          callback: value => signedMoney(value, displayedChartCurrency),
         },
         grid: { // Added to hide y-axis grid lines
           display: false
@@ -596,6 +603,9 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       },
       tooltip: {
         enabled: false
+      },
+      verticalLine: {
+        currency: displayedChartCurrency,
       },
     },
   };
@@ -653,7 +663,10 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
 
         // Draw P&L value (top)
         ctx.textBaseline = 'bottom';
-        const pnlText = `${currencyMark(displayedChartCurrency)}${pnlValue.toFixed(2)}`;
+        // The currency comes from the chart's options, not this closure:
+        // Chart.js keeps the first plugin registered under an id, so a value
+        // captured here would stay whatever the first render showed.
+        const pnlText = signedMoney(pnlValue, pluginOptions && pluginOptions.currency);
         const pnlY = chartArea.top - 5;
         ctx.fillText(pnlText, textXPos, pnlY);
 
@@ -779,8 +792,8 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       { label: 'WASH', value: stats.wash, pct: stats.totalTrades ? Math.round((stats.wash / stats.totalTrades) * 100) + '%' : '0%', color: '#A5ADBA', onClick: () => toggleFilter('WASH'), filterValue: 'WASH' },
     ],
     [
-      { label: 'AVG W', value: formatTotals(stats.avgWinByCurrency, { decimals: 0, abs: true }), totals: stats.avgWinByCurrency, decimals: 0, abs: true, pct: (stats.avgWinPct ?? 0).toFixed(0) + '%', color: '#22C55E' },
-      { label: 'AVG L', value: formatTotals(stats.avgLossByCurrency, { decimals: 0, abs: true }), totals: stats.avgLossByCurrency, decimals: 0, abs: true, pct: (stats.avgLossPct ?? 0).toFixed(0) + '%', color: '#EF4444' },
+      { label: 'AVG W', value: formatTotals(stats.avgWinByCurrency, { decimals: 0, abs: true, emptyCurrency: displayedChartCurrency }), totals: stats.avgWinByCurrency, decimals: 0, abs: true, pct: (stats.avgWinPct ?? 0).toFixed(0) + '%', color: '#22C55E' },
+      { label: 'AVG L', value: formatTotals(stats.avgLossByCurrency, { decimals: 0, abs: true, emptyCurrency: displayedChartCurrency }), totals: stats.avgLossByCurrency, decimals: 0, abs: true, pct: (stats.avgLossPct ?? 0).toFixed(0) + '%', color: '#EF4444' },
     ],
   ].map((row) => {
     // Every row is one side-by-side pair, so both boxes in it share a line
@@ -835,7 +848,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
 
   const realisedPnlStat = {
     label: 'R P&L',
-    value: formatTotals(totalRealisedPnlByCurrency, { abs: true }),
+    value: formatTotals(totalRealisedPnlByCurrency, { abs: true, emptyCurrency: displayedChartCurrency }),
     totals: totalRealisedPnlByCurrency,
     abs: true,
     // Box-level colour, which with several currencies only shows through on
@@ -857,7 +870,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
   };
   const unrealisedPnlStat = {
     label: 'U P&L',
-    value: formatTotals(unrealisedPnlByCurrency, { abs: true }),
+    value: formatTotals(unrealisedPnlByCurrency, { abs: true, emptyCurrency: displayedChartCurrency }),
     totals: unrealisedPnlByCurrency,
     abs: true,
     color: signColour(unrealisedPnlByCurrency),

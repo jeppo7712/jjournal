@@ -5,6 +5,26 @@ import styles from './Navigation.module.css';
 import { formatMoney } from '../../utils/formatMoney';
 import { sumByCurrency, mergeTotals, toTotalsList } from '../../utils/currencyTotals';
 
+// The TradingView light: green while alerts keep delivering bars, amber once
+// they've stopped for longer than a couple of bars (normal when the market is
+// closed), hidden when the webhook isn't set up at all.
+const TIMEFRAME_MINUTES = { '1M': 1, '5M': 5, '15M': 15, '1H': 60, '4H': 240, '1D': 1440, '1W': 10080 };
+
+function describeTradingViewLight(status) {
+  if (!status || !status.configured) return null;
+  const bar = status.lastBar;
+  if (!bar) return { color: '#6b7280', title: 'TradingView: no bars received yet' };
+  const ageMinutes = (Date.now() - new Date(bar.receivedAt).getTime()) / 60000;
+  const allowedMinutes = Math.max(5, 2 * (TIMEFRAME_MINUTES[bar.timeframe] || 1));
+  const age = ageMinutes < 60 ? `${Math.max(0, Math.round(ageMinutes))} min`
+    : ageMinutes < 48 * 60 ? `${Math.round(ageMinutes / 60)} h`
+    : `${Math.round(ageMinutes / 1440)} days`;
+  const what = `${bar.symbol} ${bar.timeframe}`;
+  return ageMinutes <= allowedMinutes
+    ? { color: '#0d8050', title: `TradingView: receiving bars (last ${what}, ${age} ago)` }
+    : { color: '#d97706', title: `TradingView: no bars for ${age} (last ${what}). Fine while the market is closed; otherwise check the alert.` };
+}
+
 const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
   const { stats, accounts, currentAccountId, setCurrentAccountId, trades, fetchProcessedTradesForAccount, holdings } = useContext(TradeContext);
   const { statusLogs } = useStatus();
@@ -26,6 +46,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
   const logoPopupRef = useRef(null); //
   const statusPopupRef = useRef(null); //
   const statusBoxTriggerRef = useRef(null); // Renamed for clarity, ref for the status trigger area //
+  const [tradingViewStatus, setTradingViewStatus] = useState(null);
 
   useEffect(() => {
     // WebSocket connection is handled by StatusProvider.
@@ -38,12 +59,16 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
         }
         const data = await response.json();
         setIsDatabaseConnected(data.isConnected);
+        setTradingViewStatus(data.tradingView || null);
       } catch (err) {
         console.error('Error fetching database status:', err);
         setIsDatabaseConnected(false);
       }
     };
     fetchDbStatus();
+    // Polled so the TradingView light goes stale on its own when bars stop.
+    const timer = setInterval(fetchDbStatus, 60 * 1000);
+    return () => clearInterval(timer);
   }, []); //
 
   // Cash + Total Portfolio are unfiltered account snapshots (same nature as
@@ -180,6 +205,8 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
     e.stopPropagation(); //
     setShowActionPopup(!showActionPopup); //
   };
+
+  const tradingViewLight = describeTradingViewLight(tradingViewStatus);
 
   const handleStatusTriggerClick = () => {
     setShowStatusPopup(true);
@@ -333,10 +360,21 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
       >
         <div className={styles.statusHeader}>
           <span className={styles.statusLabel}>Status</span>
-          <div
-            className={styles.statusIndicator}
-            style={{ backgroundColor: isDatabaseConnected ? '#0d8050' : '#b32424' }} //
-          ></div>
+          <div className={styles.statusLights}>
+            {tradingViewLight && (
+              <span className={styles.statusLight} title={tradingViewLight.title}>
+                <span className={styles.statusLightLabel}>TV</span>
+                <div className={styles.statusIndicator} style={{ backgroundColor: tradingViewLight.color }}></div>
+              </span>
+            )}
+            <span className={styles.statusLight} title={isDatabaseConnected ? 'Database connected' : 'Database not connected'}>
+              <span className={styles.statusLightLabel}>DB</span>
+              <div
+                className={styles.statusIndicator}
+                style={{ backgroundColor: isDatabaseConnected ? '#0d8050' : '#b32424' }} //
+              ></div>
+            </span>
+          </div>
         </div>
         {/* Removed the logList div to free up space */}
       </div>
