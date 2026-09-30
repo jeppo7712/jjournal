@@ -209,11 +209,20 @@ function filterAndMapExecutions(rawTrades, symbol, effectiveType, identity = nul
   // (e.g. "MNQU6" for a Sept 2026 MNQ contract), not the bare root "MNQ".
   // Match on: exact symbol, symbol starting with the root, or a separate
   // underlyingSymbol field if the query happens to include it.
+  //
+  // A bare prefix match was too loose: "SI" (silver) also took "SILZ5"
+  // (micro silver) fills. After the root, a futures symbol may only
+  // continue with a contract code (month letter + year digits, "U6"/"U26")
+  // or a space-separated expiry ("MNQ   SEP26"). Stocks match exactly.
+  const FUTURES_CONTRACT_SUFFIX = /^([FGHJKMNQUVXZ]\d{1,2}|\s.*)$/;
   const matchesSymbol = (t) => {
     if (effectiveType === 'STK' && identity) return isSameStockListing(identity, t);
     const rawSymbol = String(t.symbol || '').toUpperCase();
     const underlying = String(t.underlyingSymbol || '').toUpperCase();
-    return rawSymbol === upperSymbol || rawSymbol.startsWith(upperSymbol) || underlying === upperSymbol;
+    if (rawSymbol === upperSymbol || underlying === upperSymbol) return true;
+    return effectiveType === 'FUT'
+      && rawSymbol.startsWith(upperSymbol)
+      && FUTURES_CONTRACT_SUFFIX.test(rawSymbol.slice(upperSymbol.length));
   };
 
   // Only enforce the assetCategory check if the query actually includes that
