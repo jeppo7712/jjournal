@@ -810,7 +810,20 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
       )}
 
       <div className={styles.statsContainer}>
-        <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: 2, marginBottom: 8 }}>
+        {/* Selectors and tabs stay at the top together while the tab's
+            content scrolls under them. */}
+        <div className={styles.stickyHeader}>
+        <div className={styles.scopeControls}>
+          {/* Phones pick the tab here: one line instead of rows of tab
+              buttons taking half the screen (see .tabSelect). */}
+          <select
+            className={styles.tabSelect}
+            value={currentTab}
+            onChange={e => setCurrentTab(e.target.value)}
+            aria-label="Stats section"
+          >
+            {tabs.map(tab => <option key={tab.id} value={tab.id}>{tab.label}</option>)}
+          </select>
           {availableCurrencies.length > 1 && (
             <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
               <span style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>Currency</span>
@@ -830,7 +843,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
             <span style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>Timezone</span>
             <TimezonePicker value={displayTimezone} onChange={setDisplayTimezone} options={STATS_TIMEZONE_OPTIONS} />
           </div>
-          <span style={{ color: '#A5ADBA', fontSize: '0.75em', opacity: 0.8, maxWidth: 420, textAlign: 'right' }}>
+          <span className={styles.timezoneHint} style={{ color: '#A5ADBA', fontSize: '0.75em', opacity: 0.8, maxWidth: 420, textAlign: 'right' }}>
             Applies to hour-of-day / calendar-day views (Hourly Analysis, Trading Activity Heatmap, Calendar). Trades span many symbols here, so times use this one zone rather than each instrument's own exchange.
           </span>
         </div>
@@ -844,6 +857,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
               {tab.label}
             </button>
           ))}
+        </div>
         </div>
         <div className={styles.tabContent}>
           {currentTab === 'calendar' && (

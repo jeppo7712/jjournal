@@ -97,24 +97,28 @@ function isFormDirty(form, actions, tags, notes, confidence, executionRating, at
 // desktop size regardless of viewport — fine for one row of buttons, but
 // this modal's footer can have up to 5 of them stacked, and full-size made
 // each one take a disproportionate share of a phone screen's height.
-function BubbleButton({ children, onClick, color = '#3B82F6', disabled, small, ...rest }) {
+function BubbleButton({ children, onClick, color = '#3B82F6', disabled, small, style, ...rest }) {
   return (
     <button
       className={styles.saveBtn}
       style={small ? {
         background: color,
         borderRadius: 12,
-        padding: '7px 14px',
-        fontSize: '0.9rem',
+        padding: '10px 8px',
+        minHeight: 44,
+        fontSize: '0.95rem',
+        whiteSpace: 'nowrap',
         opacity: disabled ? 0.5 : 1,
-        cursor: disabled ? 'not-allowed' : 'pointer'
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        ...style,
       } : {
         background: color,
         marginRight: 10,
         borderRadius: 18,
         padding: '10px 24px',
         opacity: disabled ? 0.5 : 1,
-        cursor: disabled ? 'not-allowed' : 'pointer'
+        cursor: disabled ? 'not-allowed' : 'pointer',
+        ...style,
       }}
       onClick={onClick}
       disabled={disabled}
@@ -979,14 +983,18 @@ export default function TradeModal({ trade, onClose }) {
           // the bar is showing — enough to push the footer's Save/Delete
           // buttons below the fold, outside the modal's own overflow:hidden
           // clip, genuinely unreachable rather than just requiring a scroll.
-          // --vh (set in public/index.html from window.innerHeight, updated
-          // on resize) is this app's existing fix for that; .app/html/body
-          // already use it the same way in styles.css.
-          height: 'calc(var(--vh, 1vh) * 100)',
+          // --app-height (styles.css) is the visible height, or the real
+          // screen height in the iPhone home-screen app; .app/html/body use
+          // it the same way.
+          height: 'var(--app-height)',
           maxHeight: 'none',
           maxWidth: 'none',
           overflow: 'hidden',
           borderRadius: 0,
+          // Clear of the status bar (see styles.css); the footer keeps
+          // clear of the home indicator itself, in its own colour.
+          paddingTop: 'var(--app-top)',
+          boxSizing: 'border-box',
         } : {
           display: 'flex',
           flexDirection: 'column',
@@ -1000,7 +1008,7 @@ export default function TradeModal({ trade, onClose }) {
         <div className={styles.headerRow}>
           <span className={styles.title}>{isEditMode ? 'Edit Trade' : 'New Trade'}</span>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-            <span style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>
+            <span className={styles.headerTzLabel} style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>
               Timezone
             </span>
             <TimezonePicker value={displayTimezone} onChange={setDisplayTimezone} />
@@ -1285,8 +1293,31 @@ export default function TradeModal({ trade, onClose }) {
             </div>
           )}
         </div>
+        {isMobile ? (
+          // Phone: two tidy rows instead of five buttons wrapping wherever
+          // they happen to fit. Short labels so three fit side by side.
+          <div className={styles.footerRow} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, padding: '10px 12px calc(10px + var(--safe-bottom))' }}>
+            <BubbleButton onClick={() => fetchIBKRData(true)} disabled={!form.symbol || ibkrLoading} color="#6366F1" small title="Fetch the fills from IBKR Flex">
+              {ibkrLoading && ibkrSource === 'flex' ? 'Loading…' : 'IBKR Flex'}
+            </BubbleButton>
+            <BubbleButton onClick={() => fetchIBKRData(false)} disabled={!form.symbol || ibkrLoading} color="#10B981" small title="Fetch the fills from TWS (fallback)">
+              {ibkrLoading && ibkrSource === 'tws' ? 'Loading…' : 'TWS'}
+            </BubbleButton>
+            <BubbleButton onClick={() => setShowFormChart(prev => !prev)} disabled={!form.symbol} color="#F59E0B" small title="See the price action around your fills">
+              {showFormChart ? 'Hide Chart' : 'Chart'}
+            </BubbleButton>
+            {isEditMode && (
+              <BubbleButton onClick={() => setShowDeletePopup(true)} color="#EF4444" small>
+                Delete
+              </BubbleButton>
+            )}
+            <BubbleButton onClick={saveTrade} disabled={!canSave} color="#3B82F6" small style={{ gridColumn: isEditMode ? 'span 2' : 'span 3' }}>
+              Save
+            </BubbleButton>
+          </div>
+        ) : (
         <div className={styles.footerRow}>
-          <div style={{ marginRight: 'auto', display: 'flex', flexWrap: isMobile ? 'wrap' : 'nowrap', gap: 10 }}>
+          <div style={{ marginRight: 'auto', display: 'flex', flexWrap: 'nowrap', gap: 10 }}>
             <BubbleButton
               onClick={() => fetchIBKRData(true)}
               disabled={!form.symbol || ibkrLoading}
@@ -1325,6 +1356,7 @@ export default function TradeModal({ trade, onClose }) {
             Save
           </BubbleButton>
         </div>
+        )}
         </div>
         {showFormChart && !isMobile && (
           <TradeFormChart

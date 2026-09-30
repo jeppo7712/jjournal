@@ -1657,7 +1657,7 @@ useEffect(() => {
         <div className={styles.headerRow}>
           <span className={styles.title}>Trade View</span>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-            <span style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>
+            <span className={styles.headerTzLabel} style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>
               Timezone
             </span>
             <TimezonePicker value={displayTimezone} onChange={setDisplayTimezone} />

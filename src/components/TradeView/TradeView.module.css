@@ -867,10 +867,17 @@
     min-width: 100vw;
     width: 100vw;
     max-width: 100vw;
-    height: 100vh;
-    max-height: 100vh;
+    /* Not 100vh: with Safari's address bar showing, 100vh is taller than
+       what's visible and the footer (Edit) ends up behind the toolbar. */
+    height: calc(var(--vh, 1vh) * 100);
+    height: var(--app-height);
+    max-height: none;
     border-radius: 0;
     margin: 0;
+    /* Clear of the status bar (see styles.css); the footer keeps clear of
+       the home indicator itself, in its own colour. */
+    padding-top: var(--app-top);
+    box-sizing: border-box;
   }
 
   .timelineBar {
@@ -911,7 +918,7 @@
   }
 
   .footerRow {
-    padding: 10px 16px;
+    padding: 10px 16px calc(10px + var(--safe-bottom));
     flex-wrap: wrap;
     gap: 8px;
     border-radius: 0;
@@ -1080,5 +1087,25 @@
 
   .starsInline .star {
     font-size: 0.9em;
+  }
+}
+/* Phones: the time zone picker without its caption, so title, picker and
+   close button fit one line (the picker's value already says what it is). */
+@media (max-width: 600px) {
+  .headerTzLabel {
+    display: none;
+  }
+
+  .headerRow {
+    align-items: center;
+  }
+}
+
+/* iPhone home-screen app: cover the real screen height (iOS 26 reports the
+   viewport shorter; see --app-height in styles.css). */
+@media (max-width: 700px) and (display-mode: standalone) {
+  .overlay {
+    bottom: auto;
+    height: var(--app-height);
   }
 }

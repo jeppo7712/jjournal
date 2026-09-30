@@ -50,9 +50,11 @@
   flex-shrink: 0; /* Important for mobile scrolling */
 }
 
-.tabButton:hover {
-  background-color: #262B39;
-  color: #ffffff;
+@media (hover: hover) {
+  .tabButton:hover {
+    background-color: #262B39;
+    color: #ffffff;
+  }
 }
 
 .tabButton.activeTab {
@@ -684,6 +686,44 @@
 }
 
 @media (max-width: 600px) {
+  /* A section dropdown instead of eight tab buttons: one compact line that
+     stays at the top (the row is sticky) instead of rows of buttons. */
+  .tabsRow {
+    /* Also covers .main-content's top padding, or content showed through
+       a thin strip above the bar while scrolling. */
+    top: -6px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+  }
+
+  .tabButton {
+    display: none;
+  }
+
+  .tabSelect {
+    display: block;
+    width: 100%;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #3B82F6 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23fff"><path d="M5.3 7.3a1 1 0 011.4 0L10 10.6l3.3-3.3a1 1 0 111.4 1.4l-4 4a1 1 0 01-1.4 0l-4-4a1 1 0 010-1.4z"/></svg>') no-repeat right 12px center / 16px;
+    color: #fff;
+    border: none;
+    border-radius: 18px;
+    padding: 8px 36px 8px 16px;
+    font-size: 15px;
+    font-weight: 600;
+  }
+
+  /* Action buttons (e.g. Historical Data's three global actions) wrap
+     instead of running past the panel's edge. */
+  .buttonContainer {
+    flex-wrap: wrap;
+  }
+
+  .buttonContainer > button {
+    flex: 1 1 140px;
+  }
+
   .settings {
     padding: 5px;
     /* REMOVED: Redundant padding, now handled by .main-content */
@@ -712,5 +752,11 @@
   .treeNodeChildren {
     margin-left: 8px;
     padding-left: 8px;
+  }
+}
+/* Only on phones (see the 600px rules) */
+@media (min-width: 601px) {
+  .tabSelect {
+    display: none;
   }
 }
