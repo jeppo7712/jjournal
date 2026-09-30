@@ -191,7 +191,10 @@ function createConnection({ name, clientId, resolveAddresses }) {
                 logger.error(`${tag} [Persistent Error Handler] Error: ${err.message} (Code: ${code}, ReqId: ${localRequestId})`);
                 broadcastStatus(errSourceId, `IBKR Connection Error: ${err.message} (Code: ${code})`, 'error');
 
-                if (code === 502 || code === 504 || code === 509 || code === 1100 || code === 2104 || code === 2106 || code === 2158) {
+                // 2104/2106/2158 ("data farm connection is OK") used to be
+                // listed here too. They're good news, and @stoqey/ib sends
+                // every 2100-2999 code on EventName.info, never here.
+                if (code === 502 || code === 504 || code === 509 || code === 1100) {
                   logger.error(`${tag} [Persistent Error Handler] Critical error ${code} received. Disconnecting and nullifying ibApi.`);
                   if (ibApi) {
                     try { ibApi.disconnect(); } catch (e) { /* ignore */ }

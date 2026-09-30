@@ -198,6 +198,11 @@ function formatDurationForIBKR(duration) {
 // `accept` (optional) picks among several matches: IBKR returns one
 // contract per listing for a SMART-routed stock lookup, and only the first
 // one it accepts is returned. Without it, the first match wins, as before.
+// TWS error codes (sent with request id -1) meaning the API connection
+// itself is gone or unusable: 502 couldn't connect, 504 not connected,
+// 1100 connectivity between TWS and IBKR lost, 1300 socket port reset.
+const CONNECTION_LOST_CODES = new Set([502, 504, 1100, 1300]);
+
 async function validateContract(contract, taskId, cancellationSignal = null, broadcastStatus, accept = null) {
     return new Promise((resolve, reject) => {
         const ibApi = ibkr.getIbApi();
@@ -267,7 +272,11 @@ async function validateContract(contract, taskId, cancellationSignal = null, bro
         };
 
         const specificErrorHandler = (err, code, id) => {
-            if (id === ibReqId || id === -1) {
+            // id -1 is a connection-level message, not about this request:
+            // only the ones meaning the connection itself is gone should fail
+            // the lookup (otherwise one such message failed every lookup in
+            // flight at once).
+            if (id === ibReqId || (id === -1 && CONNECTION_LOST_CODES.has(code))) {
                 const fullError = new Error(`Contract validation failed for ibReqId ${ibReqId}: ${err.message} (code ${code})`);
                 // Add contract info to the error for better debugging in the catch block
                 fullError.contract = contract; 
@@ -404,6 +413,9 @@ async function generateContractChain(symbol, exchange, requiredStartDate, taskId
         }));
 
     } catch (error) {
+        // A cancellation must reach the caller as one, not as "no
+        // contracts found" (which made it log a misleading warning).
+        if (cancellationSignal?.aborted) throw error;
         // This catch block is a safety net but the logic above should prevent it from being hit by a single failed validation.
         logger.error(`[populate][${taskId}] A critical error occurred in generateContractChain for ${symbol}: ${error.message}`);
         // Do not re-throw, allow the function to return whatever contracts were found.

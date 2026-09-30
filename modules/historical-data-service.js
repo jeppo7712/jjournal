@@ -363,12 +363,14 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
         // backfilled by Yahoo/IBKR again. Keeping this scoped to Yahoo/IBKR's
         // own bars means their recency is judged only by their own last
         // successful fetch, so a real gap always eventually gets retried.
-        const { rows: existingDataRows } = await db.getPool().query(
-            `SELECT time, source, contract_month FROM historical_data
+        // Only the first/last bar times are needed — selecting every bar
+        // here used to ship the whole series (close to a million rows for a
+        // well-backfilled 1-minute symbol) to Node on every task.
+        const { rows: [existingRange] } = await db.getPool().query(
+            `SELECT MIN(time) AS earliest, MAX(time) AS latest FROM historical_data
         WHERE futures_setting_id = $1 AND timeframe = $2 AND is_continuous = FALSE
              AND (contract_month = $3 OR ($3 IS NULL AND contract_month IS NULL))
-             AND source != 'TradingView'
-             ORDER BY time ASC`,
+             AND source != 'TradingView'`,
             [futuresSettingId, timeframe, contractMonth]
         );
 
@@ -378,8 +380,8 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
         let isRecencyFetchOnly = false;
         let needsDataPopulation = false;
 
-        const earliestTimeInDb = existingDataRows.length > 0 ? DateTime.fromJSDate(existingDataRows[0].time, { zone: 'utc' }).setZone(exchangeTimezone) : null;
-        const latestTimeInDb = existingDataRows.length > 0 ? DateTime.fromJSDate(existingDataRows[existingDataRows.length - 1].time, { zone: 'utc' }).setZone(exchangeTimezone) : null;
+        const earliestTimeInDb = existingRange.earliest ? DateTime.fromJSDate(existingRange.earliest, { zone: 'utc' }).setZone(exchangeTimezone) : null;
+        const latestTimeInDb = existingRange.latest ? DateTime.fromJSDate(existingRange.latest, { zone: 'utc' }).setZone(exchangeTimezone) : null;
         const DURATION_MET_TOLERANCE_BARS = 3; // Allow up to 3 bars of tolerance at the start
         const barIntervalDuration = getTimeframeDuration(timeframe); // Your existing helper
         const toleranceDuration = Duration.fromMillis(barIntervalDuration.toMillis() * DURATION_MET_TOLERANCE_BARS);
@@ -397,7 +399,7 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
         let yahooFetchConfig = { isRecencyOnly: false, scanUntil: requiredStartDateForDuration };
         let ibkrFetchConfig = { isRecencyOnly: false, scanUntil: requiredStartDateForDuration };
         const recencyThreshold = lastMarketActivityTime.startOf(barIntervalUnitMap[timeframe]); // Calculate recency threshold here
-        const hasAnyData = existingDataRows.length > 0;
+        const hasAnyData = !!existingRange.latest;
 
         // --- Decision Logic ---
 
@@ -596,169 +598,175 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
             }
 
             if (ibkrSuccessfullyInitialized) {
-                let contractsToFetch = [];
+                try {
+                    let contractsToFetch = [];
 
-                // --- Determine Contracts to Fetch from IBKR ---
-                if (type === 'FUT' && contractMonth === null) {
-                    // Continuous Futures: Fetch individual contracts covering the required period
-                    logger.debug(`[populate][${taskId}] Futures (Continuous): Generating contract chain for ${symbol} from ${requiredStartDateForDuration.toISODate()}.`);
-                    try {
-                        // generateContractChain requires IBKR connection, so it must be called AFTER initializeIBKR
-                        contractsToFetch = await generateContractChain(symbol, exchangeName, requiredStartDateForDuration, taskId, broadcastStatus, cancellationSignal, rollover_months, symbolCurrency);
-                        if (contractsToFetch.length === 0) {
-                            logger.warn(`[populate][${taskId}] No relevant individual futures contracts found for ${symbol} covering the required period.`);
-                            broadcastStatus(taskId, `No relevant futures contracts found for ${symbol}.`, 'warning');
-                            // If no contracts found, no IBKR fetch is possible for this continuous symbol.
-                            // No need to set performIBKRCheck = false here, as we are already inside the ibkrSuccessfullyInitialized block.
-                        } else {
-                            logger.debug(`[populate][${taskId}] Found ${contractsToFetch.length} individual contracts for ${symbol}.`);
-                        }
-                    } catch (chainErr) {
-                        logger.error(`[populate][${taskId}] Failed to generate contract chain for ${symbol}: ${chainErr.message}`);
-                        broadcastStatus(taskId, `Failed to get futures contract chain for ${symbol}: ${chainErr.message}`, 'error');
-                        // If chain generation fails, we cannot fetch IBKR data for this symbol/timeframe.
-                        contractsToFetch = []; // Ensure the loop below doesn't run
-                    }
-                } else {
-                    // Specific Futures Contract or Stock: Validate and fetch the single contract
-                    logger.debug(`[populate][${taskId}] Specific Contract (${type}, ${contractMonth || 'N/A'}): Validating contract for ${symbol}.`);
-                    try {
-                        let secTypeResolved = type;
-                        if (type === 'FUT' && contractMonth) {
-                            secTypeResolved = 'FUT'; // Specific future
-                        } else if (type === 'STK') {
-                            secTypeResolved = 'STK'; // Stock
-                        } else {
-                            logger.error(`[populate][${taskId}] Invalid type/contractMonth combination for single contract fetch: type=${type}, contractMonth=${contractMonth}`);
-                            throw new Error("Invalid contract details for single fetch.");
-                        }
-                        // A non-US stock's journal symbol is Yahoo-style (XEON.DE)
-                        // and its exchange a display name (XETRA), neither of
-                        // which IBKR knows: look it up SMART-routed by IBKR's
-                        // own ticker and currency, and take the listing on the
-                        // expected exchange. US stocks and futures are looked
-                        // up as they always were.
-                        const translated = type === 'STK' && ibkrIdentity && ibkrIdentity.translated;
-                        const initialContract = translated
-                            ? { symbol: ibkrIdentity.symbol, secType: 'STK', currency: symbolCurrency || 'USD', exchange: 'SMART' }
-                            : {
-                                symbol: symbol.toUpperCase(),
-                                secType: secTypeResolved,
-                                currency: symbolCurrency || 'USD',
-                                exchange: exchangeName.toUpperCase(),
-                                ...(type === 'FUT' && contractMonth && { lastTradeDateOrContractMonth: contractMonth }),
-                            };
-                        const acceptListing = translated && ibkrIdentity.venues
-                            ? (c) => ibkrIdentity.venues.includes(String(c.primaryExch || '').toUpperCase())
-                            : null;
-                        // validateContract requires IBKR connection, so it must be called AFTER initializeIBKR
-                        let validatedContract;
+                    // --- Determine Contracts to Fetch from IBKR ---
+                    if (type === 'FUT' && contractMonth === null) {
+                        // Continuous Futures: Fetch individual contracts covering the required period
+                        logger.debug(`[populate][${taskId}] Futures (Continuous): Generating contract chain for ${symbol} from ${requiredStartDateForDuration.toISODate()}.`);
                         try {
-                            validatedContract = await validateContract(initialContract, taskId, cancellationSignal, broadcastStatus, acceptListing);
-                        } catch (lookupErr) {
-                            if (!translated || cancellationSignal?.aborted) throw lookupErr;
-                            // IBKR won't SMART-route some listings in their own
-                            // currency (a USD-quoted London ETF like IB01 gives
-                            // "No security definition" for SMART+USD) but does
-                            // find them with the currency left out. Ask again
-                            // that way, holding the currency check ourselves.
-                            const wantCurrency = initialContract.currency;
-                            logger.info(`[populate][${taskId}] SMART lookup of ${ibkrIdentity.symbol} in ${wantCurrency} failed (${lookupErr.message}); retrying without currency.`);
-                            validatedContract = await validateContract(
-                                { symbol: ibkrIdentity.symbol, secType: 'STK', exchange: 'SMART' },
-                                taskId, cancellationSignal, broadcastStatus,
-                                (c) => (!acceptListing || acceptListing(c)) && String(c.currency || '').toUpperCase() === wantCurrency
-                            );
+                            // generateContractChain requires IBKR connection, so it must be called AFTER initializeIBKR
+                            contractsToFetch = await generateContractChain(symbol, exchangeName, requiredStartDateForDuration, taskId, broadcastStatus, cancellationSignal, rollover_months, symbolCurrency);
+                            if (contractsToFetch.length === 0) {
+                                logger.warn(`[populate][${taskId}] No relevant individual futures contracts found for ${symbol} covering the required period.`);
+                                broadcastStatus(taskId, `No relevant futures contracts found for ${symbol}.`, 'warning');
+                                // If no contracts found, no IBKR fetch is possible for this continuous symbol.
+                                // No need to set performIBKRCheck = false here, as we are already inside the ibkrSuccessfullyInitialized block.
+                            } else {
+                                logger.debug(`[populate][${taskId}] Found ${contractsToFetch.length} individual contracts for ${symbol}.`);
+                            }
+                        } catch (chainErr) {
+                            if (cancellationSignal.aborted) throw chainErr;
+                            logger.error(`[populate][${taskId}] Failed to generate contract chain for ${symbol}: ${chainErr.message}`);
+                            broadcastStatus(taskId, `Failed to get futures contract chain for ${symbol}: ${chainErr.message}`, 'error');
+                            // If chain generation fails, we cannot fetch IBKR data for this symbol/timeframe.
+                            contractsToFetch = []; // Ensure the loop below doesn't run
                         }
-                        if (validatedContract) contractsToFetch.push(validatedContract);
-                    } catch (valErr) {
-                        logger.error(`[populate][${taskId}] Failed to validate contract for ${symbol} (${type}, ${contractMonth || 'N/A'}): ${valErr.message}`);
-                        broadcastStatus(taskId, `Failed to validate contract for ${symbol}: ${valErr.message}`, 'error');
-                        contractsToFetch = []; // Ensure the loop below doesn't run
+                    } else {
+                        // Specific Futures Contract or Stock: Validate and fetch the single contract
+                        logger.debug(`[populate][${taskId}] Specific Contract (${type}, ${contractMonth || 'N/A'}): Validating contract for ${symbol}.`);
+                        try {
+                            let secTypeResolved = type;
+                            if (type === 'FUT' && contractMonth) {
+                                secTypeResolved = 'FUT'; // Specific future
+                            } else if (type === 'STK') {
+                                secTypeResolved = 'STK'; // Stock
+                            } else {
+                                logger.error(`[populate][${taskId}] Invalid type/contractMonth combination for single contract fetch: type=${type}, contractMonth=${contractMonth}`);
+                                throw new Error("Invalid contract details for single fetch.");
+                            }
+                            // A non-US stock's journal symbol is Yahoo-style (XEON.DE)
+                            // and its exchange a display name (XETRA), neither of
+                            // which IBKR knows: look it up SMART-routed by IBKR's
+                            // own ticker and currency, and take the listing on the
+                            // expected exchange. US stocks and futures are looked
+                            // up as they always were.
+                            const translated = type === 'STK' && ibkrIdentity && ibkrIdentity.translated;
+                            const initialContract = translated
+                                ? { symbol: ibkrIdentity.symbol, secType: 'STK', currency: symbolCurrency || 'USD', exchange: 'SMART' }
+                                : {
+                                    symbol: symbol.toUpperCase(),
+                                    secType: secTypeResolved,
+                                    currency: symbolCurrency || 'USD',
+                                    exchange: exchangeName.toUpperCase(),
+                                    ...(type === 'FUT' && contractMonth && { lastTradeDateOrContractMonth: contractMonth }),
+                                };
+                            const acceptListing = translated && ibkrIdentity.venues
+                                ? (c) => ibkrIdentity.venues.includes(String(c.primaryExch || '').toUpperCase())
+                                : null;
+                            // validateContract requires IBKR connection, so it must be called AFTER initializeIBKR
+                            let validatedContract;
+                            try {
+                                validatedContract = await validateContract(initialContract, taskId, cancellationSignal, broadcastStatus, acceptListing);
+                            } catch (lookupErr) {
+                                if (!translated || cancellationSignal?.aborted) throw lookupErr;
+                                // IBKR won't SMART-route some listings in their own
+                                // currency (a USD-quoted London ETF like IB01 gives
+                                // "No security definition" for SMART+USD) but does
+                                // find them with the currency left out. Ask again
+                                // that way, holding the currency check ourselves.
+                                const wantCurrency = initialContract.currency;
+                                logger.info(`[populate][${taskId}] SMART lookup of ${ibkrIdentity.symbol} in ${wantCurrency} failed (${lookupErr.message}); retrying without currency.`);
+                                validatedContract = await validateContract(
+                                    { symbol: ibkrIdentity.symbol, secType: 'STK', exchange: 'SMART' },
+                                    taskId, cancellationSignal, broadcastStatus,
+                                    (c) => (!acceptListing || acceptListing(c)) && String(c.currency || '').toUpperCase() === wantCurrency
+                                );
+                            }
+                            if (validatedContract) contractsToFetch.push(validatedContract);
+                        } catch (valErr) {
+                            logger.error(`[populate][${taskId}] Failed to validate contract for ${symbol} (${type}, ${contractMonth || 'N/A'}): ${valErr.message}`);
+                            broadcastStatus(taskId, `Failed to validate contract for ${symbol}: ${valErr.message}`, 'error');
+                            contractsToFetch = []; // Ensure the loop below doesn't run
+                        }
                     }
-                }
 
-                // --- OPTIMIZATION: PARALLEL FETCH LOGIC ---
-                if (contractsToFetch.length > 0) {
-                    logger.debug(`[populate][${taskId}] IBKR is connected. Starting parallel fetch for ${contractsToFetch.length} contracts with concurrency limit of ${IBKR_CONCURRENCY_LIMIT}.`);
-                    let totalUpserted = 0;
+                    // --- OPTIMIZATION: PARALLEL FETCH LOGIC ---
+                    if (contractsToFetch.length > 0) {
+                        logger.debug(`[populate][${taskId}] IBKR is connected. Starting parallel fetch for ${contractsToFetch.length} contracts with concurrency limit of ${IBKR_CONCURRENCY_LIMIT}.`);
+                        let totalUpserted = 0;
 
-                    // Deliberately NOT wrapped in a transaction: this fetch can span
-                    // many contracts and, for 1-minute data, genuinely hours of
-                    // chunked requests (7-day chunks with IBKR's own pacing delay
-                    // between each). Each chunk's storeHistoricalData write commits
-                    // on its own as it succeeds. Wrapping the whole multi-contract
-                    // fetch in one transaction was tried before — it meant a single
-                    // cancellation (e.g. the user opening a different symbol's chart
-                    // partway through, which deliberately aborts whatever background
-                    // task is currently running) rolled back and discarded EVERY
-                    // chunk fetched in that run, not just the interrupted one,
-                    // making real progress on a long 1-minute backfill nearly
-                    // impossible whenever the app is also being used normally.
-                    // Individual chunk writes are idempotent (ON CONFLICT upserts),
-                    // so committing them independently is safe.
+                        // Deliberately NOT wrapped in a transaction: this fetch can span
+                        // many contracts and, for 1-minute data, genuinely hours of
+                        // chunked requests (7-day chunks with IBKR's own pacing delay
+                        // between each). Each chunk's storeHistoricalData write commits
+                        // on its own as it succeeds. Wrapping the whole multi-contract
+                        // fetch in one transaction was tried before — it meant a single
+                        // cancellation (e.g. the user opening a different symbol's chart
+                        // partway through, which deliberately aborts whatever background
+                        // task is currently running) rolled back and discarded EVERY
+                        // chunk fetched in that run, not just the interrupted one,
+                        // making real progress on a long 1-minute backfill nearly
+                        // impossible whenever the app is also being used normally.
+                        // Individual chunk writes are idempotent (ON CONFLICT upserts),
+                        // so committing them independently is safe.
 
-                    // Create an array of task functions to be executed in parallel
-                    const fetchTasks = contractsToFetch.map(contractDetails => {
-                        return async () => {
-                            if (cancellationSignal.aborted) throw new Error(`Task ${taskId} cancelled before processing IBKR fetch for contract ${contractDetails.conId}.`);
-                            logger.debug(`[populate][${taskId}] Processing IBKR fetch for contract ${contractDetails.lastTradeDateOrContractMonth || 'N/A'} (conId: ${contractDetails.conId})...`);
-                            // Each task will return the result from fetchAndStoreIBKRContractData
-                            // (it acquires its own DB connection internally now —
-                            // see the function definition — rather than sharing
-                            // this task-level client across concurrent contracts)
-                            return await fetchAndStoreIBKRContractData(
-                                futuresSettingId,
-                                contractDetails,
-                                timeframe,
-                                exchangeTimezone,
-                                cancellationSignal,
-                                broadcastStatus,
-                                taskId,
-                                completionCheckTime,
-                                requiredConfig
-                            );
-                        };
-                    });
+                        // Create an array of task functions to be executed in parallel
+                        const fetchTasks = contractsToFetch.map(contractDetails => {
+                            return async () => {
+                                if (cancellationSignal.aborted) throw new Error(`Task ${taskId} cancelled before processing IBKR fetch for contract ${contractDetails.conId}.`);
+                                logger.debug(`[populate][${taskId}] Processing IBKR fetch for contract ${contractDetails.lastTradeDateOrContractMonth || 'N/A'} (conId: ${contractDetails.conId})...`);
+                                // Each task will return the result from fetchAndStoreIBKRContractData
+                                // (it acquires its own DB connection internally now —
+                                // see the function definition — rather than sharing
+                                // this task-level client across concurrent contracts)
+                                return await fetchAndStoreIBKRContractData(
+                                    futuresSettingId,
+                                    contractDetails,
+                                    timeframe,
+                                    exchangeTimezone,
+                                    cancellationSignal,
+                                    broadcastStatus,
+                                    taskId,
+                                    completionCheckTime,
+                                    requiredConfig
+                                );
+                            };
+                        });
 
-                    // Execute tasks with the concurrency manager
-                    const settledResults = await executePromisesWithConcurrency(fetchTasks, IBKR_CONCURRENCY_LIMIT);
+                        // Execute tasks with the concurrency manager
+                        const settledResults = await executePromisesWithConcurrency(fetchTasks, IBKR_CONCURRENCY_LIMIT);
 
-                    // Process the results after all fetches have settled
-                    for (const result of settledResults) {
-                        if (cancellationSignal.aborted) break; // Stop processing results if task was cancelled
+                        // Process the results after all fetches have settled
+                        for (const result of settledResults) {
+                            if (cancellationSignal.aborted) break; // Stop processing results if task was cancelled
 
-                        if (result.status === 'fulfilled') {
-                            const { upsertedCount, earliestTime } = result.value;
-                            if (upsertedCount > 0) {
-                                ibkrDataWasModified = true;
-                                if (earliestTime && (!earliestInvalidationTimestamp || earliestTime < earliestInvalidationTimestamp)) {
-                                    earliestInvalidationTimestamp = earliestTime;
+                            if (result.status === 'fulfilled') {
+                                const { upsertedCount, earliestTime } = result.value;
+                                if (upsertedCount > 0) {
+                                    ibkrDataWasModified = true;
+                                    if (earliestTime && (!earliestInvalidationTimestamp || earliestTime < earliestInvalidationTimestamp)) {
+                                        earliestInvalidationTimestamp = earliestTime;
+                                    }
+                                    totalUpserted += upsertedCount;
                                 }
-                                totalUpserted += upsertedCount;
-                            }
-                        } else {
-                            // The task function itself might throw an error, or fetchAndStoreIBKRContractData might.
-                            const contractDesc = "a contract"; // Hard to know which one without more info in the error
-                            const errorMessage = result.reason instanceof Error ? result.reason.message : String(result.reason);
+                            } else {
+                                // The task function itself might throw an error, or fetchAndStoreIBKRContractData might.
+                                const contractDesc = "a contract"; // Hard to know which one without more info in the error
+                                const errorMessage = result.reason instanceof Error ? result.reason.message : String(result.reason);
 
-                            // Avoid logging cancellation errors as warnings
-                            if (!cancellationSignal.aborted) {
-                                logger.warn(`[populate][${taskId}] IBKR fetch failed for ${contractDesc} in parallel batch: ${errorMessage}`);
-                                broadcastStatus(taskId, `An IBKR fetch failed: ${errorMessage}`, 'warning');
+                                // Avoid logging cancellation errors as warnings
+                                if (!cancellationSignal.aborted) {
+                                    logger.warn(`[populate][${taskId}] IBKR fetch failed for ${contractDesc} in parallel batch: ${errorMessage}`);
+                                    broadcastStatus(taskId, `An IBKR fetch failed: ${errorMessage}`, 'warning');
+                                }
                             }
                         }
+
+                        if (cancellationSignal.aborted) throw new Error(`Task ${taskId} cancelled during parallel IBKR fetch processing.`);
+
+                    } else {
+                        logger.debug(`[populate][${taskId}] No contracts were determined for IBKR fetch for ${symbol} (${timeframe}).`);
                     }
-
-                    if (cancellationSignal.aborted) throw new Error(`Task ${taskId} cancelled during parallel IBKR fetch processing.`);
-
-                } else {
-                    logger.debug(`[populate][${taskId}] No contracts were determined for IBKR fetch for ${symbol} (${timeframe}).`);
-                }
-
-                if (ibkr.isIbkrConnected()) {
-                    logger.debug(`[populate][${taskId}] Attempting to disconnect IBKR after IBKR fetch block.`);
-                    await ibkr.disconnectIBKR();
+                } finally {
+                    // Always give back this task's reference on the shared
+                    // connection — also when the task was cancelled or threw
+                    // partway, which used to leave the count raised for good.
+                    if (ibkr.isIbkrConnected()) {
+                        logger.debug(`[populate][${taskId}] Attempting to disconnect IBKR after IBKR fetch block.`);
+                        await ibkr.disconnectIBKR();
+                    }
                 }
             }
         } // End of performIBKRCheck block
