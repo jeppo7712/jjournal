@@ -160,6 +160,18 @@ function createConnection({ name, clientId, resolveAddresses }) {
               ibApi = currentAttemptIbApi;
               connectionCount = 1;
 
+              // The gateway/TWS closed the connection (e.g. it restarted, or
+              // its nightly auto-restart): forget it, so the next request
+              // connects again instead of using a dead socket.
+              const connectedApi = currentAttemptIbApi;
+              connectedApi.on(EventName.disconnected, () => {
+                if (ibApi !== connectedApi) return;
+                logger.warn(`${tag} Connection closed by ${host}:${port}; will reconnect on the next request.`);
+                ibApi = null;
+                connectionCount = 0;
+                managedAccounts = [];
+              });
+
               // Setup commission report listener
               ibApi.on(EventName.commissionReport, (commissionReport) => {
                 logger.info(`${tag} Commission report received:`, commissionReport);
