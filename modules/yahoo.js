@@ -1,9 +1,9 @@
 const YahooFinance = require('yahoo-finance2').default;
 // yahoo-finance2's constructor unconditionally warns once if the running
 // Node version is below what it now recommends (its own MIN_SUPPORTED_RUNTIMES
-// policy, currently 22.x) — this app runs fine on the Node 20 LTS the
-// Dockerfiles pin, and this warning isn't from anything actually breaking,
-// just noise on every process start. Rather than silence ALL of the
+// policy, currently 22.x). The Dockerfiles pin Node 22, where it shouldn't
+// fire; on an older Node it's just noise on every process start, not a sign
+// of anything breaking. Rather than silence ALL of the
 // library's own warnings (which could hide something real later), pass a
 // logger that only filters this one specific message through to console.warn
 // as normal, matching yahoo-finance2's own default logger shape otherwise
