@@ -12,6 +12,7 @@ let isConnected = false;
  * @param {function} uuidv4 - Function to generate a UUID for request IDs.
  */
 async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
+  let client = null;
   try {
     logger.info('[Database] Connecting to database...');
     pool = new Pool({
@@ -28,12 +29,18 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
       max: 20,
     });
 
-    const client = await pool.connect();
+    client = await pool.connect();
     logger.info('✅ Connected to PostgreSQL database');
 
     // Check current user
     const { rows: userRows } = await client.query('SELECT current_user');
     logger.info(`Current database user: ${userRows[0].current_user}`);
+
+    // All schema creation/migration below runs as one transaction (Postgres
+    // DDL is transactional): a migration that fails partway rolls back
+    // whole, rather than leaving e.g. a constraint dropped but not yet
+    // re-added until the next successful start.
+    await client.query('BEGIN');
 
     // Create symbol_type enum. Postgres has no `CREATE TYPE IF NOT EXISTS`,
     // so on every startup after the very first one this used to just try the
@@ -732,12 +739,23 @@ ON trades (symbol, type, contract_month);
       logger.info('✅ Created default account');
     }
 
+    await client.query('COMMIT');
+    client.release();
+    client = null;
+
     broadcastStatus(uuidv4(), 'Database tables checked/created', 'success');
     isConnected = true;
-    client.release();
 
   } catch (err) {
     isConnected = false;
+    // Must happen before pool.end() below: pg's end() only resolves once
+    // every checked-out client has been released, so a client still held
+    // here made a failed migration hang startup forever.
+    if (client) {
+      await client.query('ROLLBACK').catch(() => {});
+      client.release();
+      client = null;
+    }
     let errorMessage = 'Failed to connect to database';
     if (err.code === '28P01') {
       errorMessage = 'Invalid authentication credentials';

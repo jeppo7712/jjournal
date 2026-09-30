@@ -80,7 +80,12 @@ async function loadConfig() {
  * @param {object} config - The configuration object to save.
  */
 async function saveConfig(config) {
-    await fs.writeFile(CONFIG_FILE, JSON.stringify(config, null, 2));
+    // Written to a temp file and renamed over the real one (an atomic
+    // replace), so a crash mid-write can't leave a truncated config.json
+    // that then fails to parse on the next start.
+    const tmpFile = `${CONFIG_FILE}.tmp`;
+    await fs.writeFile(tmpFile, JSON.stringify(config, null, 2));
+    await fs.rename(tmpFile, CONFIG_FILE);
 }
 
 module.exports = {
