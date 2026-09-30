@@ -1,5 +1,6 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { TradeContext } from '../../context/TradeContext';
+import IconButton from '../common/IconButton';
 
 // Settings → Checklists: each account's Entry and Exit checklist. Every
 // trade's Journal tab shows these as tick boxes (see TradeChecklist), so the
@@ -159,9 +160,14 @@ function ChecklistSettings({ styles, apiBaseUrl }) {
             {message.text}
           </span>
         )}
-        <button type="button" className={styles.actionBtn} onClick={save} disabled={saving || (!isDirty && !newItem.entry.trim() && !newItem.exit.trim())}>
-          {saving ? 'Saving…' : 'Save checklists'}
-        </button>
+        <IconButton
+          icon="check"
+          caption={saving ? 'Saving…' : 'Save'}
+          label="Save the checklists"
+          onClick={save}
+          disabled={!isDirty && !newItem.entry.trim() && !newItem.exit.trim()}
+          busy={saving}
+        />
       </div>
     </div>
   );

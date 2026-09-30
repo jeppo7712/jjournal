@@ -4,6 +4,7 @@ import { useDropzone } from 'react-dropzone';
 import 'react-quill/dist/quill.snow.css';
 import styles from './DayNote.module.css';
 import { TradeContext } from '../../context/TradeContext';
+import IconButton from '../common/IconButton';
 
 const getCurrentDate = () => {
   const now = new Date();
@@ -463,17 +464,14 @@ export default function DayNote({ note, onClose }) {
           </div>
         </div>
         <div className={styles.footerRow} style={{ justifyContent: 'flex-end' }}>
-          <div style={{ display: 'flex', gap: '10px' }}>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
             {note && note.id && (
-              <BubbleButton
-                color="#EF4444"
-                onClick={() => setShowDeleteConfirm(true)}
-              >
-                Delete
-              </BubbleButton>
+              <IconButton icon="trash" caption="Delete" label="Delete this note" onClick={() => setShowDeleteConfirm(true)} />
             )}
-            <BubbleButton
-              color="#3B82F6"
+            <IconButton
+              icon="check"
+              caption="Save"
+              label="Save"
               onClick={() => {
                 if (canSave) {
                   saveDayNote();
@@ -481,10 +479,9 @@ export default function DayNote({ note, onClose }) {
                   setSummaryTouched(true);
                 }
               }}
-              disabled={!canSave || isSaving}
-            >
-              Save
-            </BubbleButton>
+              disabled={!canSave}
+              busy={isSaving}
+            />
           </div>
         </div>
         {showUnsavedPopup && (
