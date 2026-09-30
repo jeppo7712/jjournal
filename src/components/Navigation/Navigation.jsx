@@ -36,9 +36,12 @@ function describeIbkrDataLight(status) {
   const lastOk = status.lastSuccessAt ? `last answer ${at(status.lastSuccessAt)}` : 'no answer yet';
   if (status.consecutiveFailures >= 2) {
     const r = status.lastReconnect;
-    const reconnect = r
-      ? ` Asked IB Gateway to reconnect at ${at(r.at)} (${r.ok ? 'accepted' : `failed: ${r.reply}`}); if it stays red, restart IB Gateway.`
-      : ' Restarting IB Gateway usually fixes this.';
+    const rs = status.lastRestart;
+    const reconnect = rs && (!r || rs.at >= r.at)
+      ? ` Restarted IB Gateway at ${at(rs.at)} (${rs.ok ? 'accepted' : `failed: ${rs.reply}`}); it logs in again within a minute or two.`
+      : r
+        ? ` Asked IB Gateway to reconnect at ${at(r.at)} (${r.ok ? 'accepted' : `failed: ${r.reply}`}); if that doesn't help within 5 minutes it gets restarted.`
+        : ' Restarting IB Gateway usually fixes this.';
     return { color: '#b32424', title: `IBKR historical data: ${status.consecutiveFailures} requests in a row failed (${lastOk}). Last error: ${status.lastError}.${reconnect}` };
   }
   if (status.consecutiveFailures === 1) {

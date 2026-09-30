@@ -42,26 +42,52 @@ function sendCommand({ host, port }, command, timeoutMs = 10000) {
   });
 }
 
+const RESTART_AFTER_MS = 5 * 60 * 1000;
+const RESTART_INTERVAL_MS = 60 * 60 * 1000;
+let lastRestart = null; // { at, ok, reply }
+
+async function send(address, command) {
+  try {
+    const reply = await sendCommand(address, command);
+    const ok = /^OK\b/i.test(reply);
+    (ok ? logger.info : logger.error)(`[IBKR gateway] ${command} reply: ${reply || '(none)'}`);
+    return { at: new Date().toISOString(), ok, reply };
+  } catch (err) {
+    logger.error(`[IBKR gateway] ${command} failed: ${err.message}`);
+    return { at: new Date().toISOString(), ok: false, reply: err.message };
+  }
+}
+
+const since = (entry) => (entry ? Date.now() - new Date(entry.at).getTime() : Infinity);
+
 /**
- * Asks the gateway to reconnect its data connections, at most once per
- * RECONNECT_INTERVAL_MS. Returns without doing anything when no command
- * address is configured.
+ * Called while historical requests keep failing. First asks the gateway to
+ * reconnect its data connections (RECONNECTDATA, at most every 15 minutes).
+ * If requests still fail 5 minutes after that, restarts the gateway
+ * application (RESTART, at most once an hour): IBC logs in again by itself,
+ * like the nightly auto-restart. Needed because after IBKR's daily server
+ * reset the gateway can report its historical-data farms as broken
+ * (e.g. "HMDS data farm connection is broken: ushmds") and RECONNECTDATA
+ * doesn't bring them back, while a fresh login does. Does nothing when no
+ * command address is configured.
  */
 async function requestDataReconnect(reason) {
   if (reconnectInFlight) return;
-  if (lastReconnect && Date.now() - new Date(lastReconnect.at).getTime() < RECONNECT_INTERVAL_MS) return;
-  const address = await loadCommandAddress();
-  if (!address) return;
+  // A restart takes a minute or two; failures meanwhile are expected.
+  if (since(lastRestart) < RESTART_AFTER_MS) return;
+  // Claimed before the first await, so failures arriving together don't
+  // each send a command.
   reconnectInFlight = true;
   try {
-    logger.warn(`[IBKR gateway] Historical data not answering (${reason}); sending RECONNECTDATA to ${address.host}:${address.port}.`);
-    const reply = await sendCommand(address, 'RECONNECTDATA');
-    const ok = /^OK\b/i.test(reply);
-    lastReconnect = { at: new Date().toISOString(), ok, reply };
-    (ok ? logger.info : logger.error)(`[IBKR gateway] RECONNECTDATA reply: ${reply || '(none)'}`);
-  } catch (err) {
-    lastReconnect = { at: new Date().toISOString(), ok: false, reply: err.message };
-    logger.error(`[IBKR gateway] RECONNECTDATA failed: ${err.message}`);
+    const address = await loadCommandAddress();
+    if (!address) return;
+    if (since(lastReconnect) >= RECONNECT_INTERVAL_MS) {
+      logger.warn(`[IBKR gateway] Historical data not answering (${reason}); sending RECONNECTDATA to ${address.host}:${address.port}.`);
+      lastReconnect = await send(address, 'RECONNECTDATA');
+    } else if (since(lastReconnect) >= RESTART_AFTER_MS && since(lastRestart) >= RESTART_INTERVAL_MS) {
+      logger.warn(`[IBKR gateway] Still no historical data ${Math.round(since(lastReconnect) / 60000)} min after RECONNECTDATA (${reason}); sending RESTART to ${address.host}:${address.port}.`);
+      lastRestart = await send(address, 'RESTART');
+    }
   } finally {
     reconnectInFlight = false;
   }
@@ -71,4 +97,8 @@ function getLastReconnect() {
   return lastReconnect;
 }
 
-module.exports = { requestDataReconnect, getLastReconnect, sendCommand };
+function getLastRestart() {
+  return lastRestart;
+}
+
+module.exports = { requestDataReconnect, getLastReconnect, getLastRestart, sendCommand };
