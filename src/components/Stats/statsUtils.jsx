@@ -19,6 +19,15 @@ const toDT = (value) => {
 
 const tradeFees = (t) => (t.buyFee || 0) + (t.sellFee || 0);
 
+// Trades reach these functions in the trade list's current sort order
+// (Stats gets filteredItems as-is), which can be by return or by symbol.
+// Anything that depends on sequence — streaks — sorts by close date itself.
+const closeMillis = (t) => {
+  const dt = toDT(t.lastActionDate);
+  return dt && dt.isValid ? dt.toMillis() : 0;
+};
+const byCloseDate = (trades) => [...trades].sort((a, b) => closeMillis(a) - closeMillis(b));
+
 // Long-term positions are mostly OPEN trades, and the trade-outcome stats
 // (win rate, profit factor, streaks...) rightly ignore them. But money
 // still moves while a trade is open: selling part of a position locks in
@@ -171,7 +180,7 @@ const computeProfitFactor = (trades) => {
 };
 
 const computeDrawdowns = (trades) => {
-  const sortedTrades = trades.sort((a, b) => new Date(a.lastActionDate) - new Date(b.lastActionDate));
+  const sortedTrades = byCloseDate(trades);
   let cumulativePnl = 0;
   let peak = 0;
   let maxDrawdown = 0;
@@ -230,7 +239,7 @@ const computeBestWorstTrades = (trades) => {
 // the count, since a wash is neither a win nor a loss.
 const computeStreakExtremes = (trades) => {
   let maxWinStreak = 0, maxLossStreak = 0, currentWin = 0, currentLoss = 0;
-  trades.forEach(t => {
+  byCloseDate(trades).forEach(t => {
     if (t.status === 'WIN') {
       currentWin++;
       currentLoss = 0;
@@ -862,7 +871,7 @@ export const computeConsecutiveStats = (trades) => {
   let totalWinStreaks = 0, countWinStreaks = 0;
   let totalLossStreaks = 0, countLossStreaks = 0;
   
-  closedTrades.forEach(t => {
+  byCloseDate(closedTrades).forEach(t => {
     if (t.status === 'WIN') {
       currentWinStreak++;
       if (currentLossStreak > 0) {
