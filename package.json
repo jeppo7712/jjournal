@@ -7,7 +7,8 @@
     "server": "node server.js",
     "app": "craco start",
     "start": "concurrently \"npm run server\" \"npm run app\"",
-    "build": "craco build"
+    "build": "craco build",
+    "test": "node --test test/*.test.js"
   },
   "dependencies": {
     "@craco/craco": "^7.1.0",
