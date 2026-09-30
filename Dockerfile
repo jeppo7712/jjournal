@@ -2,8 +2,10 @@ FROM node:22-alpine
 ENV NODE_ENV=production
 ENV REACT_APP_API_URL=
 WORKDIR /app
-COPY package.json ./
-RUN npm install
+# package-lock.json pins every dependency version, and `npm ci` installs
+# exactly those, so each image build gets the same dependencies.
+COPY package.json package-lock.json ./
+RUN npm ci
 COPY . .
 RUN npm run build
 EXPOSE 3999

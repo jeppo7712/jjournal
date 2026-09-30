@@ -4,7 +4,6 @@ build
 *.zip
 Uploads
 .vscode
-package-lock.json
 server
 src/context/TradeContext
 folder_structure.txt

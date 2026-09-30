@@ -23,15 +23,16 @@ postgresql://jjournal:choose-a-password@your-db-host:5432/jjournal
 ```bash
 docker build -t jjournal .
 docker run -d \
+  --restart unless-stopped \
   -p 3999:3999 \
   -v jjournal_data:/user_data \
-  -v jjournal_uploads:/app/Uploads \
   --name jjournal \
   jjournal
 ```
 
 - `/user_data` holds `config.json` (your saved settings) and log files — mount it so they survive container recreation.
-- `/app/Uploads` holds trade/day-note screenshot attachments — mount it too, or they're lost on recreation.
+- `--restart unless-stopped` is needed: saving a new database URL or port in Settings restarts the app by exiting the process, and Docker only starts it again with a restart policy. It also brings the app back after a host reboot. If Postgres isn't reachable yet when the app starts, the app keeps running and retries the connection every 30 seconds.
+- Trade/day-note screenshot attachments are stored in PostgreSQL, so they're covered by your database backups; no extra volume is needed for them.
 - The container serves both the API and the built frontend on port `3999` — that's the only port you need to expose.
 
 ### Option B — Manual / local dev
@@ -80,7 +81,7 @@ Add a trade for a symbol you've configured, open its chart, and watch the server
 |---|---|
 | App settings, IBKR/DB config | `config.json` (path controlled by `USER_PATH` env var, default `./`) |
 | Logs | `server.log`, `server-error.log`, `cron.log` next to `config.json` |
-| Trade/day-note attachments | `Uploads/` in the app directory |
+| Trade/day-note attachments | your PostgreSQL database (`Uploads/` only holds upload temp files) |
 | Everything else (trades, journal entries, price history) | your PostgreSQL database |
 
 See also **[EXTERNAL_API.md](../EXTERNAL_API.md)** if you want another tool (e.g. an AI trade-analysis script) to read/write this data.
