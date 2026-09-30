@@ -46,13 +46,27 @@
   }
 }
 
+/* Currency / time zone selectors and the tabs, kept at the top together
+   (sticky) so the selectors don't scroll away while the tabs stay. */
+.stickyHeader {
+  position: sticky;
+  top: 0;
+  z-index: 10;
+  background-color: #1e1e2e;
+}
+
+.scopeControls {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 2px;
+  margin-bottom: 8px;
+}
+
 /* === NEW & IMPROVED TAB NAVIGATION === */
 .tabNavigation {
   display: flex;
-  position: sticky;
-  top: 0;
   background-color: #1e1e2e;
-  z-index: 10;
   padding-top: 16px;
   padding-bottom: 0; /* Adjusted padding */
   border-bottom: 1px solid #32384a; /* Adds a clean separator */
@@ -532,10 +546,12 @@
   box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
 }
 
-.statBox:hover {
-  transform: translateY(-4px);
-  box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-  border-color: #3B82F6;
+@media (hover: hover) {
+  .statBox:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+    border-color: #3B82F6;
+  }
 }
 
 .statValue {
@@ -600,8 +616,10 @@
 }
 
 @media (max-width: 500px) {
+  /* Two per row: one per row made the General tab a very long scroll of
+     half-empty cards. */
   .statsGrid {
-    grid-template-columns: 1fr;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 
   .statsTable {
@@ -611,5 +629,115 @@
   .statsTable th,
   .statsTable td {
     padding: 4px;
+  }
+}
+/* Phones: a compact filter notice, and tabs that wrap so every tab is
+   visible (in one scrolling row, the ones past the edge were easy to miss). */
+@media (max-width: 600px) {
+  .filterWarning {
+    font-size: 12px;
+    font-weight: 500;
+    padding: 8px 12px;
+    margin-bottom: 10px;
+    border-width: 1px;
+    border-radius: 8px;
+    text-align: left;
+    justify-content: flex-start;
+    gap: 8px;
+    animation: none;
+    box-shadow: none;
+  }
+
+  .filterWarning::before {
+    font-size: 14px;
+  }
+
+  .tabNavigation {
+    flex-wrap: wrap;
+    gap: 6px;
+    padding-top: 8px;
+    padding-bottom: 8px;
+  }
+
+  .tabNavigation button {
+    padding: 5px 10px;
+    border: 1px solid #32384a;
+    border-radius: 14px;
+    font-size: 12px;
+  }
+
+  .statsContainer {
+    padding: 8px 6px;
+    box-shadow: none;
+  }
+
+  /* Three lines of explanation above every tab; the Timezone label and
+     picker say enough on a phone. */
+  .timezoneHint {
+    display: none;
+  }
+
+  .tabNavigation button.activeTab {
+    background-color: #3B82F6;
+    border-color: #3B82F6;
+    color: #fff;
+  }
+}
+
+/* Only on phones (below) */
+.tabSelect {
+  display: none;
+}
+
+/* Phones: section, currency and time zone on one compact line; the tab
+   buttons give way to the section dropdown. */
+@media (max-width: 600px) {
+  .stickyHeader {
+    /* Cover .main-content's top padding too, or content showed through a
+       thin strip above the header while scrolling. */
+    top: -6px;
+    padding-top: 6px;
+    padding-bottom: 6px;
+    border-bottom: 1px solid #32384a;
+    margin-bottom: 8px;
+  }
+
+  .scopeControls {
+    flex-direction: row;
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 6px 12px;
+    margin-bottom: 0;
+  }
+
+  .tabSelect {
+    display: block;
+    flex: 1 1 0;
+    min-width: 0;
+    margin-right: auto;
+    -webkit-appearance: none;
+    appearance: none;
+    background: #3B82F6 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23fff"><path d="M5.3 7.3a1 1 0 011.4 0L10 10.6l3.3-3.3a1 1 0 111.4 1.4l-4 4a1 1 0 01-1.4 0l-4-4a1 1 0 010-1.4z"/></svg>') no-repeat right 10px center / 16px;
+    color: #fff;
+    border: none;
+    border-radius: 18px;
+    padding: 7px 32px 7px 14px;
+    font-size: 14px;
+    font-weight: 600;
+  }
+
+  /* The pickers' own values say what they are; without the captions the
+     section, currency and time zone fit one line. */
+  .scopeControls > div > span {
+    display: none;
+  }
+
+  .tabNavigation {
+    display: none;
+  }
+
+  .scopeControls > div {
+    margin-bottom: 0 !important;
   }
 }

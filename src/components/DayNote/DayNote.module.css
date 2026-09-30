@@ -411,3 +411,80 @@ input[type="radio"]:checked + .radio-btn,
   height: 24px;
   fill: currentColor;
 }
+/* Mood / market condition / volatility: three columns on wide screens, one
+   line each (label left, choices right) on phones, where three side by side
+   ran off both edges. */
+.moodGrid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px;
+  margin-bottom: 18px;
+}
+
+.moodField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  max-width: 200px;
+}
+
+.moodField label {
+  color: #A5ADBA;
+  font-size: 0.97em;
+}
+
+@media (max-width: 600px) {
+  .moodGrid {
+    grid-template-columns: 1fr;
+    gap: 10px;
+  }
+
+  .moodField {
+    flex-direction: row;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    max-width: none;
+  }
+
+  .moodField label {
+    white-space: nowrap;
+  }
+
+  .moodField > div {
+    width: 180px;
+    flex-shrink: 0;
+    margin-bottom: 0;
+  }
+
+  /* Full screen like the trade popups, clear of the status bar and home
+     indicator (see styles.css). */
+  .modal {
+    width: 100vw;
+    max-width: 100vw;
+    height: calc(var(--vh, 1vh) * 100);
+    height: var(--app-height);
+    max-height: none;
+    border-radius: 0;
+    padding-top: var(--app-top);
+    box-sizing: border-box;
+  }
+
+  .headerRow,
+  .footerRow {
+    border-radius: 0;
+  }
+
+  .footerRow {
+    padding-bottom: calc(12px + var(--safe-bottom));
+  }
+}
+
+/* iPhone home-screen app: cover the real screen height (iOS 26 reports the
+   viewport shorter; see --app-height in styles.css). */
+@media (max-width: 700px) and (display-mode: standalone) {
+  .overlay {
+    bottom: auto;
+    height: var(--app-height);
+  }
+}

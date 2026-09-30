@@ -343,25 +343,18 @@ export default function DayNote({ note, onClose }) {
       <div
         className={styles.modal}
         ref={modalRef}
-        style={{
-          width: '800px',
-          maxWidth: '100vw',
-          maxHeight: '90vh',
-          display: 'flex',
-          flexDirection: 'column'
-        }}
       >
         <div className={styles.headerRow}>
           <span className={styles.title}>{note ? 'Edit Day Note' : 'New Day Note'}</span>
           <button className={styles.closeBtn} onClick={handleRequestClose} aria-label="Close">×</button>
         </div>
         <div className={styles.tabContent} ref={contentWrapperRef}>
-          <div className={styles.formGrid} style={{ gridTemplateColumns: 'repeat(3, 1fr)', gap: '6px' }}>
-            <div className={styles.formField} style={{ maxWidth: '200px' }}>
+          <div className={styles.moodGrid}>
+            <div className={styles.moodField}>
               <label>Mood</label>
               <SegmentedRadio name="mood" value={mood} onChange={setMood} options={moodSvgs} />
             </div>
-            <div className={styles.formField} style={{ maxWidth: '200px' }}>
+            <div className={styles.moodField}>
               <label>Mkt Condition</label>
               <SegmentedRadio
                 name="mktCondition"
@@ -372,7 +365,7 @@ export default function DayNote({ note, onClose }) {
                 options={mktConditionSvgs}
               />
             </div>
-            <div className={styles.formField} style={{ maxWidth: '200px' }}>
+            <div className={styles.moodField}>
               <label>Mkt Volatility</label>
               <SegmentedRadio
                 name="mktVolatility"

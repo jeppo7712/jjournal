@@ -13,6 +13,18 @@
   --card-hover: #2D2D45;
   --modal-overlay: rgba(0, 0, 0, 0.7);
   --nav-width: 180px; /* Matches navigation bar's default width */
+  /* Space taken by the iPhone status bar / home indicator (0 elsewhere);
+     needs viewport-fit=cover in public/index.html. */
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+  /* Where content may start. In an iPhone home-screen app, iOS 26 fades
+     the area just below the status bar too, so keep a little extra room
+     there (see the display-mode rule below). */
+  --app-top: calc(var(--safe-top) + var(--top-extra, 0px));
+  /* Native form controls (selects, date fields, checkboxes) drawn for a dark
+     page. Without it Safari draws selects white with the app's light text
+     on them, which is unreadable. */
+  color-scheme: dark;
 }
 
 * {
@@ -30,6 +42,54 @@ html, body {
   overflow: hidden; /* Default behavior, allows scrolling only if content overflows */
 }
 
+/* The page's height. Normally the visible viewport (dvh follows Safari's
+   toolbar; --vh from public/index.html is the fallback). In an iPhone
+   home-screen app iOS 26 reports the viewport 59pt (the status bar) shorter
+   than the screen, so everything anchored to its bottom stopped short above
+   an empty band; there, the large viewport (lvh) is the real screen height,
+   and bars/popups are placed from the top using it. */
+:root {
+  --app-height: calc(var(--vh, 1vh) * 100);
+}
+
+@supports (height: 100dvh) {
+  :root {
+    --app-height: 100dvh;
+  }
+}
+
+@media (display-mode: standalone) {
+  :root {
+    --top-extra: 14px;
+  }
+}
+
+@supports (height: 100lvh) {
+  @media (display-mode: standalone) {
+    :root {
+      --app-height: 100lvh;
+    }
+  }
+}
+
+/* Dark behind the app too, so Safari's rubber-band overscroll and the
+   status-bar area never flash white. */
+html {
+  background-color: var(--primary-dark);
+}
+
+/* No elastic bounce of the page as a whole (it dragged headers and tab
+   bars along); scrolling areas inside it still scroll, without handing
+   their overscroll on to the page. */
+html,
+body {
+  overscroll-behavior: none;
+}
+
+.main-content {
+  overscroll-behavior-y: contain;
+}
+
 body {
   font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
   font-size: 13px;
@@ -41,6 +101,23 @@ body {
 button {
   cursor: pointer;
   font-family: inherit;
+}
+
+/* Safari (iOS) draws date/time fields with its own taller box and a grey
+   pill around the value, so they didn't line up with the other fields.
+   Drop its styling; the fields keep their class's look and still open the
+   native picker. */
+input[type="date"],
+input[type="time"],
+input[type="datetime-local"] {
+  -webkit-appearance: none;
+  appearance: none;
+  min-width: 0;
+}
+
+input::-webkit-date-and-time-value {
+  text-align: left;
+  margin: 0;
 }
 
 .app {
@@ -108,18 +185,18 @@ button {
     --dashboard-height: 90px;
   }
 
+  :root {
+    /* The bottom bar plus the home-indicator strip below it. */
+    --nav-height: calc(60px + var(--safe-bottom));
+  }
+
   html, body {
     height: calc(var(--vh, 1vh) * 100);
-    /* 100dvh (dynamic viewport height) tracks the real, currently-visible
-       viewport continuously — including mobile Safari's address bar
-       showing/hiding mid-scroll, which does NOT reliably fire the `resize`
-       event the --vh custom property (public/index.html) depends on. That
-       gap is exactly what let scrolled-to-bottom content (e.g. the
-       Calendar's weekly summary row) end up sized against a stale height
-       and land behind the fixed bottom nav bar. Kept as a second
-       declaration, not a replacement: older browsers without dvh support
-       just don't parse this line and silently keep the --vh value above. */
-    height: 100dvh;
+    /* --app-height (top of this file): 100dvh, which tracks Safari's
+       address bar showing/hiding mid-scroll (that doesn't reliably fire the
+       resize event --vh depends on), or the real screen height in the
+       home-screen app. */
+    height: var(--app-height);
     margin: 0; /* Ensure no extra margins */
     overflow: hidden; /* Prevent body scrolling on mobile */
   }
@@ -128,15 +205,19 @@ button {
     display: flex;
     flex-direction: column;
     height: calc(var(--vh, 1vh) * 100);
-    height: 100dvh;
+    height: var(--app-height);
+    /* Keep the scrolling content below the status bar: in the home-screen
+       app it would otherwise scroll underneath it and fade out. */
+    padding-top: var(--app-top);
+    background-color: var(--primary-dark);
   }
 
 .main-content {
     margin-left: 0;
     width: 100%;
     padding: 6px;
-    /* Add padding to the bottom to prevent content from being hidden by the fixed nav bar */
-    padding-bottom: calc(var(--nav-height, 60px) + 20px);
+    /* Room for the fixed bottom bar, so the last content isn't hidden by it */
+    padding-bottom: var(--nav-height, 60px);
     height: auto; /* Adjust to content, will scroll */
     flex: 1; /* Allow it to grow and take remaining space */
     overflow-y: auto; /* Enable scrolling for the trade list */
@@ -166,5 +247,68 @@ button {
   /* adjust trade list to account for dashboard height */
   .tradeListSection {
     padding-top: var(--dashboard-height); /* assuming you have dashboard height defined */
+  }
+}
+
+/* Tables marked `responsive-table`: one card per row on phones, each cell
+   on its own line with its column name in front (the names are copied onto
+   the cells as data-label by src/utils/responsiveTables.js). Wide tables
+   otherwise ran off the screen with no hint that they scroll sideways. */
+@media (max-width: 600px) {
+  table.responsive-table,
+  table.responsive-table tbody {
+    display: block;
+    width: 100% !important;
+    border: none !important;
+    background: transparent !important;
+  }
+
+  table.responsive-table thead {
+    display: none;
+  }
+
+  table.responsive-table tr {
+    display: block;
+    background: #232837 !important;
+    border: 1px solid #32384a;
+    border-radius: 10px;
+    margin-bottom: 10px;
+    padding: 6px 0;
+  }
+
+  table.responsive-table td {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    gap: 12px;
+    padding: 3px 12px !important;
+    border: none !important;
+    text-align: right !important;
+    min-height: 28px;
+    word-break: break-word;
+  }
+
+  table.responsive-table td::before {
+    content: attr(data-label);
+    color: #9CA3AF;
+    font-size: 0.85em;
+    text-align: left;
+    flex-shrink: 0;
+  }
+
+  table.responsive-table td[data-label=""]::before,
+  table.responsive-table td:not([data-label])::before {
+    content: none;
+  }
+
+  /* The actions cell: its buttons side by side on the right */
+  table.responsive-table td:last-child {
+    flex-wrap: wrap;
+    justify-content: flex-end;
+    gap: 8px;
+  }
+
+  table.responsive-table td:last-child::before {
+    margin-right: auto;
   }
 }

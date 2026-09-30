@@ -5,12 +5,21 @@
   <meta charset="utf-8" />
   <link rel="icon" type="image/x-icon" href="%PUBLIC_URL%/favicon.ico" sizes="16x16 32x32 48x48" />
   <link rel="shortcut icon" href="%PUBLIC_URL%/favicon.ico" />
-  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no" />
-  <meta name="theme-color" content="#000000" />
+  <!-- viewport-fit=cover: the page draws edge to edge on notched iPhones and
+       keeps clear of the status bar / home indicator itself, using the
+       safe-area insets (see styles.css). -->
+  <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, viewport-fit=cover" />
+  <!-- Opened from the iPhone home screen: full screen, light status-bar text
+       over the app's own dark background. -->
+  <meta name="apple-mobile-web-app-capable" content="yes" />
+  <meta name="mobile-web-app-capable" content="yes" />
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+  <meta name="apple-mobile-web-app-title" content="Jay's Journal" />
+  <meta name="theme-color" content="#1E1E2E" />
   <meta name="description" content="Web-based trading journal for futures traders" />
   <link rel="apple-touch-icon" href="%PUBLIC_URL%/logo192.png" />
   <link rel="manifest" href="%PUBLIC_URL%/manifest.json" />
-  <title>Jays's Journal</title>
+  <title>Jay's Journal</title>
 </head>
 
 <body>
