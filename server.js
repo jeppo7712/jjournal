@@ -21,6 +21,8 @@ const configManager = require('./modules/config.js');
 const historicalDataService = require('./modules/historical-data-service.js');
 const yahoo = require('./modules/yahoo.js');
 const { processHoldingsAccrual } = require('./modules/holdingsAccrual.js');
+const tradingViewStatus = require('./modules/tradingview-status.js');
+const ibkrDataStatus = require('./modules/ibkr-data-status.js');
 
 const { getEnabledTimeframes } = historicalDataService;
 
@@ -146,24 +148,43 @@ async function startServer(newPort) {
   });
 }
 
+// Routers get this instead of the pool itself: it looks the pool up on
+// every call, so the routes can be registered (and the server can listen)
+// before the database is reachable — a fresh install with no database URL
+// yet, or Postgres coming up later than this process after a reboot. Until
+// then a call throws "pool has not been initialized", answered as an error
+// by the route (or as 503 by the middleware below).
+const lazyPool = {
+  query: (...args) => db.getPool().query(...args),
+  connect: () => db.getPool().connect(),
+};
+
+const DB_RETRY_DELAY_MS = 30 * 1000;
+
+// Connects to the configured database, retrying in the background until it
+// succeeds. Never throws: the server keeps running (Settings stays reachable)
+// while the database is down.
+async function connectDatabaseWithRetry(databaseUrl) {
+  try {
+    await db.connectDatabase(databaseUrl, broadcastStatus, uuidv4);
+    await tradingViewStatus.seedFromDatabase(db.getPool());
+  } catch (err) {
+    logger.warn(`[Database] Not connected (${err.message}); retrying in ${DB_RETRY_DELAY_MS / 1000}s.`);
+    setTimeout(() => connectDatabaseWithRetry(databaseUrl), DB_RETRY_DELAY_MS);
+  }
+}
+
 (async () => {
   try {
     const config = await configManager.loadConfig();
     PORT = config.port || PORT; // Use config port if available
 
-    if (config.databaseUrl && config.databaseUrl.startsWith('postgresql://')) {
-      await db.connectDatabase(config.databaseUrl, broadcastStatus, uuidv4);
-      if (db.getIsConnected()) await tradingViewStatus.seedFromDatabase(db.getPool());
-    } else {
-      broadcastStatus(uuidv4(), 'No valid database URL configured', 'warning');
-      logger.warn('⚠️ No valid database URL configured. Waiting for configuration via /api/config');
-    }
-    const tradesRouter = require('./routes/trades.js')(db.getPool(), upload, broadcastStatus, uuidv4);
-    const accountsRouter = require('./routes/accounts.js')(db.getPool(), broadcastStatus, uuidv4);
-    const settingsRouter = require('./routes/settings.js')(db.getPool(), broadcastStatus, uuidv4);
+    const tradesRouter = require('./routes/trades.js')(lazyPool, upload, broadcastStatus, uuidv4);
+    const accountsRouter = require('./routes/accounts.js')(lazyPool, broadcastStatus, uuidv4);
+    const settingsRouter = require('./routes/settings.js')(lazyPool, broadcastStatus, uuidv4);
     const historicalRouter = require('./routes/historical.js')(db, taskManager, historicalDataService, broadcastStatus, uuidv4, triggerTaskProcessor);
-    const ibkrRouter = require('./routes/ibkr.js')(ibkr, broadcastStatus, uuidv4, db.getPool());
-    const capitalRouter = require('./routes/capital.js')(db.getPool(), broadcastStatus, uuidv4);
+    const ibkrRouter = require('./routes/ibkr.js')(ibkr, broadcastStatus, uuidv4, lazyPool);
+    const capitalRouter = require('./routes/capital.js')(lazyPool, broadcastStatus, uuidv4);
 
     apiRouter.use('/', tradesRouter);
     apiRouter.use('/accounts', accountsRouter);
@@ -173,6 +194,13 @@ async function startServer(newPort) {
     apiRouter.use('/', capitalRouter);
 
     await startServer(PORT); // Start the HTTP server
+
+    if (config.databaseUrl && config.databaseUrl.startsWith('postgresql://')) {
+      await connectDatabaseWithRetry(config.databaseUrl);
+    } else {
+      broadcastStatus(uuidv4(), 'No valid database URL configured', 'warning');
+      logger.warn('⚠️ No valid database URL configured. Waiting for configuration via /api/config');
+    }
 
     // START THE TASK PROCESSOR
     triggerTaskProcessor(); // This will start the loop if there are any initial tasks or wait for tasks.
@@ -217,8 +245,6 @@ app.use('/api/external/v1', externalRouter);
 // app meant to be reachable from the public internet (a tunnel scoped to
 // just this path), so it has its own secret-based auth rather than relying
 // on "trusted network" like the rest of the external API.
-const tradingViewStatus = require('./modules/tradingview-status.js');
-const ibkrDataStatus = require('./modules/ibkr-data-status.js');
 const tradingViewWebhookRouter = require('./routes/tradingview-webhook.js')(db, configManager, broadcastStatus, uuidv4, wss, WebSocket);
 app.use('/api/webhooks', tradingViewWebhookRouter);
 
@@ -263,7 +289,10 @@ apiRouter.use((req, res, next) => {
     '/historical/populate',
     '/historical/db',
     '/exchanges',
-    '/yahoo-finance'
+    '/yahoo-finance',
+    '/cash-transactions',
+    '/holdings',
+    '/dividends',
   ];
   if (databaseEndpoints.some(endpoint => req.path.startsWith(endpoint)) && !db.getIsConnected()) {
     return res.status(503).json({ error: 'Database not configured or not connected' });
@@ -378,9 +407,12 @@ apiRouter.post('/config', async (req, res) => {
         return res.status(400).json({ error: 'Invalid PostgreSQL URL format' });
       }
       const testPool = new Pool({ connectionString: databaseUrl, connectionTimeoutMillis: 5000 });
-      const client = await testPool.connect();
-      await client.release();
-      await testPool.end(); // It's okay to end a temporary test pool
+      try {
+        const client = await testPool.connect();
+        client.release();
+      } finally {
+        await testPool.end(); // It's okay to end a temporary test pool
+      }
       config.databaseUrl = databaseUrl;
       needsRestart = true;      logger.info('[Config] Database URL changed. Server restart required.');
     }
