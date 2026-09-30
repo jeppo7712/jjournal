@@ -296,7 +296,6 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
       VALUES ($1, $2, $3, $4) RETURNING id`,
                 [accountId, imageBuffer, mimeType, filename]
             );
-            await fs.unlink(req.file.path);
             broadcastStatus(uuidv4(), `Uploaded attachment: ${filename}`, 'success');
             res.json({ attachment_id: rows[0].id });
         } catch (err) {
@@ -305,6 +304,9 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
             res.status(500).json({ error: err.message });
         } finally {
             client.release();
+            // The image now lives in the database; the multer temp file is
+            // removed whether or not the insert worked.
+            await fs.unlink(req.file.path).catch(() => {});
         }
     });
 
@@ -319,11 +321,19 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
             await client.query('BEGIN');
 
             // Update main trade details
-            await client.query(
+            const { rowCount: tradeUpdated } = await client.query(
                 `UPDATE trades SET type=$1, symbol=$2, target=$3, stop_loss=$4, tick_size=$5, tick_value=$6, contract_month=$7, updated_at=NOW()
          WHERE id=$8 AND account_id=$9`,
                 [type, symbol, target, stopLoss, tickSize, tickValue, contract_month || null, id, accountId]
             );
+            // The statements below are keyed by trade id alone, so stop here
+            // unless the trade really is in this account — otherwise a stale
+            // X-Account-ID (a tab left on another account) would replace this
+            // trade's fills and book its settlement to the wrong account.
+            if (tradeUpdated === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Trade not found in this account' });
+            }
 
             // Re-insert trade_actions (delete existing, then bulk insert new)
             await client.query(`DELETE FROM trade_actions WHERE trade_id=$1`, [id]);
@@ -364,7 +374,8 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
             const existingAttachmentIds = new Set(existingAttachments.map(att => att.id));
 
             // 2. Identify attachments to be linked (from the request)
-            const incomingAttachmentIds = new Set(attachments.map(att => att.attachment_id));
+            const incomingAttachments = Array.isArray(attachments) ? attachments : [];
+            const incomingAttachmentIds = new Set(incomingAttachments.map(att => att.attachment_id));
 
             // 3. Identify attachments to DELETE (no longer in incoming list, but were previously linked)
             const attachmentsToDelete = Array.from(existingAttachmentIds).filter(
@@ -380,7 +391,7 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
             }
 
             // 5. Link new/existing attachments from the incoming list to this trade
-            if (attachments && attachments.length > 0) {
+            if (incomingAttachments.length > 0) {
                 // Unlink from any potential day_note_id (safety based on check_link constraint)
                 // and link to this trade_id
                 await client.query(
@@ -409,6 +420,16 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
         const { id } = req.params;
         try {
             await client.query('BEGIN');
+            // Same reasoning as PUT: the deletes below are keyed by trade id
+            // alone, so confirm the trade is in this account first.
+            const { rows: owned } = await client.query(
+                'SELECT id FROM trades WHERE id=$1 AND account_id=$2 FOR UPDATE',
+                [id, req.accountId]
+            );
+            if (owned.length === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Trade not found in this account' });
+            }
             await client.query(`DELETE FROM trade_attachments WHERE trade_id=$1 AND account_id=$2`, [id, req.accountId]);
             await client.query(`DELETE FROM trade_journals WHERE trade_id=$1`, [id]);
             await client.query(`DELETE FROM trade_actions WHERE trade_id=$1`, [id]);
@@ -616,7 +637,8 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
             const existingAttachmentIds = new Set(existingAttachments.map(att => att.id));
 
             // 2. Identify attachments to be linked (from the request)
-            const incomingAttachmentIds = new Set(attachments.map(att => att.attachment_id));
+            const incomingAttachments = Array.isArray(attachments) ? attachments : [];
+            const incomingAttachmentIds = new Set(incomingAttachments.map(att => att.attachment_id));
 
             // 3. Identify attachments to DELETE (no longer in incoming list, but were previously linked)
             const attachmentsToDelete = Array.from(existingAttachmentIds).filter(
@@ -632,7 +654,7 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
             }
 
             // 5. Link new/existing attachments from the incoming list to this day note
-            if (attachments && attachments.length > 0) {
+            if (incomingAttachments.length > 0) {
                 // First, unlink any that might be incorrectly linked to other trades/daynotes
                 // This is a safety net; ideally, newly uploaded attachments have day_note_id/trade_id NULL
                 await client.query(

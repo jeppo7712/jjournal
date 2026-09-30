@@ -634,6 +634,21 @@ export default function Settings() {
   // (disabled, showing the parent's live values below) purely for display —
   // the backend ignores whatever's submitted for them in that case and uses
   // the parent's own current values instead (see routes/accounts.js).
+  // An account can't be moved under itself or one of its own sub-accounts
+  // (that would make the family a loop), so those aren't offered as parents.
+  const unavailableParentIds = (() => {
+    const ids = new Set();
+    if (!editingAccountId) return ids;
+    const pending = [editingAccountId];
+    while (pending.length > 0) {
+      const id = pending.pop();
+      if (ids.has(id)) continue;
+      ids.add(id);
+      accounts.forEach(a => { if (a.parent_account_id === id) pending.push(a.id); });
+    }
+    return ids;
+  })();
+
   const openAccountModal = (account = null) => {
     setEditingAccountId(account ? account.id : null);
     setAccountForm({
@@ -1824,7 +1839,7 @@ export default function Settings() {
                     className={styles.inputBubble}
                   >
                     <option value="">None (top-level)</option>
-                    {accounts.filter(a => a.id !== editingAccountId).map(a => (
+                    {accounts.filter(a => !unavailableParentIds.has(a.id)).map(a => (
                       <option key={a.id} value={a.id}>{a.name}</option>
                     ))}
                   </select>

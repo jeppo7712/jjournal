@@ -29,7 +29,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
             const { rows } = await pool.query(
                 `WITH RECURSIVE descendants AS (
                     SELECT id FROM accounts WHERE id = $1
-                    UNION ALL
+                    UNION
                     SELECT a.id FROM accounts a JOIN descendants d ON a.parent_account_id = d.id
                 )
                 SELECT ct.*, a.name AS account_name
@@ -250,7 +250,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
             const { rows } = await pool.query(
                 `WITH RECURSIVE descendants AS (
                     SELECT id FROM accounts WHERE id = $1
-                    UNION ALL
+                    UNION
                     SELECT a.id FROM accounts a JOIN descendants d ON a.parent_account_id = d.id
                 )
                 SELECT dv.id, dv.account_id, a.name AS account_name, dv.symbol, dv.kind, dv.currency,
@@ -398,7 +398,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
             const { rows } = await pool.query(
                 `WITH RECURSIVE descendants AS (
                     SELECT id FROM accounts WHERE id = $1
-                    UNION ALL
+                    UNION
                     SELECT a.id FROM accounts a JOIN descendants d ON a.parent_account_id = d.id
                 )
                 SELECT h.*, a.name AS account_name
@@ -456,15 +456,20 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         }
     });
 
-    // PUT /holdings/:id
+    // PUT /holdings/:id — also keeps the holding's own ledger rows in step:
+    // the purchase row (created with the holding, see POST above) follows
+    // purchase_price/purchase_date/name, and every linked row follows a
+    // currency change, so the ledger can't drift from the holding.
     router.put('/holdings/:id', async (req, res) => {
         const { id } = req.params;
         const {
             type, name, currency, face_value, purchase_price, purchase_date,
             maturity_date, coupon_rate, coupon_frequency, notes, status,
         } = req.body;
+        const client = await pool.connect();
         try {
-            const { rowCount } = await pool.query(
+            await client.query('BEGIN');
+            const { rowCount } = await client.query(
                 `UPDATE holdings SET type=$1, name=$2, currency=$3, face_value=$4, purchase_price=$5,
                     purchase_date=$6, maturity_date=$7, coupon_rate=$8, coupon_frequency=$9, notes=$10,
                     status=$11, updated_at=NOW()
@@ -472,11 +477,31 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
                 [type, name, currency || 'USD', face_value, purchase_price, purchase_date, maturity_date || null,
                  coupon_rate || null, coupon_frequency || null, notes || null, status || 'ACTIVE', id, req.accountId]
             );
-            if (rowCount === 0) return res.status(404).json({ error: 'Holding not found' });
+            if (rowCount === 0) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Holding not found' });
+            }
+            // The purchase row is the holding's one negative OTHER row
+            // (redemptions are positive OTHER rows, coupons are INTEREST).
+            if (purchase_price !== null && purchase_price !== undefined && purchase_price !== '' && Number.isFinite(Number(purchase_price)) && purchase_date) {
+                await client.query(
+                    `UPDATE cash_transactions SET amount = $1, date_time = $2, note = $3
+                     WHERE linked_holding_id = $4 AND type = 'OTHER' AND amount < 0`,
+                    [-Math.abs(Number(purchase_price)), purchase_date, `Purchased ${name}`, id]
+                );
+            }
+            await client.query(
+                `UPDATE cash_transactions SET currency = $1 WHERE linked_holding_id = $2`,
+                [currency || 'USD', id]
+            );
+            await client.query('COMMIT');
             res.json({ success: true });
         } catch (err) {
+            await client.query('ROLLBACK').catch(() => {});
             logger.error('Error updating holding:', err);
             res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
         }
     });
 
@@ -491,7 +516,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         try {
             await client.query('BEGIN');
             const { rows } = await client.query(
-                `SELECT * FROM holdings WHERE id = $1 AND account_id = $2`,
+                `SELECT * FROM holdings WHERE id = $1 AND account_id = $2 FOR UPDATE`,
                 [id, req.accountId]
             );
             if (rows.length === 0) {
@@ -499,6 +524,12 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
                 return res.status(404).json({ error: 'Holding not found' });
             }
             const holding = rows[0];
+            // Already matured (e.g. by the automatic maturity check) or
+            // sold: redeeming again would credit it a second time.
+            if (holding.status !== 'ACTIVE') {
+                await client.query('ROLLBACK');
+                return res.status(409).json({ error: `Holding is already ${holding.status.toLowerCase()}` });
+            }
             const redemptionAmount = typeof amount === 'number' ? amount : Number(holding.face_value);
             const redemptionDate = date_time || new Date().toISOString();
 

@@ -24,11 +24,28 @@ async function resolveInheritedFields(pool, parentAccountId) {
 // at the top of a group (or re-parenting a whole sub-tree onto a new
 // parent) fixes up the whole family immediately, not just new children
 // created going forward.
+// The recursive queries in this file (and routes/capital.js,
+// routes/external.js) use UNION, not UNION ALL: UNION drops rows already
+// seen, so even a parent_account_id cycle that got into the table ends the
+// recursion instead of looping forever. PUT /:id refuses to create one.
+async function isDescendantOf(pool, candidateId, accountId) {
+    const { rows } = await pool.query(
+        `WITH RECURSIVE descendants AS (
+            SELECT id FROM accounts WHERE parent_account_id = $1
+            UNION
+            SELECT a.id FROM accounts a JOIN descendants d ON a.parent_account_id = d.id
+        )
+        SELECT 1 FROM descendants WHERE id = $2`,
+        [accountId, candidateId]
+    );
+    return rows.length > 0;
+}
+
 async function cascadeToDescendants(pool, accountId, fields) {
     await pool.query(
         `WITH RECURSIVE descendants AS (
             SELECT id FROM accounts WHERE parent_account_id = $1
-            UNION ALL
+            UNION
             SELECT a.id FROM accounts a JOIN descendants d ON a.parent_account_id = d.id
         )
         UPDATE accounts SET is_virtual=$2, custodian=$3, custodian_is_us=$4, updated_at=NOW()
@@ -74,7 +91,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
             const { rows } = await pool.query(`
                 WITH RECURSIVE descendants AS (
                     SELECT id AS ancestor_id, id AS descendant_id FROM accounts
-                    UNION ALL
+                    UNION
                     SELECT d.ancestor_id, a.id
                     FROM accounts a
                     JOIN descendants d ON a.parent_account_id = d.descendant_id
@@ -159,6 +176,11 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         }
         try {
             const parentId = parent_account_id || null;
+            // Making an account a child of one of its own descendants would
+            // make the family a loop.
+            if (parentId && await isDescendantOf(pool, parentId, id)) {
+                return res.status(400).json({ error: 'An account cannot be moved under one of its own sub-accounts' });
+            }
             const inherited = await resolveInheritedFields(pool, parentId);
             const effectiveIsVirtual = inherited ? inherited.is_virtual : !!is_virtual;
             const effectiveCustodian = inherited ? inherited.custodian : (custodian || null);
@@ -247,6 +269,11 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
             broadcastStatus(uuidv4(), `Deleted account ID ${id}`, 'success');
             res.json({ success: true });
         } catch (err) {
+            // parent_account_id has no ON DELETE action on purpose: deleting
+            // a parent shouldn't silently delete or re-parent its children.
+            if (err.code === '23503' && /parent_account_id/.test(err.constraint || err.detail || err.message)) {
+                return res.status(409).json({ error: 'This account has sub-accounts — move or delete them first' });
+            }
             broadcastStatus(uuidv4(), `Error deleting account: ${err.message}`, 'error');
             logger.error('Error deleting account:', err);
             res.status(500).json({ error: err.message });
