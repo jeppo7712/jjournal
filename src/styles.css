@@ -213,14 +213,21 @@ input::-webkit-date-and-time-value {
   }
 
 .main-content {
+    /* Placed exactly like the fixed bottom bar, ending at its top edge.
+       Sizing it from the viewport height instead (100dvh minus the bar)
+       went wrong in iOS 26 Safari: dvh there includes the area behind
+       Safari's floating toolbar while the bar sits above it, so the end of
+       every page stayed hidden behind the bar. */
+    position: fixed;
+    top: var(--app-top);
+    left: 0;
+    right: 0;
+    bottom: var(--nav-height, 60px);
     margin-left: 0;
-    width: 100%;
+    width: auto;
+    height: auto;
     padding: 6px;
-    /* Room for the fixed bottom bar, so the last content isn't hidden by it */
-    padding-bottom: var(--nav-height, 60px);
-    height: auto; /* Adjust to content, will scroll */
-    flex: 1; /* Allow it to grow and take remaining space */
-    overflow-y: auto; /* Enable scrolling for the trade list */
+    overflow-y: auto;
     display: flex;
     flex-direction: column;
     box-sizing: border-box;
@@ -278,7 +285,7 @@ input::-webkit-date-and-time-value {
 
   table.responsive-table td {
     display: flex;
-    justify-content: space-between;
+    justify-content: flex-end;
     align-items: center;
     gap: 12px;
     padding: 3px 12px !important;
@@ -288,12 +295,15 @@ input::-webkit-date-and-time-value {
     word-break: break-word;
   }
 
+  /* The label on the left; the value's parts (e.g. "Ledger (non-US)")
+     stay together on the right. */
   table.responsive-table td::before {
     content: attr(data-label);
     color: #9CA3AF;
     font-size: 0.85em;
     text-align: left;
     flex-shrink: 0;
+    margin-right: auto;
   }
 
   table.responsive-table td[data-label=""]::before,
@@ -301,14 +311,19 @@ input::-webkit-date-and-time-value {
     content: none;
   }
 
-  /* The actions cell: its buttons side by side on the right */
+  /* The actions cell: its buttons may wrap */
   table.responsive-table td:last-child {
     flex-wrap: wrap;
-    justify-content: flex-end;
-    gap: 8px;
   }
+}
 
-  table.responsive-table td:last-child::before {
-    margin-right: auto;
+
+/* Home-screen app: bottom-anchored positions are off there (the viewport is
+   reported 59pt short, see --app-height), so the content area is sized from the
+   top against the real height, like the bottom bar (Navigation.module.css). */
+@media (max-width: 600px) and (display-mode: standalone) {
+  .main-content {
+    bottom: auto;
+    height: calc(var(--app-height) - var(--app-top) - var(--nav-height, 60px));
   }
 }

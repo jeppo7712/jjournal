@@ -2,6 +2,7 @@ import React, { useState, useEffect, useContext, useMemo } from 'react';
 import styles from './Settings.module.css';
 import { TradeContext, TRADE_LIST_COLUMNS } from '../../context/TradeContext';
 import ChecklistSettings from './ChecklistSettings';
+import IconButton, { ACTION_COLORS } from '../common/IconButton';
 import { useStatus } from '../../context/StatusContext';
 import { DateTime } from 'luxon';
 import { FaPencilAlt, FaTrash } from 'react-icons/fa'; // Example using react-icons
@@ -1769,8 +1770,10 @@ export default function Settings() {
                       </td>
                       <td style={{padding: '12px', color: '#e0e2e6'}}>{acc.id === parseInt(currentAccountId) ? 'Current' : ''}</td>
                       <td style={{padding: '12px', textAlign: 'center'}}>
-                        <button className={styles.actionBtn} onClick={() => openAccountModal(acc)} style={{marginRight: '8px'}}>Edit</button>
-                        <button className={styles.actionBtn} onClick={() => handleDeleteAccount(acc.id)}>Delete</button>
+                        <span className={styles.rowActions}>
+                          <IconButton size="small" icon="pencil" label={`Edit ${acc.name}`} onClick={() => openAccountModal(acc)} />
+                          <IconButton size="small" icon="trash" label={`Delete ${acc.name}`} onClick={() => handleDeleteAccount(acc.id)} />
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -1908,7 +1911,7 @@ export default function Settings() {
                 })()}
               </div>
               <div className={styles.footerRow}>
-                <BubbleButton onClick={saveAccountForm} color="#3B82F6">Save</BubbleButton>
+                <IconButton icon="check" caption="Save" label="Save the account" onClick={saveAccountForm} />
               </div>
             </div>
           </div>
@@ -1946,7 +1949,9 @@ export default function Settings() {
                       <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.fee}</td>
                       <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.exchange || 'N/A'}</td>
                       <td style={{padding: '12px', textAlign: 'center'}}>
-                        <button className={styles.actionBtn} onClick={() => openModalForEdit(setting)}>Edit</button>
+                        <span className={styles.rowActions}>
+                          <IconButton size="small" icon="pencil" label="Edit the default settings" onClick={() => openModalForEdit(setting)} />
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -1983,8 +1988,10 @@ export default function Settings() {
                       <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.fee}</td>
                       <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.exchange || 'N/A'}</td>
                       <td style={{padding: '12px', textAlign: 'center'}}>
-                        <button className={styles.actionBtn} onClick={() => openModalForEdit(setting)} style={{marginRight: '8px'}}>Edit</button>
-                        <button className={styles.actionBtn} onClick={() => handleDeleteSymbol(setting.symbol, setting.type)}>Delete</button>
+                        <span className={styles.rowActions}>
+                          <IconButton size="small" icon="pencil" label={`Edit ${setting.symbol}`} onClick={() => openModalForEdit(setting)} />
+                          <IconButton size="small" icon="trash" label={`Delete ${setting.symbol}`} onClick={() => handleDeleteSymbol(setting.symbol, setting.type)} />
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -2024,8 +2031,10 @@ export default function Settings() {
                       <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.fee}</td>
                       <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.exchange || 'N/A'}</td>
                       <td style={{padding: '12px', textAlign: 'center'}}>
-                        <button className={styles.actionBtn} onClick={() => openModalForEdit(setting)} style={{marginRight: '8px'}}>Edit</button>
-                        <button className={styles.actionBtn} onClick={() => handleDeleteSymbol(setting.symbol, setting.type)}>Delete</button>
+                        <span className={styles.rowActions}>
+                          <IconButton size="small" icon="pencil" label={`Edit ${setting.symbol}`} onClick={() => openModalForEdit(setting)} />
+                          <IconButton size="small" icon="trash" label={`Delete ${setting.symbol}`} onClick={() => handleDeleteSymbol(setting.symbol, setting.type)} />
+                        </span>
                       </td>
                     </tr>
                   ))}
@@ -2279,8 +2288,10 @@ export default function Settings() {
                         <td style={{padding: '12px', color: '#e0e2e6'}}>{exchange.timezone}</td>
                         <td style={{padding: '12px', color: '#e0e2e6'}}>{exchange.opening_hours.flat().filter(h => h).length}</td>
                         <td style={{padding: '12px', textAlign: 'center'}}>
-                          <button className={styles.actionBtn} onClick={() => openExchangeModal(exchange)} style={{marginRight: '8px'}}>Edit</button>
-                          <button className={styles.actionBtn} onClick={() => handleDeleteExchange(exchange.id)}>Delete</button>
+                          <span className={styles.rowActions}>
+                            <IconButton size="small" icon="pencil" label={`Edit ${exchange.name}`} onClick={() => openExchangeModal(exchange)} />
+                            <IconButton size="small" icon="trash" label={`Delete ${exchange.name}`} onClick={() => handleDeleteExchange(exchange.id)} />
+                          </span>
                         </td>
                       </tr>
                     ))}
@@ -2326,14 +2337,14 @@ export default function Settings() {
                   <h3>{splitSymbolKey(selectedHistoricalSymbol)[0]} Data Actions</h3>
                   <div className={styles.buttonContainer} style={{ marginTop: '1rem' }}>
                     {splitSymbolKey(selectedHistoricalSymbol)[1] === 'FUT' && (
-                      <BubbleButton onClick={handleRecalculateContinuous} color="#2563EB" disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
+                      <BubbleButton onClick={handleRecalculateContinuous} color={ACTION_COLORS.primary} disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
                         Recalculate Continuous Series
                       </BubbleButton>
                     )}
-                    <BubbleButton onClick={handleDeleteHistoricalData} color="#DC2626" disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
+                    <BubbleButton onClick={handleDeleteHistoricalData} color={ACTION_COLORS.danger} disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
                       Delete Historical Data
                     </BubbleButton>
-                    <BubbleButton onClick={handleFetchSymbolHistoricalData} color="#10B981" disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
+                    <BubbleButton onClick={handleFetchSymbolHistoricalData} color={ACTION_COLORS.import} disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
                       {isFetchingSymbolHistoricalData ? 'Fetching…' : 'Fetch Historical Data'}
                     </BubbleButton>
                   </div>
@@ -2346,13 +2357,13 @@ export default function Settings() {
               <h3>Global Data Actions</h3>
               <p>These actions affect all symbols in the historical database.</p>
               <div className={styles.buttonContainer} style={{ marginTop: '1rem' }}>
-                <BubbleButton onClick={handleFetchAllHistoricalData} color="#2563EB" disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
+                <BubbleButton onClick={handleFetchAllHistoricalData} color={ACTION_COLORS.import} disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
                   {isFetchingAllHistoricalData ? 'Fetching all…' : 'Fetch All Historical Data'}
                 </BubbleButton>
-                <BubbleButton onClick={handleDeleteAllHistoricalData} color="#DC2626" disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
+                <BubbleButton onClick={handleDeleteAllHistoricalData} color={ACTION_COLORS.danger} disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
                   Delete All Historical Data
                 </BubbleButton>
-                <BubbleButton onClick={handleRebuildAllContinuousData} color="#2563EB" disabled={isRebuildingAllContinuous}>
+                <BubbleButton onClick={handleRebuildAllContinuousData} color={ACTION_COLORS.primary} disabled={isRebuildingAllContinuous}>
                   {isRebuildingAllContinuous ? 'Starting rebuild…' : 'Rebuild All Continuous Series'}
                 </BubbleButton>
               </div>
@@ -2466,9 +2477,7 @@ export default function Settings() {
       </div>
       {(activeTab === 'general' || activeTab === 'tws') && (
         <div className={styles.footerRow}>
-          <BubbleButton onClick={handleSave} color="#3B82F6">
-            Save
-          </BubbleButton>
+          <IconButton icon="check" caption="Save" label="Save settings" onClick={handleSave} />
         </div>
       )}
       {showFuturesModal && (
@@ -2695,7 +2704,7 @@ export default function Settings() {
               </table>
             </div>
             <div className={styles.footerRow}>
-              <BubbleButton onClick={saveFuturesSetting} color="#3B82F6">Save</BubbleButton>
+              <IconButton icon="check" caption="Save" label="Save the symbol" onClick={saveFuturesSetting} />
             </div>
           </div>
         </div>
@@ -2827,7 +2836,7 @@ export default function Settings() {
               </div>
             </div>
             <div className={styles.footerRow}>
-              <BubbleButton onClick={saveExchange} color="#3B82F6">Save</BubbleButton>
+              <IconButton icon="check" caption="Save" label="Save the exchange" onClick={saveExchange} />
             </div>
           </div>
         </div>
@@ -2859,17 +2868,13 @@ export default function Settings() {
                 />
               </div>
             </div>
-            <div className={styles.footerRow} style={{ justifyContent: 'space-between' }}>
+            <div className={styles.footerRow} style={{ justifyContent: 'flex-end', gap: 12 }}>
               <div>
                 {editingRollover.rollover_type === 'MANUAL' && (
-                  <BubbleButton onClick={handleDeleteRolloverOverride} color="#EF4444" disabled={isDeleting}>
-                    {isDeleting ? 'Deleting...' : 'Delete Override'}
-                  </BubbleButton>
+                  <IconButton icon="trash" caption="Delete" label="Delete this rollover override" onClick={handleDeleteRolloverOverride} busy={isDeleting} />
                 )}
               </div>
-              <BubbleButton onClick={handleSaveRollover} color="#3B82F6" disabled={isSaving}>
-                {isSaving ? 'Rebuilding...' : 'Save'}
-              </BubbleButton>
+              <IconButton icon="check" caption={isSaving ? 'Rebuilding…' : 'Save'} label="Save the rollover and rebuild the continuous series" onClick={handleSaveRollover} busy={isSaving} />
             </div>
           </div>
         </div>

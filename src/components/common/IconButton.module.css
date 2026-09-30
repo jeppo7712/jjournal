@@ -1,0 +1,77 @@
+.iconButton {
+  background: none;
+  border: none;
+  padding: 0;
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  color: #fff;
+  cursor: pointer;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.circle {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: var(--btn-color);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: filter 0.15s, transform 0.1s;
+}
+
+.circle svg {
+  width: 20px;
+  height: 20px;
+}
+
+.caption {
+  font-size: 10px;
+  line-height: 1;
+  color: #A5ADBA;
+}
+
+.iconButton:disabled {
+  cursor: not-allowed;
+}
+
+.iconButton:disabled .circle {
+  opacity: 0.45;
+}
+
+.iconButton:not(:disabled):active .circle {
+  transform: scale(0.94);
+}
+
+@media (hover: hover) {
+  .iconButton:not(:disabled):hover .circle {
+    filter: brightness(1.15);
+  }
+}
+
+.spinner {
+  width: 18px;
+  height: 18px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: iconButtonSpin 0.8s linear infinite;
+}
+
+@keyframes iconButtonSpin {
+  to { transform: rotate(360deg); }
+}
+
+/* Table rows: a compact circle, no caption */
+.small .circle {
+  width: 32px;
+  height: 32px;
+}
+
+.small .circle svg {
+  width: 16px;
+  height: 16px;
+}
+
