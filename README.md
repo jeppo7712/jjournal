@@ -33,11 +33,14 @@ The short version:
 ```bash
 docker build -t jjournal .
 docker run -d \
+  --restart unless-stopped \
   -p 3999:3999 \
   -v jjournal_data:/user_data \
   --name jjournal \
   jjournal
 ```
+
+`--restart unless-stopped` matters: changing the database URL or port in Settings restarts the app by exiting the process, and Docker only brings it back up with a restart policy.
 
 Then open `http://localhost:3999`, go to **Settings**, and paste in a PostgreSQL connection string — the app creates its own schema on connect. Everything else (IBKR address, Flex Web Service token, which symbols/timeframes to track) is configured from the same Settings page.
 
@@ -49,7 +52,7 @@ Then open `http://localhost:3999`, go to **Settings**, and paste in a PostgreSQL
 
 ## Data & persistence
 
-If running via Docker, mount `/user_data` (holds `config.json` and log files) and the app's `Uploads/` directory (trade/day-note screenshots) as volumes, and point `databaseUrl` at a Postgres instance you're backing up separately — the database itself isn't stored in the container.
+If running via Docker, mount `/user_data` (holds `config.json` and log files) as a volume, and point `databaseUrl` at a Postgres instance you're backing up separately — the database itself isn't stored in the container. Trade/day-note screenshots are stored in the database too; the app's `Uploads/` directory only holds upload temp files.
 
 ## Disclaimer
 
