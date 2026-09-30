@@ -406,6 +406,26 @@ export default function TradeModal({ trade, onClose }) {
     tickValue: form.tickValue === '' || !onlyNumber(form.tickValue),
   };
 
+  // Not an error (saving still works), just a heads-up: side, P&L and
+  // return % assume one position per trade, opened and closed once. A trade
+  // whose position goes flat or flips side before its last fill (long,
+  // flat, then short) gets its side from the last leg only.
+  const positionReentryWarning = useMemo(() => {
+    const ordered = actions
+      .filter(a => a.dateTime && a.dateTime.isValid && a.quantity !== '' && Number(a.quantity) > 0)
+      .sort((a, b) => a.dateTime.toMillis() - b.dateTime.toMillis());
+    let position = 0;
+    for (let i = 0; i < ordered.length - 1; i++) {
+      const before = position;
+      position += (ordered[i].type === 'BUY' ? 1 : -1) * Number(ordered[i].quantity);
+      const flippedSide = (before > 0 && position < 0) || (before < 0 && position > 0);
+      if (Math.abs(position) < 1e-9 || flippedSide) {
+        return 'The position goes flat or switches side before the last fill. Side, P&L and return % treat a trade as one position — consider logging each position as its own trade.';
+      }
+    }
+    return null;
+  }, [actions]);
+
   const allActionsValid = actionErrors.every(err => !err.quantity && !err.price && !err.fee && !err.dateTime);
   const allFormValid = Object.values(formErrors).every(v => !v);
   const canSave = allActionsValid && allFormValid;
@@ -1220,6 +1240,9 @@ export default function TradeModal({ trade, onClose }) {
                     </div>
                   );
                 })}
+                {positionReentryWarning && (
+                  <div className={styles.positionWarning} role="note">{positionReentryWarning}</div>
+                )}
                 <div className={styles.addActionRow}>
                   <button className={styles.addActionBtn} onClick={handleAddAction} disabled={!allActionsValid}>+</button>
                 </div>

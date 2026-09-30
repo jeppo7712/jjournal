@@ -162,7 +162,7 @@ List trades across one or all accounts, with computed fields included so you don
 | `symbol` | string | Exact symbol match (e.g. `MNQ`, `AAPL`). |
 | `type` | `STK` \| `FUT` | Filter by instrument type. |
 | `status` | string | Comma-separated: `OPEN,WIN,LOSS,WASH`. A trade is `OPEN` while a position remains, or resolves to `WIN`/`LOSS`/`WASH` once fully closed (fully closed with ~$0 realised PnL is `WASH`, not `WIN`/`LOSS`). |
-| `from` / `to` | ISO date/time | Filters on the trade's **first action date** (when it was actually opened), not `created_at` (when the row was saved). |
+| `from` / `to` | ISO date/time | Filters on the trade's **first action date** (when it was actually opened), not `created_at` (when the row was saved). A date-only `to` (e.g. `2026-05-12`) includes that whole day (UTC). |
 | `limit` | int | Default 200, max 1000. |
 | `offset` | int | Default 0. |
 
