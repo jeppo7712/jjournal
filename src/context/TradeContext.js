@@ -21,6 +21,9 @@ export const TRADE_LIST_COLUMNS = [
   { key: 'returnPercentage', label: 'Return %' },
 ];
 
+// Returns an invalid DateTime (not the 1970 epoch) for anything it can't
+// parse, so callers' `.isValid` checks actually skip bad dates instead of
+// showing them as 01/01/1970.
 export function parseActionDate(date) {
   if (date instanceof DateTime && date.isValid) {
     return date;
@@ -29,12 +32,11 @@ export function parseActionDate(date) {
     const dt = DateTime.fromISO(date, { zone: 'utc' }).toLocal();
     if (!dt.isValid) {
       console.warn(`Invalid dateTime: ${date}`);
-      return DateTime.fromMillis(0, { zone: 'local' });
     }
     return dt;
   }
   console.warn(`Invalid dateTime type: ${typeof date}, value:`, date);
-  return DateTime.fromMillis(0, { zone: 'local' });
+  return DateTime.invalid('unparsable date');
 }
 
 export function formatDate(date) {
@@ -201,7 +203,8 @@ export function calculateRisk(trade) {
     return null;
 }
 
-function getFuturesSettings(symbol, type, futuresSettings) {
+function getFuturesSettings(symbol, type, futuresSettingsList) {
+  const futuresSettings = Array.isArray(futuresSettingsList) ? futuresSettingsList : [];
   if (!symbol || !type) {
     const defaultSetting = futuresSettings.find(s => s.symbol === 'DEFAULT' && s.type === type) ||
                           futuresSettings.find(s => s.symbol === 'DEFAULT');
@@ -331,9 +334,10 @@ async function computeTradeMeta(trade, futuresSettings) {
   let returnPercentage = null;
   if (ret !== null) {
     if (trade.type === 'FUT') {
-      const setting = Array.isArray(futuresSettings) ? futuresSettings.find(fs => fs.symbol === trade.symbol && fs.type === trade.type) : null;
-      const defaultSetting = Array.isArray(futuresSettings) ? futuresSettings.find(fs => fs.symbol === 'DEFAULT' && fs.type === trade.type) : null;
-      const applicableSetting = setting || defaultSetting;
+      // Same prefix match as the backend (getFuturesSetting in
+      // modules/tradeCalculations.js), so a contract-suffixed symbol (MNQZ5)
+      // uses its root's (MNQ) margin here and in the external API alike.
+      const applicableSetting = getFuturesSettings(trade.symbol, trade.type, futuresSettings);
 
       if (applicableSetting && applicableSetting.initial_margin > 0) {
         let maxContracts = 0;
@@ -436,14 +440,14 @@ async function processRawTradesArray(tradesData, futuresSettings) {
 
     return {
       ...trade, actions, ...meta,
-      quantity: meta.status === 'OPEN' ? null : meta.side === 'LONG' ? meta.sellSum / meta.avgSell : meta.buySum / meta.avgBuy,
+      quantity: meta.status === 'OPEN' ? null : meta.side === 'LONG' ? meta.sellQty : meta.buyQty,
       position: meta.status === 'OPEN' ? Math.abs(meta.buyQty - meta.sellQty) : null,
       entry: meta.side === 'LONG' ? meta.avgBuy : meta.avgSell,
       exit: meta.status === 'OPEN' ? null : meta.side === 'LONG' ? meta.avgSell : meta.avgBuy,
       entryTotal: meta.status === 'OPEN' ? openEntryTotal : (meta.side === 'LONG' ? meta.buySum : meta.sellSum),
       exitTotal: meta.status === 'OPEN' ? null : meta.side === 'LONG' ? meta.sellSum : meta.buySum,
       stop_loss: trade.stop_loss !== undefined ? trade.stop_loss : trade.stopLoss,
-      firstActionDate: meta.firstActionDate.toLocal(),
+      firstActionDate: meta.firstActionDate ? meta.firstActionDate.toLocal() : null,
       lastActionDate: meta.lastActionDate ? meta.lastActionDate.toLocal() : null,
       currentReturn: null,
       currentReturnPercentage: null,
@@ -453,8 +457,10 @@ async function processRawTradesArray(tradesData, futuresSettings) {
 }
 
 async function fetchCurrentPrice(symbol, type) {
+  // Declared outside the try: the catch below logs it, and a const inside
+  // the try made that log throw a ReferenceError instead of returning null.
+  const yahooSymbol = symbol + (type === 'FUT' ? '=F' : '');
   try {
-    const yahooSymbol = symbol + (type === 'FUT' ? '=F' : '');
     const response = await fetch(`${process.env.REACT_APP_API_URL}/api/yahoo-finance/${encodeURIComponent(yahooSymbol)}`);
     if (!response.ok) {
       throw new Error(`HTTP error ${response.status}: ${response.statusText}`);
@@ -546,8 +552,7 @@ function computeStats(trades, futuresSettings) {
     // Calculate return percentage correctly for futures
     let returnPct = null;
     if (trade.type === 'FUT') {
-      const setting = futuresSettings.find(fs => fs.symbol === trade.symbol && fs.type === trade.type) ||
-                      futuresSettings.find(fs => fs.symbol === 'DEFAULT' && fs.type === trade.type);
+      const setting = getFuturesSettings(trade.symbol, trade.type, futuresSettings);
       if (setting && setting.initial_margin > 0) {
         // Calculate max contracts from trade actions
         let maxContracts = 0;
@@ -626,7 +631,10 @@ function computeStats(trades, futuresSettings) {
     losses,
     wash,
     open,
-    winRate: totalTrades ? Math.round((wins / totalTrades) * 100) : 0,
+    // Among decided trades only (open and wash trades are neither a win nor
+    // a loss), matching computeGeneralStats on the Stats page.
+    winRate: wins + losses ? Math.round((wins / (wins + losses)) * 100) : 0,
+    lossRate: wins + losses ? Math.round((losses / (wins + losses)) * 100) : 0,
     avgWinByCurrency: Object.fromEntries(
       Object.entries(winSumByCurrency).map(([code, sum]) => [code, sum / winCountByCurrency[code]])
     ),
@@ -645,7 +653,9 @@ function computeStats(trades, futuresSettings) {
 function getTimeRange(filter, customStartDate, customEndDate) {
   const now = DateTime.now();
   const startOfDay = now.startOf('day');
-  const startOfWeek = startOfDay.minus({ days: startOfDay.weekday - 1 + (startOfDay.weekday === 7 ? -6 : 0) });
+  // ISO week: Monday to Sunday, every day of the week (the old arithmetic
+  // made a Sunday its own one-day week).
+  const startOfWeek = now.startOf('week');
   const startOfMonth = now.startOf('month');
   const startOfYear = now.startOf('year');
 
@@ -755,6 +765,10 @@ export const TradeProvider = ({ children }) => {
   const [showTrades, setShowTrades] = useState(true);
   const [showDayNotes, setShowDayNotes] = useState(true);
   const [futuresSettings, setFuturesSettings] = useState([]);
+  // Whether the first /futures-settings fetch has finished (successfully or
+  // not). Trades wait for it rather than for a non-empty list, so an account
+  // with no symbol settings at all still shows its trades.
+  const [futuresSettingsLoaded, setFuturesSettingsLoaded] = useState(false);
   const [symbolFilter, setSymbolFilter] = useState('');
   const [restrictToActionsInRange, setRestrictToActionsInRange] = useState(false);
   const [isFetching, setIsFetching] = useState(false);
@@ -778,13 +792,27 @@ export const TradeProvider = ({ children }) => {
     setHiddenColumns(prev => prev.includes(columnKey) ? prev.filter(k => k !== columnKey) : [...prev, columnKey]);
   }, []);
 
+  // Which account the filter state currently holds, once its saved filters
+  // have loaded. Saving is skipped until it matches currentAccountId:
+  // otherwise, right after an account switch (or on first load), the save
+  // effect ran with the PREVIOUS account's (or default) filters and wrote
+  // them into the new account if its own filters took over a second to load.
+  const filtersLoadedForRef = useRef(null);
+  const latestAccountIdRef = useRef(currentAccountId);
+  latestAccountIdRef.current = currentAccountId;
+
   const loadFilterSettings = useCallback(async () => {
+    filtersLoadedForRef.current = null;
     if (!currentAccountId) return;
+    const accountId = currentAccountId;
     try {
-      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/accounts/${currentAccountId}/filters`, {
-        headers: { 'X-Account-ID': currentAccountId },
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/accounts/${accountId}/filters`, {
+        headers: { 'X-Account-ID': accountId },
       });
+      if (!res.ok) throw new Error(`HTTP ${res.status}`);
       const data = await res.json();
+      // The user switched accounts while this was loading.
+      if (latestAccountIdRef.current !== accountId) return;
       setFilter(data.status_filters || []);
       setTimeFilter(data.time_filter || null);
       setCustomStartDate(data.custom_start_date || null);
@@ -801,6 +829,7 @@ export const TradeProvider = ({ children }) => {
       setTradesPerPage(data.trades_per_page === undefined ? 100 : data.trades_per_page);
       setHiddenColumns(Array.isArray(data.hidden_columns) ? data.hidden_columns : []);
       setCurrentPage(1);
+      filtersLoadedForRef.current = accountId;
     } catch (err) {
       console.error('Failed to load filter settings:', err);
     }
@@ -812,7 +841,7 @@ export const TradeProvider = ({ children }) => {
 
   const saveFilterSettings = useCallback(
     debounce(async (currentSettings) => {
-      if (!currentAccountId) return;
+      if (!currentAccountId || filtersLoadedForRef.current !== currentAccountId) return;
       try {
         await fetch(`${process.env.REACT_APP_API_URL}/api/accounts/${currentAccountId}/filters`, {
           method: 'PUT',
@@ -830,6 +859,7 @@ export const TradeProvider = ({ children }) => {
   );
 
   useEffect(() => {
+    if (!currentAccountId || filtersLoadedForRef.current !== currentAccountId) return;
     saveFilterSettings({
         status_filters: filter,
         time_filter: timeFilter,
@@ -842,7 +872,7 @@ export const TradeProvider = ({ children }) => {
         trades_per_page: tradesPerPage,
         hidden_columns: hiddenColumns,
     });
-  }, [filter, timeFilter, customStartDate, customEndDate, symbolFilter, showTrades, showDayNotes, restrictToActionsInRange, tradesPerPage, hiddenColumns, saveFilterSettings]);
+  }, [currentAccountId, filter, timeFilter, customStartDate, customEndDate, symbolFilter, showTrades, showDayNotes, restrictToActionsInRange, tradesPerPage, hiddenColumns, saveFilterSettings]);
 
   // The save above is debounced (1s) so rapid changes don't fire a request
   // per keystroke/click — but that means a discrete, deliberate change (e.g.
@@ -924,7 +954,7 @@ export const TradeProvider = ({ children }) => {
     }
 
     if (trade.type === 'FUT') {
-        const setting = futuresSettings.find(fs => fs.symbol === trade.symbol && fs.type === trade.type) || futuresSettings.find(fs => fs.symbol === 'DEFAULT' && fs.type === trade.type);
+        const setting = getFuturesSettings(trade.symbol, trade.type, futuresSettings);
         const openQty = openLots.reduce((sum, lot) => sum + lot.quantity, 0);
         if (setting && setting.initial_margin > 0) {
             const totalInitialMargin = setting.initial_margin * openQty;
@@ -1223,10 +1253,12 @@ export const TradeProvider = ({ children }) => {
     try {
       const res = await fetch(`${process.env.REACT_APP_API_URL}/api/futures-settings`);
       const data = await res.json();
-      setFuturesSettings(data);
+      setFuturesSettings(Array.isArray(data) ? data : []);
     } catch (err) {
       console.error('Failed to fetch futures settings:', err);
       setFuturesSettings([]);
+    } finally {
+      setFuturesSettingsLoaded(true);
     }
   }, []);
 
@@ -1238,16 +1270,21 @@ export const TradeProvider = ({ children }) => {
         localStorage.setItem('currentAccountId', newAccountId);
       }
     });
-    refreshFuturesSettings();
-  }, [currentAccountId, refreshFuturesSettings, refreshAccounts]);
+  }, [currentAccountId, refreshAccounts]);
+
+  // Symbol settings are global, not per account: fetched once here (and
+  // again whenever Settings calls refreshFuturesSettings), not on every
+  // account switch — refetching them there replaced the array and made
+  // refreshTrades run a second time for the same switch.
+  useEffect(() => { refreshFuturesSettings(); }, [refreshFuturesSettings]);
 
   useEffect(() => { refreshHoldings(); }, [refreshHoldings]);
 
   useEffect(() => {
-    if (currentAccountId && futuresSettings.length > 0) {
+    if (currentAccountId && futuresSettingsLoaded) {
       refreshTrades();
     }
-  }, [currentAccountId, futuresSettings, refreshTrades]);
+  }, [currentAccountId, futuresSettingsLoaded, refreshTrades]);
 
   useEffect(() => {
     if (currentAccountId) {

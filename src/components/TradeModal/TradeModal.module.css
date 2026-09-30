@@ -350,6 +350,17 @@ select.inputBubble {
   height: 34px !important;
 }
 
+.positionWarning {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 6px;
+  border: 1px solid rgba(245, 158, 11, 0.5);
+  background: rgba(245, 158, 11, 0.1);
+  color: #F59E0B;
+  font-size: 0.85em;
+  line-height: 1.35;
+}
+
 .addActionRow {
   display: flex;
   justify-content: center;

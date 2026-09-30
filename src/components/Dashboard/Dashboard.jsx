@@ -782,10 +782,12 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     );
   };
 
+  // WINS/LOSSES percentages are the win and loss rate among decided trades
+  // (they add up to 100%); OPEN/WASH are each a share of all trades.
   const statGrid = [
     [
       { label: 'WINS', value: stats.wins, pct: stats.winRate + '%', color: '#22C55E', onClick: () => toggleFilter('WIN'), filterValue: 'WIN' },
-      { label: 'LOSSES', value: stats.losses, pct: stats.totalTrades ? Math.round((stats.losses / stats.totalTrades) * 100) + '%' : '0%', color: '#EF4444', onClick: () => toggleFilter('LOSS'), filterValue: 'LOSS' },
+      { label: 'LOSSES', value: stats.losses, pct: (stats.lossRate ?? 0) + '%', color: '#EF4444', onClick: () => toggleFilter('LOSS'), filterValue: 'LOSS' },
     ],
     [
       { label: 'OPEN', value: stats.open, pct: stats.totalTrades ? Math.round((stats.open / stats.totalTrades) * 100) + '%' : '0%', color: '#60A5FA', onClick: () => toggleFilter('OPEN'), filterValue: 'OPEN' },

@@ -62,7 +62,7 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
             const { rows } = await db.getPool().query(`
                 WITH RECURSIVE descendants AS (
                     SELECT id AS ancestor_id, id AS descendant_id FROM accounts
-                    UNION ALL
+                    UNION
                     SELECT d.ancestor_id, a.id
                     FROM accounts a
                     JOIN descendants d ON a.parent_account_id = d.descendant_id
@@ -109,7 +109,7 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
             const { rows } = await db.getPool().query(
                 `WITH RECURSIVE descendants AS (
                     SELECT id FROM accounts WHERE id = $1
-                    UNION ALL
+                    UNION
                     SELECT a.id FROM accounts a JOIN descendants d ON a.parent_account_id = d.id
                 )
                 SELECT ct.*, a.name AS account_name
@@ -184,7 +184,7 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
                 const result = await db.getPool().query(
                     `WITH RECURSIVE descendants AS (
                         SELECT id FROM accounts WHERE id = $1
-                        UNION ALL
+                        UNION
                         SELECT a.id FROM accounts a JOIN descendants d ON a.parent_account_id = d.id
                     )
                     SELECT h.*, a.name AS account_name
@@ -313,8 +313,12 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
             // Filtered against first_action_at (when the trade was actually
             // opened in the market), not created_at (when the row was saved) —
             // the former is what "trades in this date range" usually means.
+            // A date-only `to` means "through the end of that day" (UTC, like
+            // first_action_at): compared as a plain string it excluded every
+            // trade opened on that day.
+            const toBound = to && /^\d{4}-\d{2}-\d{2}$/.test(to) ? `${to}T23:59:59.999Z` : to;
             if (from) trades = trades.filter(t => t.first_action_at && t.first_action_at >= from);
-            if (to) trades = trades.filter(t => t.first_action_at && t.first_action_at <= to);
+            if (toBound) trades = trades.filter(t => t.first_action_at && t.first_action_at <= toBound);
 
             const total = trades.length;
             const page = trades.slice(offset, offset + limit);

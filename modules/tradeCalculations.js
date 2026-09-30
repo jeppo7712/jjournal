@@ -199,7 +199,7 @@ function computeTradeDerived(trade, futuresSettings) {
         sell_fee: sellFee,
         avg_buy_price: buyQty ? avgBuy : null,
         avg_sell_price: sellQty ? avgSell : null,
-        quantity: status === 'OPEN' ? null : (side === 'LONG' ? sellSum / avgSell : buySum / avgBuy),
+        quantity: status === 'OPEN' ? null : (side === 'LONG' ? sellQty : buyQty),
         position: status === 'OPEN' ? Math.abs(buyQty - sellQty) : null,
         entry_price: side === 'LONG' ? avgBuy : avgSell,
         exit_price: status === 'OPEN' ? null : (side === 'LONG' ? avgSell : avgBuy),
