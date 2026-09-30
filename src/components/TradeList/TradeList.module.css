@@ -102,10 +102,14 @@
   width: 100%;
 }
 
-.tradeRow:hover {
-  background: #313745;
-  transform: translateX(5px);
-  box-shadow: 0 2px 8px 0 rgba(20,22,25,0.13);
+/* Only where there's a real pointer: on a touch screen the hover state
+   sticks after a tap, and the shifted row poked out past the right edge. */
+@media (hover: hover) {
+  .tradeRow:hover {
+    background: #313745;
+    transform: translateX(5px);
+    box-shadow: 0 2px 8px 0 rgba(20,22,25,0.13);
+  }
 }
 
 .tradeRowNotClosed {
@@ -262,10 +266,14 @@
   align-items: center;
 }
 
-.noteRow:hover {
-  background: #313745;
-  transform: translateX(5px);
-  box-shadow: 0 2px 8px 0 rgba(20,22,25,0.13);
+/* Only where there's a real pointer: on a touch screen the hover state
+   sticks after a tap, and the shifted row poked out past the right edge. */
+@media (hover: hover) {
+  .noteRow:hover {
+    background: #313745;
+    transform: translateX(5px);
+    box-shadow: 0 2px 8px 0 rgba(20,22,25,0.13);
+  }
 }
 
 .noteIcon {
@@ -418,6 +426,16 @@
 @media (max-width: 600px) {
   .header {
     display: none;
+  }
+
+  .tradeRows {
+    padding: 4px 0 8px;
+    -webkit-overflow-scrolling: touch;
+  }
+
+  .tradeRow:active,
+  .noteRow:active {
+    background: #313745;
   }
 
   .tradeRow {
@@ -597,4 +615,16 @@
 .paginationInfo {
   color: #A5ADBA;
   white-space: nowrap;
+}
+/* Phones: compact paging, so it doesn't take a band of the screen. After
+   the base pagination rules above, which would otherwise win. */
+@media (max-width: 600px) {
+  .paginationContainer {
+    padding: 6px 0 2px;
+    gap: 8px;
+  }
+
+  .paginationBtn {
+    padding: 5px 12px;
+  }
 }

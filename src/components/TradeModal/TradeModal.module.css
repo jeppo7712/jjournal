@@ -976,3 +976,23 @@ ibkrModal {
 
   }
 }
+/* Phones: the time zone picker without its caption, so title, picker and
+   close button fit one line (the picker's value already says what it is). */
+@media (max-width: 600px) {
+  .headerTzLabel {
+    display: none;
+  }
+
+  .headerRow {
+    align-items: center;
+  }
+}
+
+/* iPhone home-screen app: cover the real screen height (iOS 26 reports the
+   viewport shorter; see --app-height in styles.css). */
+@media (max-width: 700px) and (display-mode: standalone) {
+  .overlay {
+    bottom: auto;
+    height: var(--app-height);
+  }
+}

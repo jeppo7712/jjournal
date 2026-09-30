@@ -1568,6 +1568,22 @@ export default function Settings() {
           visibility: showFuturesModal || showExchangeModal ? 'hidden' : 'visible',
         }}
       >
+        {/* Phones pick the tab here: one line instead of rows of tab
+            buttons (see .tabSelect). Without a database only General and
+            Server Logs can be opened, as with the buttons. */}
+        <select
+          className={styles.tabSelect}
+          value={activeTab}
+          onChange={e => setActiveTab(e.target.value)}
+          aria-label="Settings section"
+        >
+          {[
+            ['general', 'General'], ['logs', 'Server Logs'], ['accounts', 'Accounts'], ['checklists', 'Checklists'],
+            ['tws', 'IBKR API'], ['exchanges', 'Exchanges'], ['symbols', 'Symbols'], ['historical', 'Historical Data'],
+          ].map(([id, label]) => (
+            <option key={id} value={id} disabled={!dbStatus?.isConnected && id !== 'general' && id !== 'logs'}>{label}</option>
+          ))}
+        </select>
         <button
           className={`${styles.tabButton} ${activeTab === 'general' ? styles.activeTab : ''} ${!dbStatus?.isConnected && activeTab !== 'general' ? styles.disabledTab : ''}`}
           onClick={() => setActiveTab('general')}
@@ -1724,7 +1740,7 @@ export default function Settings() {
             </div>
             <h3>Accounts</h3>
             <div style={{overflowX: 'auto'}}>
-              <table style={{width: '100%', borderCollapse: 'collapse', background: '#232837', border: '1px solid #32384a', borderRadius: '7px', overflow: 'hidden'}}>
+              <table className="responsive-table" style={{width: '100%', borderCollapse: 'collapse', background: '#232837', border: '1px solid #32384a', borderRadius: '7px', overflow: 'hidden'}}>
                 <thead>
                   <tr style={{background: '#353943'}}>
                     <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Name</th>
@@ -1904,7 +1920,7 @@ export default function Settings() {
             </div>
             <h3>Default Settings</h3>
             <div style={{overflowX: 'auto'}}>
-              <table style={{width: '100%', borderCollapse: 'collapse', background: '#232837', border: '1px solid #32384a', borderRadius: '7px', overflow: 'hidden'}}>
+              <table className="responsive-table" style={{width: '100%', borderCollapse: 'collapse', background: '#232837', border: '1px solid #32384a', borderRadius: '7px', overflow: 'hidden'}}>
                 <thead>
                   <tr style={{background: '#353943'}}>
                     <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Symbol</th>
@@ -1949,7 +1965,7 @@ export default function Settings() {
             </div>
             <h3>Stock Symbols</h3>
             <div style={{overflowX: 'auto'}}>
-              <table style={{width: '100%', borderCollapse: 'collapse', background: '#232837', border: '1px solid #32384a', borderRadius: '7px', overflow: 'hidden'}}>
+              <table className="responsive-table" style={{width: '100%', borderCollapse: 'collapse', background: '#232837', border: '1px solid #32384a', borderRadius: '7px', overflow: 'hidden'}}>
                 <thead>
                   <tr style={{background: '#353943'}}>
                     <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Symbol</th>
@@ -1982,7 +1998,7 @@ export default function Settings() {
             </div>
             <h3>Futures Symbols</h3>
             <div style={{overflowX: 'auto'}}>
-              <table style={{width: '100%', borderCollapse: 'collapse', background: '#232837', border: '1px solid #32384a', borderRadius: '7px', overflow: 'hidden'}}>
+              <table className="responsive-table" style={{width: '100%', borderCollapse: 'collapse', background: '#232837', border: '1px solid #32384a', borderRadius: '7px', overflow: 'hidden'}}>
                 <thead>
                   <tr style={{background: '#353943'}}>
                     <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Symbol</th>
@@ -2245,7 +2261,7 @@ export default function Settings() {
             </div>
             <h3>Exchanges</h3>
             <div style={{overflowX: 'auto'}}>
-              <table style={{width: '100%', borderCollapse: 'collapse', background: '#232837', border: '1px solid #32384a', borderRadius: '7px', overflow: 'hidden'}}>
+              <table className="responsive-table" style={{width: '100%', borderCollapse: 'collapse', background: '#232837', border: '1px solid #32384a', borderRadius: '7px', overflow: 'hidden'}}>
                 <thead>
                   <tr style={{background: '#353943'}}>
                     <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Name</th>

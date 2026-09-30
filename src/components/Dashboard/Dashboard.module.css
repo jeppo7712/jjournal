@@ -729,9 +729,8 @@
 }
 
 @media (max-width: 600px) {
-  .tradeListSection {
-    padding-bottom: calc(60px + env(safe-area-inset-bottom));
-  }
+  /* No bottom padding here: .main-content (styles.css) already keeps clear
+     of the bottom bar, and reserving it twice left a gap under the list. */
 
   .symbolFilterInput {
     font-size: 14px;
@@ -858,21 +857,21 @@
     background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23fff"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>');
   }
 
+  /* Open positions: a clock (still running) instead of a bare letter "O". */
   .openTradesButton::before {
     display: block;
-    content: 'O';
-    font-size: 14px;
-    font-weight: 500;
-    color: #A5ADBA;
-    text-align: center;
+    content: '';
+    width: 20px;
+    height: 20px;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23A5ADBA"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg>');
+    background-size: contain;
+    background-repeat: no-repeat;
+    background-position: center;
   }
 
-  .openTradesButton.active::before {
-    color: #fff;
-  }
-
+  .openTradesButton.active::before,
   .openTradesButton.excluded::before {
-    color: #fff;
+    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23fff"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg>');
   }
 
   .statPctContainer {
@@ -899,9 +898,10 @@
   }
 
   .statLabel {
-    font-size: 14px;
+    font-size: 13px;
     position: static;
-    margin-right: 8px;
+    margin-right: 6px;
+    white-space: nowrap; /* "AVG W" broke over two lines next to a long value */
   }
 
   .statValue {
@@ -909,6 +909,7 @@
     position: static;
     transform: none;
     margin-left: auto;
+    white-space: nowrap;
   }
 
   .topRow {

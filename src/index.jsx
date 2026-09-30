@@ -2,6 +2,9 @@ import React from 'react';
 import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles.css';
+import { startResponsiveTables } from './utils/responsiveTables';
+
+startResponsiveTables();
 
 // The charts size themselves with a ResizeObserver (lightweight-charts'
 // autoSize). When a chart opens inside a modal whose layout is still
@@ -9,8 +12,11 @@ import './styles.css';
 // undelivered notifications": harmless, the chart just redraws a frame later.
 // The development error overlay shows it as a runtime error, so drop exactly
 // that message before the overlay's own listener sees it (capture phase).
+// Same for a bare "Script error.": an error from outside the app's own code
+// (e.g. Safari itself while opening the share sheet) that carries no detail.
 window.addEventListener('error', (event) => {
-  if (typeof event.message === 'string' && event.message.startsWith('ResizeObserver loop')) {
+  if (typeof event.message === 'string'
+      && (event.message.startsWith('ResizeObserver loop') || event.message === 'Script error.')) {
     event.stopImmediatePropagation();
     event.preventDefault();
   }

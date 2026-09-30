@@ -1,6 +1,12 @@
 .page {
   padding: 24px;
   max-width: 1100px;
+  /* A fixed width: with only margin:auto the page took the width of its
+     widest table and ran off a phone screen; the tables scroll inside
+     .tableWrap instead. */
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
   margin: 0 auto;
   color: #e0e2e6;
   display: flex;
@@ -279,6 +285,8 @@
 
 .tableWrap {
   overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
 }
 
 .table {
@@ -369,6 +377,8 @@
 }
 
 @media (max-width: 480px) {
+  /* Three tabs share the width instead of the last one poking past it. */
+  .tabBtn { flex: 1 1 0; padding: 9px 6px; text-align: center; }
   .formGrid { grid-template-columns: 1fr 1fr; }
   .formFieldWide { grid-column: 1 / -1; }
 }
