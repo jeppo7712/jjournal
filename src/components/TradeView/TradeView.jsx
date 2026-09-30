@@ -1,5 +1,6 @@
 import React, { useRef, useLayoutEffect, useState, useEffect, useContext, useCallback, useMemo } from 'react';
 import TradeChecklist from '../TradeModal/TradeChecklist';
+import IconButton from '../common/IconButton';
 import { TradeContext, calculateRisk, getEnabledTimeframesForSetting } from '../../context/TradeContext';
 import { DateTime } from 'luxon';
 import { sanitizeNotesHtml } from '../../utils/sanitizeHtml';
@@ -7,7 +8,6 @@ import { getWebSocketUrl } from '../../utils/getWebSocketUrl';
 import { loadStoredDisplayTimezone, storeDisplayTimezone, resolveDisplayZone, TimezonePicker } from '../../utils/timezonePreference';
 import styles from './TradeView.module.css';
 import { formatMoney, currencyMark } from '../../utils/formatMoney';
-import { ChartIcon } from './TradeViewIcons';
 import { createChart, LineType } from 'lightweight-charts';
 import { getRealisedPnL } from '../../context/TradeContext';
 import { debounce } from 'lodash';
@@ -78,32 +78,6 @@ function getBarDurationInSeconds(timeframe) {
     case '1M': return 60;
     default: return 24 * 60 * 60; // Default to 1 day
   }
-}
-
-function BubbleButton({ children, onClick, color = '#3B82F6', disabled, circle = false, ...rest }) {
-  return (
-    <button
-      className={`${styles.saveBtn} ${circle ? styles.circleBtn : ''}`}
-      style={{
-        background: color,
-        borderRadius: circle ? '50%' : 18,
-        padding: circle ? '8px' : '10px 24px',
-        minWidth: circle ? '40px' : 90,
-        height: circle ? '40px' : 'auto',
-        width: circle ? '40px' : 'auto',
-        display: circle ? 'flex' : 'inline-flex',
-        alignItems: 'center',
-        justifyContent: 'center',
-        opacity: disabled ? 0.5 : 1,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-      }}
-      onClick={onClick}
-      disabled={disabled}
-      {...rest}
-    >
-      {children}
-    </button>
-  );
 }
 
 // action.quantity is rendered raw from the DB with no cap at all — fine for
@@ -218,7 +192,7 @@ export default function TradeView({ trade, onClose, onEdit }) {
   const [moveTargetId, setMoveTargetId] = useState('');
   const [isMoving, setIsMoving] = useState(false);
   // One ref on the wrapper around both the trigger button and the popover —
-  // BubbleButton is a plain function component (not React.forwardRef), so a
+  // IconButton is a plain function component (not React.forwardRef), so a
   // ref placed directly on it would silently never attach and the
   // outside-click check below would then never see a real element to test
   // against, permanently short-circuiting to "never close."
@@ -1893,25 +1867,24 @@ useEffect(() => {
         </div>
         <div className={styles.footerRow}>
           <div className={styles.leftButtonGroup}>
-            <BubbleButton
-              circle
-              color="#10B981"
+            <IconButton
+              icon="chart"
+              caption="Chart"
+              label="Show the chart"
               disabled={!hasSymbolSetting}
               onClick={() => setShowChart(true)}
-            >
-              <ChartIcon className={styles.aiIcon} />
-            </BubbleButton>
+            />
             {Array.isArray(accounts) && accounts.length > 1 && (
               <div style={{ position: 'relative' }} ref={moveWrapperRef}>
-                <BubbleButton
-                  color="#6B7280"
+                <IconButton
+                  icon="move"
+                  caption="Move"
+                  label="Move this trade to another account"
                   onClick={() => {
                     setMoveTargetId('');
                     setShowMoveMenu(v => !v);
                   }}
-                >
-                  Move
-                </BubbleButton>
+                />
                 {showMoveMenu && (
                   <div className={styles.moveMenu}>
                     <label className={styles.moveMenuLabel}>Move to account</label>
@@ -1940,9 +1913,7 @@ useEffect(() => {
               </div>
             )}
           </div>
-          <BubbleButton color="#3B82F6" onClick={() => onEdit && onEdit(trade)}>
-            Edit
-          </BubbleButton>
+          <IconButton icon="pencil" caption="Edit" label="Edit this trade" onClick={() => onEdit && onEdit(trade)} />
         </div>
       </div>
       {selectedAttachment && (

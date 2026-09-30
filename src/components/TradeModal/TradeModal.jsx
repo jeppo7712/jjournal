@@ -2,6 +2,7 @@ import React, { useContext, useState, useCallback, useRef, useEffect, useLayoutE
 import { createPortal } from 'react-dom';
 import ReactQuill from 'react-quill';
 import TradeChecklist from './TradeChecklist';
+import IconButton from '../common/IconButton';
 import { useDropzone } from 'react-dropzone';
 import 'react-quill/dist/quill.snow.css';
 import { TradeContext, calculateRisk, getEnabledTimeframesForSetting } from '../../context/TradeContext';
@@ -1293,70 +1294,47 @@ export default function TradeModal({ trade, onClose }) {
             </div>
           )}
         </div>
-        {isMobile ? (
-          // Phone: two tidy rows instead of five buttons wrapping wherever
-          // they happen to fit. Short labels so three fit side by side.
-          <div className={styles.footerRow} style={{ display: 'grid', gridTemplateColumns: 'repeat(3, 1fr)', gap: 8, padding: '10px 12px calc(10px + var(--safe-bottom))' }}>
-            <BubbleButton onClick={() => fetchIBKRData(true)} disabled={!form.symbol || ibkrLoading} color="#6366F1" small title="Fetch the fills from IBKR Flex">
-              {ibkrLoading && ibkrSource === 'flex' ? 'Loading…' : 'IBKR Flex'}
-            </BubbleButton>
-            <BubbleButton onClick={() => fetchIBKRData(false)} disabled={!form.symbol || ibkrLoading} color="#10B981" small title="Fetch the fills from TWS (fallback)">
-              {ibkrLoading && ibkrSource === 'tws' ? 'Loading…' : 'TWS'}
-            </BubbleButton>
-            <BubbleButton onClick={() => setShowFormChart(prev => !prev)} disabled={!form.symbol} color="#F59E0B" small title="See the price action around your fills">
-              {showFormChart ? 'Hide Chart' : 'Chart'}
-            </BubbleButton>
-            {isEditMode && (
-              <BubbleButton onClick={() => setShowDeletePopup(true)} color="#EF4444" small>
-                Delete
-              </BubbleButton>
-            )}
-            <BubbleButton onClick={saveTrade} disabled={!canSave} color="#3B82F6" small style={{ gridColumn: isEditMode ? 'span 2' : 'span 3' }}>
-              Save
-            </BubbleButton>
-          </div>
-        ) : (
-        <div className={styles.footerRow}>
-          <div style={{ marginRight: 'auto', display: 'flex', flexWrap: 'nowrap', gap: 10 }}>
-            <BubbleButton
+        {/* Icons instead of five text buttons: import and chart on the
+            left, delete and save on the right; one row on every screen. */}
+        <div
+          className={styles.footerRow}
+          style={{
+            justifyContent: 'space-between',
+            ...(isMobile ? { padding: '8px 12px calc(8px + var(--safe-bottom))', flexWrap: 'nowrap' } : {}),
+          }}
+        >
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
+            <IconButton
+              icon="cloudDownload"
+              caption="Flex"
+              label="Fetch the fills from IBKR Flex"
               onClick={() => fetchIBKRData(true)}
               disabled={!form.symbol || ibkrLoading}
-              color="#6366F1"
-              small={isMobile}
-            >
-              {ibkrLoading && ibkrSource === 'flex' ? 'Loading...' : 'Fetch IBKR (Flex)'}
-            </BubbleButton>
-            <BubbleButton
+              busy={ibkrLoading && ibkrSource === 'flex'}
+            />
+            <IconButton
+              icon="desktop"
+              caption="TWS"
+              label="Fetch the fills from TWS (fallback)"
               onClick={() => fetchIBKRData(false)}
               disabled={!form.symbol || ibkrLoading}
-              color="#10B981"
-              small={isMobile}
-            >
-              {ibkrLoading && ibkrSource === 'tws' ? 'Loading...' : 'Fetch TWS (fallback)'}
-            </BubbleButton>
-            <BubbleButton
+              busy={ibkrLoading && ibkrSource === 'tws'}
+            />
+            <IconButton
+              icon="chart"
+              caption={showFormChart ? 'Hide' : 'Chart'}
+              label={showFormChart ? 'Hide the chart' : 'Show the chart around your fills (helps pick Stop-Loss / Target)'}
               onClick={() => setShowFormChart(prev => !prev)}
               disabled={!form.symbol}
-              color="#F59E0B"
-              title="See the price action around your fills to help pick Stop-Loss / Target"
-              small={isMobile}
-            >
-              {showFormChart ? 'Hide Chart' : 'Show Chart'}
-            </BubbleButton>
+            />
           </div>
-          <div>
+          <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
             {isEditMode && (
-              <BubbleButton onClick={() => setShowDeletePopup(true)} color="#EF4444" small={isMobile}>
-                Delete
-              </BubbleButton>
+              <IconButton icon="trash" caption="Delete" label="Delete this trade" onClick={() => setShowDeletePopup(true)} />
             )}
+            <IconButton icon="check" caption="Save" label="Save" onClick={saveTrade} disabled={!canSave} />
           </div>
-
-          <BubbleButton onClick={saveTrade} disabled={!canSave} color="#3B82F6" small={isMobile}>
-            Save
-          </BubbleButton>
         </div>
-        )}
         </div>
         {showFormChart && !isMobile && (
           <TradeFormChart
