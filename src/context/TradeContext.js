@@ -778,6 +778,9 @@ export const TradeProvider = ({ children }) => {
 
   const priceCacheRef = useRef(new Map());
   const CACHE_DURATION = 5 * 1000;
+  // How often the open positions' live prices are refreshed while the page
+  // is open (see refreshOpenTradePrices).
+  const LIVE_PRICE_REFRESH_MS = 5 * 60 * 1000;
 
   // "Latest request wins" guard for refreshTrades: switching accounts (or any
   // rapid re-trigger) can leave an older, slower fetch resolving after a newer
@@ -1220,6 +1223,44 @@ export const TradeProvider = ({ children }) => {
       }
     }
   }, [currentAccountId, futuresSettings, updateTradePriceData, loadAttachmentsInBackground, refreshAccounts]);
+
+  // Live prices of the open positions, refreshed every few minutes while the
+  // page is open (refreshTrades only fetches them when the trades load, e.g.
+  // on an account switch, so a page left open kept showing the prices from
+  // that moment). Only the open trades' prices are fetched, not the trades.
+  const tradesRef = useRef(trades);
+  tradesRef.current = trades;
+  const lastPriceRefreshRef = useRef(Date.now());
+
+  const refreshOpenTradePrices = useCallback(async () => {
+    lastPriceRefreshRef.current = Date.now();
+    const openTrades = tradesRef.current.filter(t => t.status === 'OPEN' && ['STK', 'FUT'].includes(t.type) && t.symbol);
+    if (openTrades.length === 0 || !futuresSettings) return;
+    const requestSeq = refreshSeqRef.current;
+    try {
+      const results = await Promise.all(openTrades.map(trade => updateTradePriceData(trade, futuresSettings)));
+      // An account switch or reload in the meantime replaced these trades.
+      if (requestSeq !== refreshSeqRef.current) return;
+      const byId = new Map(openTrades.map((t, i) => [t.id, results[i]]));
+      setTrades(prev => prev.map(t => (byId.get(t.id) ? { ...t, ...byId.get(t.id) } : t)));
+    } catch (err) {
+      console.error('Failed to refresh live prices:', err);
+    }
+  }, [futuresSettings, updateTradePriceData]);
+
+  useEffect(() => {
+    const due = () => Date.now() - lastPriceRefreshRef.current >= LIVE_PRICE_REFRESH_MS;
+    const tick = () => {
+      // Not while the tab is in the background; catch up when it's back.
+      if (document.visibilityState === 'visible' && due()) refreshOpenTradePrices();
+    };
+    const timer = setInterval(tick, 30 * 1000);
+    document.addEventListener('visibilitychange', tick);
+    return () => {
+      clearInterval(timer);
+      document.removeEventListener('visibilitychange', tick);
+    };
+  }, [refreshOpenTradePrices]);
 
   // For a specific OTHER account's trades, fully processed (including live
   // price data) the same way `trades` is for the currently selected account
