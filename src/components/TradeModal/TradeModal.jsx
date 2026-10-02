@@ -404,6 +404,33 @@ export default function TradeModal({ trade, onClose }) {
     return calculateRisk(tradeDataForRiskCalculation);
   }, [actions, form.type, form.stopLoss, form.tickSize, form.tickValue]);
 
+  // Live summary of the fills as they're typed: side, open position,
+  // average entry, P&L once flat, and the planned reward:risk.
+  const fillSummary = useMemo(() => {
+    const valid = actions.filter(a => a.quantity !== '' && Number(a.quantity) > 0 && a.price !== '' && !isNaN(Number(String(a.price).replace(',', '.'))));
+    if (valid.length === 0) return null;
+    const num = v => Number(String(v).replace(',', '.')) || 0;
+    let buyQty = 0, sellQty = 0, buySum = 0, sellSum = 0, fees = 0;
+    valid.forEach(a => {
+      const q = num(a.quantity), pr = num(a.price);
+      if (a.type === 'BUY') { buyQty += q; buySum += q * pr; } else { sellQty += q; sellSum += q * pr; }
+      fees += num(a.fee);
+    });
+    const ordered = [...valid].sort((x, y) => (x.dateTime?.toMillis?.() || 0) - (y.dateTime?.toMillis?.() || 0));
+    const side = ordered[0].type === 'BUY' ? 'LONG' : 'SHORT';
+    const entryQty = side === 'LONG' ? buyQty : sellQty;
+    const avgEntry = entryQty ? (side === 'LONG' ? buySum : sellSum) / entryQty : null;
+    const openQty = Math.abs(buyQty - sellQty);
+    const multiplier = form.type === 'FUT' && num(form.tickSize) && num(form.tickValue) ? num(form.tickValue) / num(form.tickSize) : 1;
+    const isFlat = openQty < 1e-9 && buyQty > 0;
+    const pnl = isFlat ? (sellSum - buySum) * multiplier - fees : null;
+    const stop = num(form.stopLoss), target = num(form.target);
+    const plannedRR = avgEntry && stop && target && Math.abs(avgEntry - stop) > 0
+      ? Math.abs(target - avgEntry) / Math.abs(avgEntry - stop)
+      : null;
+    return { side, openQty, avgEntry, isFlat, pnl, fees, plannedRR, count: valid.length };
+  }, [actions, form.type, form.tickSize, form.tickValue, form.stopLoss, form.target]);
+
   const actionErrors = actions.map((action, idx) => ({
     quantity: action.quantity === '' || !onlyNumber(action.quantity),
     price: action.price === '' || !onlyNumber(String(action.price).replace(',', '.')),
@@ -1043,7 +1070,7 @@ export default function TradeModal({ trade, onClose }) {
         <div className={styles.headerRow} {...drag.dragHandleProps}>
           <span className={styles.title}>{isEditMode ? 'Edit Trade' : 'New Trade'}</span>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-            <span className={styles.headerTzLabel} style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>
+            <span className={styles.headerTzLabel}>
               Timezone
             </span>
             <TimezonePicker value={displayTimezone} onChange={setDisplayTimezone} />
@@ -1063,6 +1090,7 @@ export default function TradeModal({ trade, onClose }) {
         <div className={styles.tabContent} ref={contentWrapperRef}>
           {activeTab === 'general' ? (
             <>
+              <div className={styles.sectionTitle}>Instrument &amp; plan</div>
               <div className={styles.formGrid}>
                 <div className={styles.formField}>
                   <label htmlFor="symbol">Symbol</label>
@@ -1114,7 +1142,7 @@ export default function TradeModal({ trade, onClose }) {
                 </div>
                 <div className={styles.formField}>
                   <label htmlFor="stopLoss">
-                    Stop-Loss {risk !== null && <span style={{ fontWeight: 'normal' }}>(${formatNumber(risk, 2)})</span>}
+                    Stop-Loss
                   </label>
                   <input
                     id="stopLoss"
@@ -1149,6 +1177,30 @@ export default function TradeModal({ trade, onClose }) {
                       className={`${styles.inputBubble} ${formErrors.tickValue ? styles.invalid : ''}`}
                       inputMode="decimal"
                     />
+                  </div>
+                )}
+              </div>
+              <div className={styles.fillsHeader}>
+                <div className={styles.sectionTitle}>Fills <span className={styles.fillsCount}>{actions.length}</span></div>
+                {fillSummary && (
+                  <div className={styles.fillSummary}>
+                    <span className={`${styles.summaryChip} ${fillSummary.side === 'LONG' ? styles.summaryLong : styles.summaryShort}`}>
+                      {fillSummary.side === 'LONG' ? '↗ Long' : '↘ Short'}
+                    </span>
+                    {fillSummary.isFlat ? (
+                      <span className={`${styles.summaryChip} ${fillSummary.pnl >= 0 ? styles.summaryWin : styles.summaryLoss}`} title="After fees">
+                        {fillSummary.pnl >= 0 ? '+' : '−'}{formatNumber(Math.abs(fillSummary.pnl), 2)} P&amp;L
+                      </span>
+                    ) : (
+                      <span className={styles.summaryChip}>{formatNumber(fillSummary.openQty, 8, true)} open</span>
+                    )}
+                    {fillSummary.avgEntry !== null && (
+                      <span className={styles.summaryChip} title="Average entry price">avg {formatNumber(fillSummary.avgEntry, Math.max(2, formPricePrecision || 2))}</span>
+                    )}
+                    {risk !== null && <span className={styles.summaryChip} title="Money lost if the stop is hit">risk {formatNumber(risk, 2)}</span>}
+                    {fillSummary.plannedRR !== null && isFinite(fillSummary.plannedRR) && (
+                      <span className={styles.summaryChip} title="Target distance ÷ stop distance from the average entry">{formatNumber(fillSummary.plannedRR, 1)} : 1 plan</span>
+                    )}
                   </div>
                 )}
               </div>
@@ -1258,7 +1310,9 @@ export default function TradeModal({ trade, onClose }) {
                   <div className={styles.positionWarning} role="note">{positionReentryWarning}</div>
                 )}
                 <div className={styles.addActionRow}>
-                  <button className={styles.addActionBtn} onClick={handleAddAction} disabled={!allActionsValid}>+</button>
+                  <button className={styles.addFillBtn} onClick={handleAddAction} disabled={!allActionsValid} title={allActionsValid ? 'Add another fill' : 'Complete the fills above first'}>
+                    <span aria-hidden="true">+</span> Add fill
+                  </button>
                 </div>
               </div>
             </>

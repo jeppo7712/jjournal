@@ -3,9 +3,8 @@ import { DateTime } from 'luxon';
 import { debounce } from 'lodash';
 import { formatNumber } from '../utils/numberFormat';
 
-// The trade list's hideable columns, in display order. Shared between
-// TradeList.jsx (rendering) and Settings.jsx (the per-account visibility
-// toggles) so the two never drift out of sync.
+// The trade list's hideable columns, in display order (TradeList.jsx renders
+// them and its header's column picker toggles them, per account).
 export const TRADE_LIST_COLUMNS = [
   { key: 'openDate', label: 'Open Date' },
   { key: 'symbol', label: 'Symbol' },

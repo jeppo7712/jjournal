@@ -5,6 +5,8 @@ import { useDropzone } from 'react-dropzone';
 import 'react-quill/dist/quill.snow.css';
 import styles from './DayNote.module.css';
 import { TradeContext } from '../../context/TradeContext';
+import { formatMoney } from '../../utils/formatMoney';
+import { sumByCurrency, toTotalsList } from '../../utils/currencyTotals';
 import IconButton from '../common/IconButton';
 
 const getCurrentDate = () => {
@@ -72,11 +74,22 @@ function SegmentedRadio({ name, value, onChange, options }) {
 }
 
 export default function DayNote({ note, onClose }) {
-  const { refreshTrades, currentAccountId } = useContext(TradeContext);
+  const { refreshTrades, currentAccountId, trades } = useContext(TradeContext);
   const [mood, setMood] = useState(note && note.mood !== undefined ? note.mood : 1);
   const [marketCondition, setMarketCondition] = useState(note && note.market_condition !== undefined ? note.market_condition : 1);
   const [marketVolatility, setMarketVolatility] = useState(note && note.market_volume !== undefined ? note.market_volume : 1);
   const [date, setDate] = useState(note ? formatDateForInput(new Date(note.date)) : getCurrentDate());
+
+  // The trades closed on this note's day (local calendar day), shown at the
+  // top so the day's result is in view while writing about it.
+  const dayTrades = (Array.isArray(trades) ? trades : []).filter(t => {
+    if (t.status === 'OPEN' || !t.lastActionDate || typeof t.lastActionDate.toFormat !== 'function') return false;
+    return t.lastActionDate.toFormat('yyyy-MM-dd') === date;
+  });
+  const dayWins = dayTrades.filter(t => t.status === 'WIN').length;
+  const dayLosses = dayTrades.filter(t => t.status === 'LOSS').length;
+  const dayPnl = toTotalsList(sumByCurrency(dayTrades, t => t.return || 0));
+  const daySymbols = [...new Set(dayTrades.map(t => t.symbol))];
   const [summary, setSummary] = useState(note ? note.summary || '' : '');
   const [notes, setNotes] = useState(note ? note.notes_html || '' : '');
   const [attachments, setAttachments] = useState(note && note.attachments ? note.attachments.map(att => ({
@@ -382,6 +395,26 @@ export default function DayNote({ note, onClose }) {
                 options={mktVolSvgs}
               />
             </div>
+          </div>
+          <div className={styles.daySummary}>
+            <span className={styles.daySummaryLabel}>That day</span>
+            {dayTrades.length === 0 ? (
+              <span className={styles.daySummaryEmpty}>No trades closed on this date</span>
+            ) : (
+              <>
+                {dayPnl.map(({ currency, amount }) => (
+                  <span key={currency} className={`${styles.dayChip} ${amount >= 0 ? styles.dayChipWin : styles.dayChipLoss}`}>
+                    {amount >= 0 ? '+' : '−'}{formatMoney(Math.abs(amount), currency)}
+                  </span>
+                ))}
+                <span className={styles.dayChip}>
+                  {dayTrades.length} trade{dayTrades.length === 1 ? '' : 's'} · <span className={styles.dayWins}>{dayWins}W</span> / <span className={styles.dayLosses}>{dayLosses}L</span>
+                </span>
+                <span className={styles.dayChip} title={daySymbols.join(', ')}>
+                  {daySymbols.slice(0, 4).join(' · ')}{daySymbols.length > 4 ? ` +${daySymbols.length - 4}` : ''}
+                </span>
+              </>
+            )}
           </div>
           <div className={styles.journalTab}>
             <div style={{ display: 'flex', gap: 16, alignItems: 'center' }}>
