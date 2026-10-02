@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import styles from './Settings.module.css';
-import { TradeContext, TRADE_LIST_COLUMNS } from '../../context/TradeContext';
+import { TradeContext } from '../../context/TradeContext';
 import ChecklistSettings from './ChecklistSettings';
 import IconButton, { ACTION_COLORS } from '../common/IconButton';
 import { useStatus } from '../../context/StatusContext';
@@ -144,7 +144,7 @@ function getBackAdjustedBars(bars) {
 }
 
 export default function Settings() {
-  const { accounts, currentAccountId, setCurrentAccountId, setAccounts, futuresSettings, refreshFuturesSettings, tradesPerPage, setTradesPerPage, hiddenColumns, toggleColumnVisibility } = useContext(TradeContext);
+  const { accounts, currentAccountId, setCurrentAccountId, setAccounts, futuresSettings, refreshFuturesSettings, tradesPerPage, setTradesPerPage } = useContext(TradeContext);
   const { statusLogs } = useStatus();
   const [settings, setSettings] = useState({
     databaseUrl: '',
@@ -1595,30 +1595,6 @@ export default function Settings() {
               </div>
             </section>
 
-            <section className={styles.card}>
-              <div className={styles.cardHeader}>
-                <div>
-                  <h3>Trade list columns</h3>
-                  <p>Which columns this account's trade list shows, e.g. no Entry/Exit Total for a futures-only account.</p>
-                </div>
-              </div>
-              <div className={styles.chipGroup}>
-                {TRADE_LIST_COLUMNS.map(col => {
-                  const on = !hiddenColumns.includes(col.key);
-                  return (
-                    <button
-                      key={col.key}
-                      type="button"
-                      className={`${styles.chip} ${on ? styles.chipOn : ''}`}
-                      aria-pressed={on}
-                      onClick={() => toggleColumnVisibility(col.key)}
-                    >
-                      {col.label}
-                    </button>
-                  );
-                })}
-              </div>
-            </section>
           </div>
         )}
         {activeTab === 'logs' && (() => {

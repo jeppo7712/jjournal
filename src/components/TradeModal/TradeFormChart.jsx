@@ -272,7 +272,7 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
       height: chartContainerRef.current.clientHeight,
-      layout: { background: { color: '#161A24' }, textColor: '#e0e2e6' },
+      layout: { background: { color: '#13161F' }, textColor: '#8B93A3' },
       grid: { vertLines: { color: '#141822' }, horzLines: { color: '#141822' }, horzLinesVisible: false, vertLinesVisible: false },
       timeScale: {
         timeVisible: true,
@@ -457,24 +457,17 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
       : { flex: '1 1 auto', minWidth: 0, display: 'flex', flexDirection: 'column', borderLeft: '1px solid #3a3f4d', paddingLeft: 20, marginLeft: 4 }
     }>
       <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: 10 }}>
-        <span className={styles.title} style={{ fontSize: '1rem' }}>{symbol} — reference chart</span>
+        <span className={styles.title} style={{ fontSize: '1rem' }}>{symbol} <span className={styles.chartSubtitle}>reference chart</span></span>
         <button className={styles.closeBtn} onClick={onClose} title="Hide chart">×</button>
       </div>
-      <div style={{ display: 'flex', gap: 6, marginBottom: 10, flexWrap: 'wrap' }}>
+      <div className={styles.chartSegmented} role="group" aria-label="Timeframe">
         {availableTimeframes.map(tf => (
           <button
             key={tf}
+            type="button"
             onClick={() => setTimeframe(tf)}
-            style={{
-              background: timeframe === tf ? '#3B82F6' : 'rgb(112, 113, 115)',
-              color: '#f0f2f6',
-              border: 'none',
-              borderRadius: '12px',
-              padding: '6px 12px',
-              fontSize: '0.9em',
-              cursor: 'pointer',
-              opacity: timeframe === tf ? 1 : 0.7,
-            }}
+            className={timeframe === tf ? styles.chartSegmentOn : ''}
+            aria-pressed={timeframe === tf}
           >
             {tf}
           </button>
@@ -492,7 +485,7 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
           // overlay (chartMessageOverlay) sets the same z-index: 10 for
           // exactly this reason — dropped when this component was built from
           // scratch instead of sharing that CSS.
-          <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, background: '#161A24' }}>
+          <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, background: '#13161F' }}>
             <Oval height="40" width="40" color="#3B82F6" ariaLabel="loading-indicator" secondaryColor="#ccc" strokeWidth={4} strokeWidthSecondary={4} />
             <p style={{ color: '#e0e2e6', fontSize: '0.9em', textAlign: 'center', padding: '0 20px' }}>
               {awaitingData ? `Fetching ${symbol} (${timeframe}) data for the first time — this can take a bit…` : `Loading ${timeframe} chart…`}
@@ -500,7 +493,7 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
           </div>
         )}
         {error && (
-          <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#161A24' }}>
+          <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#13161F' }}>
             <p style={{ color: '#EF4444' }}>{error}</p>
           </div>
         )}

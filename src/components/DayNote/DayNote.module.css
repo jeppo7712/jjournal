@@ -616,3 +616,56 @@ input[type="radio"]:checked + .radio-btn,
   from { opacity: 0; translate: 0 8px; scale: 0.99; }
   to { opacity: 1; translate: 0 0; scale: 1; }
 }
+
+/* ---------- Day note content ---------- */
+.moodField label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-muted, #8B93A3);
+}
+
+.daySummary {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 4px 0 18px;
+  padding: 10px 12px;
+  border-radius: 12px;
+  background: rgba(245, 158, 11, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.2);
+}
+
+.daySummaryLabel {
+  margin-right: 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #FCD34D;
+}
+
+.daySummaryEmpty {
+  font-size: 12.5px;
+  color: var(--ui-faint, #6B7280);
+}
+
+.dayChip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ui-text-2, #C7CDD8);
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dayChipWin { background: rgba(34, 197, 94, 0.13); color: #4ADE80; }
+.dayChipLoss { background: rgba(239, 68, 68, 0.13); color: #F87171; }
+.dayWins { color: #4ADE80; }
+.dayLosses { color: #F87171; }
