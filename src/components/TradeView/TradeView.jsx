@@ -14,6 +14,7 @@ import { createChart, LineType } from 'lightweight-charts';
 import { getRealisedPnL } from '../../context/TradeContext';
 import { debounce } from 'lodash';
 import { Oval } from 'react-loader-spinner';
+import { notify } from '../common/Dialogs';
 
 // Remembers the last chart timeframe picked per symbol (scoped by type too,
 // since a symbol string could in principle mean different things for STK vs
@@ -245,7 +246,7 @@ export default function TradeView({ trade, onClose, onEdit }) {
       // nothing left here for this view to show.
       onClose && onClose();
     } catch (err) {
-      alert(err.message);
+      notify(err.message);
     } finally {
       setIsMoving(false);
     }
