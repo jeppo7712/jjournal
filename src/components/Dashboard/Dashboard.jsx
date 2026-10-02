@@ -299,7 +299,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
   function computeUnrealisedPnLSeries(trades, historicalDataMap, startDate = null, endDate = null) {
     const relevantTrades = trades.filter(trade => ['OPEN', 'WIN', 'LOSS', 'WASH'].includes(trade.status) && (trade.type === 'FUT' || trade.type === 'STK'));
     if (relevantTrades.length === 0) {
-      return { labels: [], series: [] };
+      return { labels: [], seriesByCurrency: {} };
     }
 
     const openLotsPerTrade = relevantTrades.map(trade => ({
@@ -324,7 +324,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       // Potentially swap them or return empty if start is truly after end.
       // For now, let's cap latestDate at today if it's in the future from a filter.
       if (latestDate > today) latestDate = today;
-      if (earliestDate > latestDate) return { labels: [], series: [] };
+      if (earliestDate > latestDate) return { labels: [], seriesByCurrency: {} };
     }
 
     const days = Math.ceil(latestDate.diff(earliestDate, 'days').days) + 1;
