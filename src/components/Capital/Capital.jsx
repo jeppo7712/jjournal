@@ -2,6 +2,7 @@ import React, { useContext, useState, useEffect, useCallback } from 'react';
 import { TradeContext } from '../../context/TradeContext';
 import styles from './Capital.module.css';
 import { formatNumber } from '../../utils/numberFormat';
+import { notify, confirmDialog, promptDialog } from '../common/Dialogs';
 
 const apiBaseUrl = process.env.REACT_APP_API_URL || '';
 
@@ -95,7 +96,7 @@ const Capital = () => {
 
   const submitTransaction = async (e) => {
     e.preventDefault();
-    if (!txForm.amount || Number(txForm.amount) <= 0) { alert('Enter a positive amount.'); return; }
+    if (!txForm.amount || Number(txForm.amount) <= 0) { notify('Enter a positive amount.'); return; }
     try {
       const res = await fetch(`${apiBaseUrl}/api/cash-transactions`, {
         method: 'POST',
@@ -105,13 +106,13 @@ const Capital = () => {
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to save transaction');
       setTxForm(prev => ({ ...prev, amount: '', note: '' }));
       fetchAll();
-    } catch (err) { alert(err.message); }
+    } catch (err) { notify(err.message); }
   };
 
   const submitTransfer = async (e) => {
     e.preventDefault();
-    if (!transferForm.to_account_id) { alert('Choose a destination account.'); return; }
-    if (!transferForm.amount || Number(transferForm.amount) <= 0) { alert('Enter a positive amount.'); return; }
+    if (!transferForm.to_account_id) { notify('Choose a destination account.'); return; }
+    if (!transferForm.amount || Number(transferForm.amount) <= 0) { notify('Enter a positive amount.'); return; }
     try {
       const res = await fetch(`${apiBaseUrl}/api/cash-transactions/transfer`, {
         method: 'POST',
@@ -121,16 +122,16 @@ const Capital = () => {
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to save transfer');
       setTransferForm(prev => ({ ...prev, amount: '', note: '' }));
       fetchAll();
-    } catch (err) { alert(err.message); }
+    } catch (err) { notify(err.message); }
   };
 
   const submitExchange = async (e) => {
     e.preventDefault();
     if (!exchangeForm.from_amount || Number(exchangeForm.from_amount) <= 0 || !exchangeForm.to_amount || Number(exchangeForm.to_amount) <= 0) {
-      alert('Enter positive amounts on both sides.'); return;
+      notify('Enter positive amounts on both sides.'); return;
     }
     if (exchangeForm.from_currency.toUpperCase() === exchangeForm.to_currency.toUpperCase()) {
-      alert('From/To currencies must differ — use a plain deposit/withdrawal for same-currency amounts.'); return;
+      notify('From/To currencies must differ — use a plain deposit/withdrawal for same-currency amounts.'); return;
     }
     try {
       const res = await fetch(`${apiBaseUrl}/api/cash-transactions/exchange`, {
@@ -146,16 +147,16 @@ const Capital = () => {
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to save exchange');
       setExchangeForm(prev => ({ ...prev, from_amount: '', to_amount: '', note: '' }));
       fetchAll();
-    } catch (err) { alert(err.message); }
+    } catch (err) { notify(err.message); }
   };
 
   const deleteTransaction = async (id) => {
-    if (!window.confirm('Delete this cash transaction? A transfer\'s matching entry in the other account is deleted too.')) return;
+    if (!await confirmDialog('Delete this cash transaction? A transfer\'s matching entry in the other account is deleted too.')) return;
     try {
       const res = await fetch(`${apiBaseUrl}/api/cash-transactions/${id}`, { method: 'DELETE', headers: { 'X-Account-ID': currentAccountId } });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete');
       fetchAll();
-    } catch (err) { alert(err.message); }
+    } catch (err) { notify(err.message); }
   };
 
   // Typing a symbol that has a stock setting pre-fills its currency; the
@@ -185,9 +186,9 @@ const Capital = () => {
     e.preventDefault();
     const gross = Number(dividendForm.gross_amount);
     const tax = dividendForm.withholding_tax === '' ? 0 : Number(dividendForm.withholding_tax);
-    if (!dividendForm.symbol.trim()) { alert('Enter a symbol.'); return; }
-    if (!gross) { alert('Enter the gross amount.'); return; }
-    if (tax < 0 || tax > Math.abs(gross)) { alert('Tax withheld must be between 0 and the gross amount.'); return; }
+    if (!dividendForm.symbol.trim()) { notify('Enter a symbol.'); return; }
+    if (!gross) { notify('Enter the gross amount.'); return; }
+    if (tax < 0 || tax > Math.abs(gross)) { notify('Tax withheld must be between 0 and the gross amount.'); return; }
     try {
       const res = await fetch(`${apiBaseUrl}/api/dividends${editingDividendId ? `/${editingDividendId}` : ''}`, {
         method: editingDividendId ? 'PUT' : 'POST',
@@ -202,20 +203,20 @@ const Capital = () => {
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to save dividend');
       resetDividendForm();
       fetchAll();
-    } catch (err) { alert(err.message); }
+    } catch (err) { notify(err.message); }
   };
 
   const deleteDividend = async (d) => {
     const msg = d.source === 'MANUAL'
       ? `Delete this ${d.symbol} dividend? Its ledger entries are removed too.`
       : `Remove this imported ${d.symbol} dividend? Its ledger entries are removed and it won't be imported again (you can restore it).`;
-    if (!window.confirm(msg)) return;
+    if (!await confirmDialog(msg)) return;
     try {
       const res = await fetch(`${apiBaseUrl}/api/dividends/${d.id}`, { method: 'DELETE', headers: { 'X-Account-ID': currentAccountId } });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete');
       if (editingDividendId === d.id) resetDividendForm();
       fetchAll();
-    } catch (err) { alert(err.message); }
+    } catch (err) { notify(err.message); }
   };
 
   const restoreDividend = async (d) => {
@@ -223,13 +224,13 @@ const Capital = () => {
       const res = await fetch(`${apiBaseUrl}/api/dividends/${d.id}/restore`, { method: 'POST', headers: { 'X-Account-ID': currentAccountId } });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to restore');
       fetchAll();
-    } catch (err) { alert(err.message); }
+    } catch (err) { notify(err.message); }
   };
 
   const submitHolding = async (e) => {
     e.preventDefault();
     if (!holdingForm.name.trim() || !holdingForm.face_value || !holdingForm.purchase_price || !holdingForm.purchase_date) {
-      alert('Name, face value, purchase price, and purchase date are required.');
+      notify('Name, face value, purchase price, and purchase date are required.');
       return;
     }
     try {
@@ -248,14 +249,14 @@ const Capital = () => {
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to save holding');
       setHoldingForm(prev => ({ ...prev, name: '', face_value: '', purchase_price: '', maturity_date: '', coupon_rate: '', coupon_frequency: '', notes: '' }));
       fetchAll();
-    } catch (err) { alert(err.message); }
+    } catch (err) { notify(err.message); }
   };
 
   const redeemHolding = async (holding) => {
-    const input = window.prompt(`Redemption amount for "${holding.name}" (${holding.currency}):`, holding.face_value);
+    const input = await promptDialog(`Redemption amount for "${holding.name}" (${holding.currency}):`, holding.face_value, { title: "Redeem holding", confirmLabel: "Redeem" });
     if (input === null) return;
     const amount = Number(input);
-    if (!amount || amount <= 0) { alert('Enter a positive amount.'); return; }
+    if (!amount || amount <= 0) { notify('Enter a positive amount.'); return; }
     try {
       const res = await fetch(`${apiBaseUrl}/api/holdings/${holding.id}/redeem`, {
         method: 'POST',
@@ -264,16 +265,16 @@ const Capital = () => {
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to redeem');
       fetchAll();
-    } catch (err) { alert(err.message); }
+    } catch (err) { notify(err.message); }
   };
 
   const deleteHolding = async (id) => {
-    if (!window.confirm('Delete this holding? Its linked cash transactions are removed too.')) return;
+    if (!await confirmDialog('Delete this holding? Its linked cash transactions are removed too.')) return;
     try {
       const res = await fetch(`${apiBaseUrl}/api/holdings/${id}`, { method: 'DELETE', headers: { 'X-Account-ID': currentAccountId } });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to delete');
       fetchAll();
-    } catch (err) { alert(err.message); }
+    } catch (err) { notify(err.message); }
   };
 
   // Manually runs the same check the server does automatically every 6
@@ -290,13 +291,13 @@ const Capital = () => {
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to check');
       const { couponsPosted, maturedCount } = await res.json();
       if (couponsPosted === 0 && maturedCount === 0) {
-        alert('Nothing due right now.');
+        notify('Nothing due right now.');
       } else {
-        alert(`${couponsPosted} coupon payment(s) posted, ${maturedCount} holding(s) matured.`);
+        notify(`${couponsPosted} coupon payment(s) posted, ${maturedCount} holding(s) matured.`);
       }
       fetchAll();
     } catch (err) {
-      alert(err.message);
+      notify(err.message);
     } finally {
       setCheckingAccrual(false);
     }

@@ -329,16 +329,24 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   const renderCurrencyStat = (totals) => {
     const list = toTotalsList(totals);
     if (list.length === 0) {
-      return <span className={`${styles.accountBalance} ${styles.positive}`}>{formatMoney(0, 'USD')}</span>;
+      return (
+        <span className={styles.navStatValues}>
+          <span className={`${styles.accountBalance} ${styles.positive}`}>{formatMoney(0, 'USD')}</span>
+        </span>
+      );
     }
-    return list.map(({ currency, amount }) => (
-      <span
-        key={currency}
-        className={`${styles.accountBalance} ${amount >= 0 ? styles.positive : styles.negative}`}
-      >
-        {formatMoney(Math.abs(amount), currency)}
+    return (
+      <span className={styles.navStatValues}>
+        {list.map(({ currency, amount }) => (
+          <span
+            key={currency}
+            className={`${styles.accountBalance} ${amount >= 0 ? styles.positive : styles.negative}`}
+          >
+            {formatMoney(Math.abs(amount), currency)}
+          </span>
+        ))}
       </span>
-    ));
+    );
   };
 
   const renderAccountInfo = () => (

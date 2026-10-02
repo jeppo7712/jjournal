@@ -1,0 +1,268 @@
+/* Toasts (notify) and dialogs (confirmDialog / promptDialog), in the
+   app's dark card look. */
+
+.toasts {
+  position: fixed;
+  right: 20px;
+  bottom: 20px;
+  z-index: 3000;
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 10px;
+  pointer-events: none;
+}
+
+.toast {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  width: min(380px, calc(100vw - 32px));
+  padding: 12px 12px 12px 14px;
+  box-sizing: border-box;
+  background: rgba(29, 33, 48, 0.96);
+  -webkit-backdrop-filter: blur(10px);
+  backdrop-filter: blur(10px);
+  border: 1px solid #2C3244;
+  border-left-width: 3px;
+  border-radius: 12px;
+  box-shadow: 0 14px 36px rgba(0, 0, 0, 0.45);
+  color: #E5E7EB;
+  font-size: 0.88rem;
+  line-height: 1.45;
+  pointer-events: auto;
+  animation: toastIn 0.22s ease-out;
+}
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(8px); }
+  to { opacity: 1; transform: none; }
+}
+
+.toast.success { border-left-color: #22C55E; }
+.toast.error { border-left-color: #EF4444; }
+.toast.warning { border-left-color: #F59E0B; }
+.toast.info { border-left-color: #3B82F6; }
+
+.toast.success .icon { color: #4ADE80; }
+.toast.error .icon { color: #F87171; }
+.toast.warning .icon { color: #FBBF24; }
+.toast.info .icon { color: #60A5FA; }
+
+.icon {
+  flex: none;
+  width: 18px;
+  height: 18px;
+  margin-top: 1px;
+}
+
+.toastMessage {
+  flex: 1;
+  min-width: 0;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.toastClose {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin: -2px -2px 0 0;
+  padding: 0;
+  border: none;
+  border-radius: 50%;
+  background: none;
+  color: #8B93A3;
+  font-size: 1.1rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .toastClose:hover {
+    background: rgba(255, 255, 255, 0.08);
+    color: #fff;
+  }
+}
+
+/* Dialogs */
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 3100;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+  background: rgba(8, 10, 16, 0.62);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  animation: fadeIn 0.15s ease-out;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.dialog {
+  width: min(440px, 100%);
+  padding: 24px;
+  box-sizing: border-box;
+  background: #1C2030;
+  border: 1px solid #2C3244;
+  border-radius: 18px;
+  box-shadow: 0 24px 64px rgba(0, 0, 0, 0.55);
+  color: #E5E7EB;
+  animation: dialogIn 0.18s ease-out;
+}
+
+@keyframes dialogIn {
+  from { opacity: 0; transform: translateY(6px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.dialogIcon {
+  width: 40px;
+  height: 40px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin-bottom: 14px;
+  border-radius: 12px;
+}
+
+.dialogIcon .icon {
+  width: 22px;
+  height: 22px;
+  margin: 0;
+}
+
+.dialogIcon.error { background: rgba(239, 68, 68, 0.14); color: #F87171; }
+.dialogIcon.info { background: rgba(59, 130, 246, 0.14); color: #60A5FA; }
+
+.dialogTitle {
+  margin: 0 0 6px;
+  font-size: 1.1rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.dialogMessage {
+  margin: 0;
+  font-size: 0.9rem;
+  line-height: 1.55;
+  color: #AEB6C4;
+  white-space: pre-wrap;
+}
+
+.input {
+  width: 100%;
+  margin-top: 14px;
+  padding: 10px 12px;
+  box-sizing: border-box;
+  background: #141822;
+  border: 1px solid #2C3244;
+  border-radius: 10px;
+  color: #E5E7EB;
+  font: inherit;
+  font-size: 0.95rem;
+  outline: none;
+}
+
+.input:focus {
+  border-color: #3B82F6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.18);
+}
+
+.actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 22px;
+}
+
+.primary,
+.secondary {
+  padding: 9px 18px;
+  border-radius: 10px;
+  font-size: 0.88rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.secondary {
+  background: transparent;
+  border: 1px solid #2C3244;
+  color: #C7CDD8;
+}
+
+.primary {
+  background: #3B82F6;
+  border: none;
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.3), inset 0 1px 0 rgba(255, 255, 255, 0.14);
+}
+
+.primary.dangerButton {
+  background: #EF4444;
+}
+
+@media (hover: hover) {
+  .secondary:hover { border-color: #4B5468; color: #fff; }
+  .primary:hover { filter: brightness(1.1); }
+}
+
+.primary:focus-visible,
+.secondary:focus-visible {
+  outline: 2px solid #60A5FA;
+  outline-offset: 2px;
+}
+
+/* Phones: toasts at the top, clear of the bottom navigation bar */
+@media (max-width: 768px) {
+  .toasts {
+    top: calc(env(safe-area-inset-top, 0px) + 10px);
+    bottom: auto;
+    left: 16px;
+    right: 16px;
+    align-items: stretch;
+  }
+
+  .toast {
+    width: 100%;
+  }
+
+  .actions > button {
+    flex: 1;
+  }
+}
+
+/* ErrorBoundary: a failed part of the page */
+.crash {
+  display: flex;
+  justify-content: center;
+  padding: 48px 16px;
+}
+
+.crashCard {
+  width: min(520px, 100%);
+  padding: 24px;
+  box-sizing: border-box;
+  background: #1C2030;
+  border: 1px solid #2C3244;
+  border-radius: 18px;
+  color: #E5E7EB;
+}
+
+.crashDetail {
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  background: #0F121A;
+  border: 1px solid #252B3A;
+  border-radius: 10px;
+  color: #FCA5A5;
+  font-size: 0.78rem;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

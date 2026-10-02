@@ -11,6 +11,8 @@ import LoadingIndicator from './components/LoadingIndicator';
 import { TradeProvider } from './context/TradeContext';
 import { StatusProvider } from './context/StatusContext';
 import { getNumberFormat, subscribeNumberFormat } from './utils/numberFormat';
+import ErrorBoundary, { PageBoundary } from './components/common/ErrorBoundary';
+import { DialogHost } from './components/common/Dialogs';
 import './styles.css';
 
 function App() {
@@ -132,13 +134,16 @@ function App() {
     <StatusProvider>
       <TradeProvider>
         <div className="app">
-          <Navigation
-            onNewTrade={handleNewTrade}
-            onNewNote={handleNewNote}
-            setCurrentView={setCurrentView}
-            currentView={currentView}
-          />
+          <ErrorBoundary>
+            <Navigation
+              onNewTrade={handleNewTrade}
+              onNewNote={handleNewNote}
+              setCurrentView={setCurrentView}
+              currentView={currentView}
+            />
+          </ErrorBoundary>
           <main className="main-content" key={numberFormat}>
+            <PageBoundary view={currentView}>
             {currentView === 'dashboard' && (
               <Dashboard
                 onViewTrade={handleViewTrade}
@@ -162,7 +167,9 @@ function App() {
             {currentView === 'capital' && (
               <Capital />
             )}
+            </PageBoundary>
           </main>
+          <ErrorBoundary resetKey={`${selectedTrade?.id}|${selectedDayNote?.id}|${showTradeModal}|${showTradeView}|${showDayNote}`}>
           {showTradeModal && (
             <TradeModal
               trade={selectedTrade}
@@ -182,7 +189,9 @@ function App() {
               onClose={handleCloseModals}
             />
           )}
+          </ErrorBoundary>
           <LoadingIndicator />
+          <DialogHost />
         </div>
       </TradeProvider>
     </StatusProvider>
