@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import Dashboard from './components/Dashboard/Dashboard';
 import Navigation from './components/Navigation/Navigation';
 import TradeModal from './components/TradeModal/TradeModal';
@@ -10,6 +10,7 @@ import Capital from './components/Capital/Capital';
 import LoadingIndicator from './components/LoadingIndicator';
 import { TradeProvider } from './context/TradeContext';
 import { StatusProvider } from './context/StatusContext';
+import { getNumberFormat, subscribeNumberFormat } from './utils/numberFormat';
 import './styles.css';
 
 function App() {
@@ -21,6 +22,12 @@ function App() {
   const [selectedDayNote, setSelectedDayNote] = useState(null);
   const [customFilterDate, setCustomFilterDate] = useState(null);
   const [customFilterWeek, setCustomFilterWeek] = useState(null);
+  // The number format setting: when it changes, the page below is mounted
+  // afresh so figures it computed and kept (memoised stats, chart options)
+  // are formatted again. Open trade/note windows only re-render, so a
+  // change arriving from another device can't throw away unsaved edits.
+  const [numberFormat, setNumberFormatState] = useState(getNumberFormat);
+  useEffect(() => subscribeNumberFormat(setNumberFormatState), []);
 
   const handleNewTrade = () => {
     setShowTradeModal(true);
@@ -111,7 +118,7 @@ function App() {
             onNewNote={handleNewNote}
             setCurrentView={setCurrentView}
           />
-          <main className="main-content">
+          <main className="main-content" key={numberFormat}>
             {currentView === 'dashboard' && (
               <Dashboard
                 onViewTrade={handleViewTrade}

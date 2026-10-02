@@ -36,6 +36,10 @@ let USER_PATH_LOCAL = process.env.USER_PATH || "./";
 
 const AbortController = globalThis.AbortController || require('abort-controller'); // Polyfill for Node < 15 if needed
 
+// Number display styles the frontend offers (src/utils/numberFormat.js):
+// 123456.78, 1,234,567.89 and 1.234.567,89.
+const NUMBER_FORMATS = ['plain', 'comma', 'dot'];
+
 // WebSocket server
 const wss = new WebSocket.Server({ noServer: true });
 
@@ -334,6 +338,8 @@ apiRouter.get('/config/status', async (req, res) => {
       // Optional IBC command server for the auto-reconnect (see
       // modules/ibkr-gateway-command.js); null when not set.
       ibkrGatewayCommandAddress: config.ibkrGatewayCommandAddress || null,
+      // How the frontend displays numbers (src/utils/numberFormat.js).
+      numberFormat: config.numberFormat || 'plain',
       ibkrConnected: ibkr.isIbkrConnected(),
       ibkrDataConnected: ibkr.data.isIbkrConnected(),
       status: db.getIsConnected() ? 'Connected' : config.databaseUrl ? 'Connection failed' : 'Not configured',
@@ -405,7 +411,7 @@ apiRouter.post('/config', async (req, res) => {
     databaseUrl, port, ibkrAddresses, ibkrDataAddresses, ibkrGatewayCommandAddress,
     ibkrFlexTokenReal, ibkrFlexQueryIdActivityReal, ibkrFlexQueryIdTradeConfReal,
     ibkrFlexTokenPaper, ibkrFlexQueryIdActivityPaper, ibkrFlexQueryIdTradeConfPaper,
-    tradingViewWebhookSecret,
+    tradingViewWebhookSecret, numberFormat,
   } = req.body;
 
   try {
@@ -455,6 +461,12 @@ apiRouter.post('/config', async (req, res) => {
     // No restart needed — the webhook route reads this fresh via
     // configManager.loadConfig() on every request, not a cached value.
     if (tradingViewWebhookSecret !== undefined) config.tradingViewWebhookSecret = tradingViewWebhookSecret;
+    if (numberFormat !== undefined) {
+      if (!NUMBER_FORMATS.includes(numberFormat)) {
+        return res.status(400).json({ error: `numberFormat must be one of: ${NUMBER_FORMATS.join(', ')}` });
+      }
+      config.numberFormat = numberFormat;
+    }
 
     await configManager.saveConfig(config);
 

@@ -10,6 +10,13 @@ import styles from './TradeModal.module.css';
 import { DateTime } from 'luxon';
 import { loadStoredDisplayTimezone, storeDisplayTimezone, resolveDisplayZone, TimezonePicker } from '../../utils/timezonePreference';
 import TradeFormChart from './TradeFormChart';
+import { formatNumber } from '../../utils/numberFormat';
+
+// Prices, sizes and fees from IBKR as they came, in the number format
+// setting: their own decimals (trailing zeros dropped), '—' when missing.
+const showNum = (value) => (value === null || value === undefined || value === '' || value === '—' || !Number.isFinite(Number(value))
+  ? '—'
+  : formatNumber(Number(value), 8, true));
 
 const onlyNumber = val => /^-?\d*[,.\d]*$/.test(val);
 const validTimeFormat = val => /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(val);
@@ -1100,7 +1107,7 @@ export default function TradeModal({ trade, onClose }) {
                 </div>
                 <div className={styles.formField}>
                   <label htmlFor="stopLoss">
-                    Stop-Loss {risk !== null && <span style={{ fontWeight: 'normal' }}>(${risk.toFixed(2)})</span>}
+                    Stop-Loss {risk !== null && <span style={{ fontWeight: 'normal' }}>(${formatNumber(risk, 2)})</span>}
                   </label>
                   <input
                     id="stopLoss"
@@ -1610,7 +1617,7 @@ export default function TradeModal({ trade, onClose }) {
                 const exitPrice = exitExecs[0]?.price ?? (group.result === 'TP_HIT' ? group.tpOrder?.limitPrice : group.slOrder?.stopPrice) ?? '—';
                 const tpPrice = group.tpOrder?.limitPrice ?? '—';
                 const slPrice = group.slOrder?.stopPrice ?? group.slOrder?.limitPrice ?? '—';
-                const totalFee = allGroupExecs.reduce((s, e) => s + parseFloat(e.fee || 0), 0).toFixed(2);
+                const totalFee = allGroupExecs.reduce((s, e) => s + parseFloat(e.fee || 0), 0);
                 const totalQty = group.entryExecutions.reduce((s, e) => s + parseFloat(e.quantity || 0), 0);
 
                 return (
@@ -1656,9 +1663,9 @@ export default function TradeModal({ trade, onClose }) {
 
                       {/* Summary: qty @ entry → exit */}
                       <span style={{ color: '#D1D5DB', fontSize: '0.82rem', flex: 1, textAlign: 'right' }}>
-                        {totalQty > 0 ? `${totalQty} @ ` : ''}{entryPrice}
-                        {exitPrice !== '—' ? ` → ${exitPrice}` : ''}
-                        {totalFee > 0 ? <span style={{ color: '#6B7280' }}> (fee: ${totalFee})</span> : null}
+                        {totalQty > 0 ? `${showNum(totalQty)} @ ` : ''}{showNum(entryPrice)}
+                        {exitPrice !== '—' ? ` → ${showNum(exitPrice)}` : ''}
+                        {totalFee > 0 ? <span style={{ color: '#6B7280' }}> (fee: ${formatNumber(totalFee, 2)})</span> : null}
                       </span>
 
                       {/* Expand chevron */}
@@ -1677,7 +1684,7 @@ export default function TradeModal({ trade, onClose }) {
                             <div style={{ color: '#9CA3AF', marginBottom: 4, fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Entry execution{group.entryExecutions.length > 1 ? 's' : ''}</div>
                             {group.entryExecutions.map(e => (
                               <div key={e.execId} style={{ display: 'flex', justifyContent: 'space-between', color: e.inJournal ? '#6B7280' : '#E5E7EB', padding: '3px 0' }}>
-                                <span>{e.action} {e.quantity} @ <b>{e.price}</b> — {e.dateTime.toFormat('LLL d, HH:mm:ss')}</span>
+                                <span>{e.action} {showNum(e.quantity)} @ <b>{showNum(e.price)}</b> — {e.dateTime.toFormat('LLL d, HH:mm:ss')}</span>
                                 <span style={{ color: '#9CA3AF' }}>{e.inJournal ? '✓ in journal · ' : ''}fee: ${e.fee}</span>
                               </div>
                             ))}
@@ -1691,7 +1698,7 @@ export default function TradeModal({ trade, onClose }) {
                             <div style={{ color: '#9CA3AF', marginBottom: 4, fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Exit execution{group.tpExecutions.length > 1 ? 's' : ''}</div>
                             {group.tpExecutions.map(e => (
                               <div key={e.execId} style={{ display: 'flex', justifyContent: 'space-between', color: e.inJournal ? '#6B7280' : '#E5E7EB', padding: '3px 0' }}>
-                                <span>{e.action} {e.quantity} @ <b>{e.price}</b> — {e.dateTime.toFormat('LLL d, HH:mm:ss')}</span>
+                                <span>{e.action} {showNum(e.quantity)} @ <b>{showNum(e.price)}</b> — {e.dateTime.toFormat('LLL d, HH:mm:ss')}</span>
                                 <span style={{ color: '#9CA3AF' }}>{e.inJournal ? '✓ in journal · ' : ''}fee: ${e.fee}</span>
                               </div>
                             ))}
@@ -1710,10 +1717,10 @@ export default function TradeModal({ trade, onClose }) {
                           <div style={{ marginBottom: 8 }}>
                             <div style={{ color: '#9CA3AF', marginBottom: 4, fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Take Profit order</div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', color: group.tpExecutions.length > 0 ? '#10B981' : '#6B7280', padding: '3px 0' }}>
-                              <span>LMT {group.tpOrder.action} {group.tpOrder.quantity} @ <b>{group.tpOrder.limitPrice ?? '—'}</b></span>
+                              <span>LMT {group.tpOrder.action} {showNum(group.tpOrder.quantity)} @ <b>{showNum(group.tpOrder.limitPrice)}</b></span>
                               <span style={{ fontSize: '0.75rem' }}>
                                 {group.tpExecutions.length > 0
-                                  ? `✅ FILLED @ ${group.tpExecutions[0].price} (fee: $${group.tpExecutions[0].fee})`
+                                  ? `✅ FILLED @ ${showNum(group.tpExecutions[0].price)} (fee: $${showNum(group.tpExecutions[0].fee)})`
                                   : group.tpOrder.status}
                               </span>
                             </div>
@@ -1725,10 +1732,10 @@ export default function TradeModal({ trade, onClose }) {
                           <div style={{ marginBottom: 10 }}>
                             <div style={{ color: '#9CA3AF', marginBottom: 4, fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Stop Loss order</div>
                             <div style={{ display: 'flex', justifyContent: 'space-between', color: group.slExecutions.length > 0 ? '#EF4444' : '#6B7280', padding: '3px 0' }}>
-                              <span>{group.slOrder.orderType} {group.slOrder.action} {group.slOrder.quantity} @ <b>{group.slOrder.stopPrice ?? group.slOrder.limitPrice ?? '—'}</b></span>
+                              <span>{group.slOrder.orderType} {group.slOrder.action} {showNum(group.slOrder.quantity)} @ <b>{showNum(group.slOrder.stopPrice ?? group.slOrder.limitPrice)}</b></span>
                               <span style={{ fontSize: '0.75rem' }}>
                                 {group.slExecutions.length > 0
-                                  ? `🛑 FILLED @ ${group.slExecutions[0].price} (fee: $${group.slExecutions[0].fee})`
+                                  ? `🛑 FILLED @ ${showNum(group.slExecutions[0].price)} (fee: $${showNum(group.slExecutions[0].fee)})`
                                   : group.slOrder.status}
                               </span>
                             </div>
@@ -1803,7 +1810,7 @@ export default function TradeModal({ trade, onClose }) {
                               }}
                               style={{ padding: '6px 12px', background: form.stopLoss === (group.slOrder.stopPrice ?? group.slOrder.limitPrice)?.toString() ? '#374151' : '#450A0A', color: '#EF4444', border: '1px solid #EF4444', borderRadius: 7, cursor: 'pointer', fontSize: '0.78rem' }}
                             >
-                              {form.stopLoss === (group.slOrder.stopPrice ?? group.slOrder.limitPrice)?.toString() ? '✓' : '→'} Set SL {group.slOrder.stopPrice ?? group.slOrder.limitPrice}
+                              {form.stopLoss === (group.slOrder.stopPrice ?? group.slOrder.limitPrice)?.toString() ? '✓' : '→'} Set SL {showNum(group.slOrder.stopPrice ?? group.slOrder.limitPrice)}
                             </button>
                           )}
                         </div>
@@ -1823,8 +1830,8 @@ export default function TradeModal({ trade, onClose }) {
                     <div key={item.execId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#232733', borderRadius: 8, marginBottom: 6 }}>
                       <span style={{ color: '#D1D5DB', fontSize: '0.83rem' }}>
                         <b style={{ color: item.action === 'BUY' ? '#60A5FA' : '#F97316' }}>{item.action}</b>{' '}
-                        {item.quantity} @ {item.price} — {item.dateTime.toFormat('LLL d, HH:mm:ss')}
-                        <span style={{ color: '#6B7280' }}> fee: ${item.fee}</span>
+                        {showNum(item.quantity)} @ {showNum(item.price)} — {item.dateTime.toFormat('LLL d, HH:mm:ss')}
+                        <span style={{ color: '#6B7280' }}> fee: ${showNum(item.fee)}</span>
                       </span>
                       <button
                         onClick={() => handleAddAsAction(item)}

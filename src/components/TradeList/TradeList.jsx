@@ -5,6 +5,7 @@ import { DateTime } from 'luxon';
 import { sanitizeNotesHtml } from '../../utils/sanitizeHtml';
 import styles from './TradeList.module.css';
 import { formatMoney, currencyMark } from '../../utils/formatMoney';
+import { formatNumber } from '../../utils/numberFormat';
 import { sumByCurrency, formatTotals, toTotalsList } from '../../utils/currencyTotals';
 
 // SVG Icons for Mood, Market Condition, and Market Volume (existing)
@@ -329,7 +330,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                       {item.status === 'OPEN' ? (
                         item.position !== undefined && item.position !== null ? `${item.position} PCS` : '- PCS'
                       ) : (
-                        item.quantity !== undefined && item.quantity !== null ? `${item.quantity} PCS` : '- PCS'
+                        item.quantity !== undefined && item.quantity !== null ? `${formatNumber(item.quantity, 8, true)} PCS` : '- PCS'
                       )}
                     </div>
                   </div>
@@ -350,7 +351,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                       {item.status === 'OPEN' ? (
                         item.currentReturn !== undefined && item.currentReturn !== null ? (
                           <span className={item.currentReturn >= 0 ? styles.positiveItalic : styles.negativeItalic}>
-                            ({currencyMark(item.currency)}{Math.abs(item.currentReturn).toFixed(2)})
+                            ({currencyMark(item.currency)}{formatNumber(Math.abs(item.currentReturn), 2)})
                           </span>
                         ) : (
                           <span className={styles.loading}>Loading...</span>
@@ -358,7 +359,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                       ) : (
                         item.return !== undefined && item.return !== null ? (
                           <span className={item.return >= 0 ? styles.positive : styles.negative}>
-                            {currencyMark(item.currency)}{Math.abs(item.return).toFixed(2)}
+                            {currencyMark(item.currency)}{formatNumber(Math.abs(item.return), 2)}
                           </span>
                         ) : (
                           '-'
@@ -369,7 +370,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                       {item.status === 'OPEN' ? (
                         item.currentReturnPercentage !== undefined && item.currentReturnPercentage !== null ? (
                           <span className={item.currentReturnPercentage >= 0 ? styles.positiveItalic : styles.negativeItalic}>
-                            ({item.currentReturnPercentage >= 0 ? '' : ''}{Math.abs(item.currentReturnPercentage).toFixed(2)}%)
+                            ({item.currentReturnPercentage >= 0 ? '' : ''}{formatNumber(Math.abs(item.currentReturnPercentage), 2)}%)
                           </span>
                         ) : (
                           <span className={styles.loading}>Loading...</span>
@@ -377,7 +378,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                       ) : (
                         item.returnPercentage !== undefined && item.returnPercentage !== null ? (
                           <span className={item.returnPercentage >= 0 ? styles.positive : styles.negative}>
-                            {item.returnPercentage >= 0 ? '' : ''}{Math.abs(item.returnPercentage).toFixed(2)}%
+                            {item.returnPercentage >= 0 ? '' : ''}{formatNumber(Math.abs(item.returnPercentage), 2)}%
                           </span>
                         ) : (
                           '-'
@@ -412,7 +413,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                   )}
                   {isColumnVisible('quantity') && (
                     <div className={styles.cell}>
-                      {item.quantity !== undefined && item.quantity !== null ? item.quantity : '-'}
+                      {item.quantity !== undefined && item.quantity !== null ? formatNumber(item.quantity, 8, true) : '-'}
                     </div>
                   )}
                   {isColumnVisible('entry') && (
@@ -450,7 +451,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                       {item.status === 'OPEN' ? (
                         item.currentReturn !== undefined && item.currentReturn !== null ? (
                           <span className={item.currentReturn >= 0 ? styles.positiveItalic : styles.negativeItalic}>
-                            ({currencyMark(item.currency)}{Math.abs(item.currentReturn).toFixed(2)})
+                            ({currencyMark(item.currency)}{formatNumber(Math.abs(item.currentReturn), 2)})
                           </span>
                         ) : (
                           <span className={styles.loading}>Loading...</span>
@@ -458,7 +459,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                       ) : (
                         item.return !== undefined && item.return !== null ? (
                           <span className={item.return >= 0 ? styles.positive : styles.negative}>
-                            {currencyMark(item.currency)}{Math.abs(item.return).toFixed(2)}
+                            {currencyMark(item.currency)}{formatNumber(Math.abs(item.return), 2)}
                           </span>
                         ) : (
                           '-'
@@ -471,7 +472,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                       {item.status === 'OPEN' ? (
                         item.currentReturnPercentage !== undefined && item.currentReturnPercentage !== null ? (
                           <span className={item.currentReturnPercentage >= 0 ? styles.positiveItalic : styles.negativeItalic}>
-                            ({item.currentReturnPercentage >= 0 ? '' : ''}{Math.abs(item.currentReturnPercentage).toFixed(2)}%)
+                            ({item.currentReturnPercentage >= 0 ? '' : ''}{formatNumber(Math.abs(item.currentReturnPercentage), 2)}%)
                           </span>
                         ) : (
                           <span className={styles.loading}>Loading...</span>
@@ -479,7 +480,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                       ) : (
                         item.returnPercentage !== undefined && item.returnPercentage !== null ? (
                           <span className={item.returnPercentage >= 0 ? styles.positive : styles.negative}>
-                            {item.returnPercentage >= 0 ? '' : ''}{Math.abs(item.returnPercentage).toFixed(2)}%
+                            {item.returnPercentage >= 0 ? '' : ''}{formatNumber(Math.abs(item.returnPercentage), 2)}%
                           </span>
                         ) : (
                           '-'

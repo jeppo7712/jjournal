@@ -8,6 +8,7 @@ import 'react-datepicker/dist/react-datepicker.css';
 import styles from './Dashboard.module.css';
 import { sumByCurrency, formatTotals, toTotalsList, totalsSign } from '../../utils/currencyTotals';
 import { formatMoney, currencyMark } from '../../utils/formatMoney';
+import { formatNumber } from '../../utils/numberFormat';
 import { DateTime } from 'luxon';
 import { getRealisedPnL } from '../../context/TradeContext';
 import { debounce } from 'lodash';
@@ -19,7 +20,7 @@ ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, T
 // print as -0.4000000000000001) and the minus before the currency mark.
 const signedMoney = (value, currency) => {
   const n = Number(value) || 0;
-  return `${n < 0 ? '-' : ''}${currencyMark(currency)}${Math.abs(n).toFixed(2)}`;
+  return `${n < 0 ? '-' : ''}${currencyMark(currency)}${formatNumber(Math.abs(n), 2)}`;
 };
 
 const formatCustomDate = (date) => {
