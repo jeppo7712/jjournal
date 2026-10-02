@@ -861,6 +861,9 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     realisedOf
   ), [filteredItems]);
 
+  // The dimmed figures say which currency the chart shows; with no chart
+  // on screen there is nothing to point at, so every figure stays lit.
+  const chartVisible = isGraphHidden ? showGraphPopup : chartOpen;
   const realisedPnlStat = {
     label: 'R P&L',
     value: formatTotals(totalRealisedPnlByCurrency, { abs: true, emptyCurrency: displayedChartCurrency }),
@@ -881,8 +884,9 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       setPnlChartType('realised');
       setChartCurrency(code);
       if (isGraphHidden) setShowGraphPopup(true);
+      else setChartOpen(true);
     },
-    activeCurrency: pnlChartType === 'realised' ? activeChartCurrency : null,
+    activeCurrency: chartVisible && pnlChartType === 'realised' ? activeChartCurrency : null,
   };
   const unrealisedPnlStat = {
     label: 'U P&L',
@@ -900,8 +904,9 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       setPnlChartType('unrealised');
       setChartCurrency(code);
       if (isGraphHidden) setShowGraphPopup(true);
+      else setChartOpen(true);
     },
-    activeCurrency: pnlChartType === 'unrealised' ? activeUnrealisedCurrency : null,
+    activeCurrency: chartVisible && pnlChartType === 'unrealised' ? activeUnrealisedCurrency : null,
   };
 
   // R P&L and U P&L sit side by side, so they share a line count too.
