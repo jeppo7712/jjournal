@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useState, useEffect, useRef } from 'react';
+import React, { useContext, useMemo, useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import TradeList from '../TradeList/TradeList';
@@ -15,6 +15,50 @@ import { debounce } from 'lodash';
 
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
+
+// A stat tile's figure(s) at the largest size that fits: they start at
+// maxPx and only shrink, to minPx at the least, when the widest line would
+// run past the tile. The font size is set here (not in the style prop) so a
+// re-render can't put the unfitted size back.
+function FitValue({ maxPx = 20, minPx = 9, className, style, children }) {
+  const ref = useRef(null);
+  useLayoutEffect(() => {
+    const el = ref.current;
+    if (!el) return undefined;
+    const fit = () => {
+      // The stylesheet's size for this screen width is the ceiling.
+      el.style.fontSize = '';
+      const cs = window.getComputedStyle(el);
+      let size = Math.min(maxPx, parseFloat(cs.fontSize) || maxPx);
+      el.style.fontSize = `${size}px`;
+      const padding = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
+      const available = el.clientWidth - padding;
+      const needed = el.scrollWidth - padding;
+      if (needed > available && needed > 0 && available > 0) {
+        size = Math.max(minPx, Math.floor((size * available / needed) * 10) / 10);
+        el.style.fontSize = `${size}px`;
+      }
+      // A tile with a fixed height (phones) can't grow for extra lines:
+      // shrink until the figures fit its inner height. (Not the tile's
+      // scrollHeight: its corner glow overflows on purpose.)
+      const tile = el.parentElement;
+      if (tile) {
+        const tcs = window.getComputedStyle(tile);
+        const inner = tile.clientHeight - (parseFloat(tcs.paddingTop) || 0) - (parseFloat(tcs.paddingBottom) || 0);
+        if (inner > 0 && el.offsetHeight > inner + 1) {
+          size = Math.max(minPx, Math.floor((size * inner / el.offsetHeight) * 10) / 10);
+          el.style.fontSize = `${size}px`;
+        }
+      }
+    };
+    fit();
+    if (typeof ResizeObserver === 'undefined') return undefined;
+    const observer = new ResizeObserver(fit);
+    observer.observe(el);
+    return () => observer.disconnect();
+  });
+  return <div ref={ref} className={className} style={style}>{children}</div>;
+}
 
 // "-€1.16" for the P&L chart: two decimals (axis steps like -0.4 otherwise
 // print as -0.4000000000000001) and the minus before the currency mark.
@@ -749,24 +793,16 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     const list = toTotalsList(stat.totals || {});
     const lines = Math.max(groupLines, list.length);
     if (lines <= 1) {
-      // Large amounts ("$18.627,22") were cut off with an ellipsis at the
-      // fixed 20px: shrink with the length instead, so the whole figure fits.
-      const length = String(stat.value ?? '').length;
-      const singlePx = length <= 8 ? 20 : Math.max(13, (20 * 8) / length);
-      return <div className={styles.statValue} style={{ color: stat.color, fontSize: `${singlePx.toFixed(1)}px` }}>{stat.value}</div>;
+      return <FitValue className={styles.statValue} style={{ color: stat.color }}>{stat.value}</FitValue>;
     }
-    // .statBox is a fixed 50px and the stack starts at top:16px, leaving
-    // the lines ~30px to share (34px to the border, less a little margin).
-    // Sizing from the count keeps any number of currencies inside the box
-    // rather than fitting exactly two and spilling on a third (measured:
-    // 3 lines at the 2-line size overflow ~6px past the bottom border).
-    // Capped at the base size so one or two render at the verified size.
-    const basePx = align === 'right' ? 11.5 : 10;
-    const fontPx = Math.min(basePx, 30 / lines / 1.12);
+    // Several currencies: one line each, at the same full size as a single
+    // figure where the width allows (the tile row grows to fit the lines,
+    // see .tileStacked), smaller only when the widest one wouldn't fit.
     return (
-      <div
+      <FitValue
+        maxPx={20}
         className={`${styles.statValue} ${styles.statValueStacked} ${align === 'right' ? styles.statValueStackedRight : styles.statValueStackedLeft}`}
-        style={{ color: stat.color, fontSize: `${fontPx.toFixed(2)}px` }}
+        style={{ color: stat.color }}
       >
         {list.length === 0 ? <span>{stat.value}</span> : list.map(({ currency, amount }) => {
           const text = formatMoney(stat.abs ? Math.abs(amount) : amount, currency, stat.decimals ?? 2);
@@ -795,7 +831,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
             </span>
           );
         })}
-      </div>
+      </FitValue>
     );
   };
 
@@ -1067,8 +1103,8 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
             {renderTile(statGrid[1][1], { extraClass: styles.tileWash })}
             {renderTile(statGrid[2][0], { extraClass: styles.tileAvgWin })}
             {renderTile(statGrid[2][1], { extraClass: styles.tileAvgLoss })}
-            {renderTile({ ...realisedPnlStat, title: isGraphHidden ? 'Show the realised P&L chart' : 'Chart realised P&L' }, { align: 'right', lines: pnlStatLines, ring: false, extraClass: `${styles.tilePnl} ${styles.tileRealised} ${pnlChartType === 'realised' && showChartPanel ? styles.charted : ''}` })}
-            {renderTile({ ...unrealisedPnlStat, title: isGraphHidden ? 'Show the unrealised P&L chart' : 'Chart unrealised P&L' }, { align: 'right', lines: pnlStatLines, ring: false, extraClass: `${styles.tilePnl} ${styles.tileUnrealised} ${pnlChartType === 'unrealised' && showChartPanel ? styles.charted : ''}` })}
+            {renderTile({ ...realisedPnlStat, title: isGraphHidden ? 'Show the realised P&L chart' : 'Chart realised P&L' }, { align: 'left', lines: pnlStatLines, ring: false, extraClass: `${styles.tilePnl} ${pnlStatLines > 1 ? styles.tileStacked : ''} ${styles.tileRealised} ${pnlChartType === 'realised' && showChartPanel ? styles.charted : ''}` })}
+            {renderTile({ ...unrealisedPnlStat, title: isGraphHidden ? 'Show the unrealised P&L chart' : 'Chart unrealised P&L' }, { align: 'left', lines: pnlStatLines, ring: false, extraClass: `${styles.tilePnl} ${pnlStatLines > 1 ? styles.tileStacked : ''} ${styles.tileUnrealised} ${pnlChartType === 'unrealised' && showChartPanel ? styles.charted : ''}` })}
           </div>
         </div>
 
