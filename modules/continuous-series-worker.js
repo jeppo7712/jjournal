@@ -1,10 +1,10 @@
 // Runs _buildAndStoreContinuousSeries (modules/historical-data-service.js)
 // in its own worker thread instead of on the main thread.
 //
-// That function has to walk a symbol's entire raw history to run rollover
-// detection — for a high-frequency timeframe on a symbol with a lot of
-// history (e.g. CL 1M, 10M+ rows), that's genuinely tens of seconds to
-// minutes of synchronous JS work. Running it inline on the main thread (as
+// A full rebuild walks a symbol's entire raw history to run rollover
+// detection (incremental ones only read from the invalidation day on) —
+// for a high-frequency timeframe on a symbol with a lot of history (e.g.
+// CL 1M, 10M+ rows), that's genuinely minutes of synchronous JS work. Running it inline on the main thread (as
 // it used to) meant every other request — every API call, every WebSocket
 // message, the whole app for every user — queued up behind it, since
 // Node's main thread has exactly one event loop. A worker thread has its
@@ -21,6 +21,7 @@ const { parentPort, workerData } = require('worker_threads');
 const { Pool } = require('pg');
 const { DateTime } = require('luxon');
 const { _buildAndStoreContinuousSeries } = require('./historical-data-service.js');
+const { handlePoolErrors } = require('./database.js');
 const { logger } = require('./logger.js');
 
 (async () => {
@@ -28,6 +29,9 @@ const { logger } = require('./logger.js');
     // max: 1 — this worker only ever runs one query at a time itself; no
     // need for a full pool the way the main thread's shared one is.
     const pool = new Pool({ connectionString: databaseUrl, connectionTimeoutMillis: 5000, max: 1 });
+    // Postgres closing this connection (e.g. a restart) must fail the
+    // rebuild, not crash the worker; the main thread retries it.
+    handlePoolErrors(pool, 'continuous-series-worker');
     let client;
     try {
         client = await pool.connect();

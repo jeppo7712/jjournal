@@ -28,6 +28,7 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
       // is shared with an unrelated service on this host).
       max: 20,
     });
+    handlePoolErrors(pool, 'Database');
 
     client = await pool.connect();
     logger.info('✅ Connected to PostgreSQL database');
@@ -787,6 +788,24 @@ ON trades (symbol, type, contract_month);
  * Returns the active database connection pool.
  * @returns {Pool} The pg Pool object.
  */
+// When Postgres closes a connection on its side (e.g. it restarts: 57P01
+// "terminating connection due to administrator command"), pg reports that as
+// an 'error' event: on the pool for an idle connection, on the client itself
+// for one a caller has checked out but isn't running a query on. With no
+// listener Node treats either as unhandled and the whole process exits. The
+// pool already drops a dead connection and opens a fresh one on the next
+// query, and a caller's next query on a dead checked-out client fails and is
+// handled like any other query error, so logging is all that's needed here.
+function handlePoolErrors(targetPool, label) {
+  targetPool.on('connect', (client) => {
+    client.on('error', (err) => {
+      logger.warn(`[${label}] Database connection closed: ${err.message} (${err.code || 'no code'}). A new one is opened on the next query.`);
+    });
+  });
+  // Idle connections: the client listener above has already logged it.
+  targetPool.on('error', (err) => logger.debug(`[${label}] Pool dropped a closed idle connection: ${err.message}`));
+}
+
 function getPool() {
   if (!pool) {
     throw new Error("Database pool has not been initialized. Call connectDatabase first.");
@@ -805,5 +824,6 @@ function getIsConnected() {
 module.exports = {
   connectDatabase,
   getPool,
+  handlePoolErrors,
   getIsConnected,
 };

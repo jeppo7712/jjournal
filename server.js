@@ -62,8 +62,18 @@ async function triggerTaskProcessor() {
   taskManager.setProcessorActive(true);
   logger.info('[TaskManager] Task processor activated.');
 
+  // Whether futures tasks for this symbol/timeframe are still waiting to run;
+  // their continuous series rebuild waits for the last of them.
+  const hasQueuedTasksFor = (symbol, timeframe) => taskManager.getQueue().some(t =>
+    t.status === taskManager.TASK_STATUS.PENDING && t.type === 'FUT' && t.symbol === symbol && t.timeframe === timeframe);
+
   // Run indefinitely, checking for tasks
   while (true) {
+    try {
+      await historicalDataService.runPendingContinuousRebuilds(hasQueuedTasksFor, wss);
+    } catch (err) {
+      logger.error(`[TaskManager] Continuous series rebuilds failed: ${err.message}`);
+    }
     if (taskManager.getCurrentTask() === null && taskManager.getQueue().length > 0) {
       const taskToRun = taskManager.getNextPendingTask();
       if (taskToRun) {
