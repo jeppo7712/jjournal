@@ -1,4 +1,5 @@
 import React, { useRef, useLayoutEffect, useState, useEffect, useContext, useCallback, useMemo } from 'react';
+import useDraggableWindow from '../../utils/useDraggableWindow';
 import TradeChecklist from '../TradeModal/TradeChecklist';
 import IconButton from '../common/IconButton';
 import { TradeContext, calculateRisk, getEnabledTimeframesForSetting } from '../../context/TradeContext';
@@ -259,6 +260,8 @@ export default function TradeView({ trade, onClose, onEdit }) {
   // button) stayed desktop-sized no matter what the stylesheet said — same
   // bug already found and fixed in TradeModal.jsx.
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 700px)').matches);
+  // Movable window on desktop (see useDraggableWindow).
+  const drag = useDraggableWindow('tradeView', { enabled: !isMobile });
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 700px)');
     const update = () => setIsMobile(mq.matches);
@@ -1115,8 +1118,8 @@ useEffect(() => {
       const chartOptions = {
         width: chartContainerRef.current.clientWidth,
         height: chartContainerRef.current.clientHeight,
-        layout: { background: { color: '#232733' }, textColor: '#e0e2e6' },
-        grid: { vertLines: { color: '#353943' }, horzLines: { color: '#353943' }, horzLinesVisible: false, vertLinesVisible: false },
+        layout: { background: { color: '#161A24' }, textColor: '#e0e2e6' },
+        grid: { vertLines: { color: '#141822' }, horzLines: { color: '#141822' }, horzLinesVisible: false, vertLinesVisible: false },
         timeScale: {
           timeVisible: true,
           secondsVisible: timeframe === '1M' || timeframe === '15M' || timeframe === '5M' || timeframe === '1H',
@@ -1148,7 +1151,7 @@ useEffect(() => {
             return timeframe === '1D' || timeframe === '1W' ? dt.toFormat("d LLL ''yy") : dt.toFormat('HH:mm');
           },
         },
-        rightPriceScale: { borderColor: '#353943' },
+        rightPriceScale: { borderColor: '#141822' },
         crosshair: { mode: 0 },
         autoSize: true, // This enables internal ResizeObserver
       };
@@ -1613,8 +1616,8 @@ useEffect(() => {
   return (
     <div className={styles.overlay}>
       <div
-        className={styles.modal}
-        ref={modalRef}
+        className={`${styles.modal} ${drag.dragging ? styles.dragging : ''}`}
+        ref={el => { modalRef.current = el; drag.setWindowEl(el); }}
         style={isMobile ? {
           width: '100vw',
           maxWidth: 'none',
@@ -1631,9 +1634,10 @@ useEffect(() => {
           maxHeight: '90vh',
           display: 'flex',
           flexDirection: 'column',
+          ...drag.windowStyle,
         }}
       >
-        <div className={styles.headerRow}>
+        <div className={styles.headerRow} {...drag.dragHandleProps}>
           <span className={styles.title}>Trade View</span>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
             <span className={styles.headerTzLabel} style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>
@@ -1935,7 +1939,7 @@ useEffect(() => {
         >
           <div
             style={{
-              background: '#232733',
+              background: '#161A24',
               borderRadius: 18,
               padding: 16,
               maxWidth: '90vw',
