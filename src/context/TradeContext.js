@@ -1345,11 +1345,11 @@ export const TradeProvider = ({ children }) => {
 
   // --- MEMOIZED CALCULATIONS ---
 
-  const filteredItems = useMemo(() => {
-  let combinedItems = [
-    ...(showTrades && Array.isArray(trades) ? trades : []),
-    ...(showDayNotes && Array.isArray(dayNotes) ? dayNotes : []),
-  ];
+  // The Dashboard's filters (time range, status, symbol) and sort order,
+  // applied to any list of trades and notes: this account's own items
+  // below, and on the Stats page also its sub-accounts' trades.
+  const applyItemFilters = useCallback((items) => {
+  let combinedItems = items;
 
   if (timeFilter) {
     const range = getTimeRange(timeFilter, customStartDate, customEndDate);
@@ -1404,7 +1404,19 @@ export const TradeProvider = ({ children }) => {
   }
 
       return sortItems(combinedItems, sortField, sortDirection);
-  }, [trades, dayNotes, showTrades, showDayNotes, timeFilter, customStartDate, customEndDate, restrictToActionsInRange, filter, symbolFilter, sortField, sortDirection]);
+  }, [timeFilter, customStartDate, customEndDate, restrictToActionsInRange, filter, symbolFilter, sortField, sortDirection]);
+
+  const filteredItems = useMemo(() => applyItemFilters([
+    ...(showTrades && Array.isArray(trades) ? trades : []),
+    ...(showDayNotes && Array.isArray(dayNotes) ? dayNotes : []),
+  ]), [applyItemFilters, trades, dayNotes, showTrades, showDayNotes]);
+
+  // Trades from other accounts (sub-accounts, for Stats) filtered and sorted
+  // the way this account's own are, honouring the trades/notes toggle.
+  const filterTradeItems = useCallback(
+    (items) => applyItemFilters(showTrades && Array.isArray(items) ? items : []),
+    [applyItemFilters, showTrades]
+  );
 
   const stats = useMemo(() => {
     return computeStats(filteredItems.filter(item => item.type === 'FUT' || item.type === 'STK'), futuresSettings);
@@ -1415,6 +1427,7 @@ export const TradeProvider = ({ children }) => {
         trades,
         dayNotes,
         filteredItems,
+        filterTradeItems,
         setTrades,
         stats,
         toggleFilter,
@@ -1458,7 +1471,7 @@ export const TradeProvider = ({ children }) => {
         hiddenColumns,
         toggleColumnVisibility,
   }), [
-        trades, dayNotes, filteredItems, stats, toggleFilter, refreshTrades, fetchProcessedTradesForAccount, setSort, sortField, sortDirection,
+        trades, dayNotes, filteredItems, filterTradeItems, stats, toggleFilter, refreshTrades, fetchProcessedTradesForAccount, setSort, sortField, sortDirection,
         timeFilter, filter, customStartDate, customEndDate, accounts, refreshAccounts, holdings, refreshHoldings, currentAccountId, showTrades, showDayNotes,
         toggleShowTrades, toggleShowDayNotes, futuresSettings, refreshFuturesSettings, getAllTradeData,
         symbolFilter, restrictToActionsInRange, isFetching, tradesPerPage, currentPage, hiddenColumns, toggleColumnVisibility

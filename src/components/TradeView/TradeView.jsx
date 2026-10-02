@@ -211,7 +211,9 @@ export default function TradeView({ trade, onClose, onEdit }) {
     try {
       const res = await fetch(`${process.env.REACT_APP_API_URL}/api/trades/${trade.id}/move`, {
         method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
+        // The account the trade is booked in (not the selected one when it was
+        // opened from a parent account's Stats).
+        headers: { 'Content-Type': 'application/json', 'X-Account-ID': trade.account_id ?? currentAccountId },
         body: JSON.stringify({ to_account_id: moveTargetId }),
       });
       const data = await res.json();
@@ -231,7 +233,7 @@ export default function TradeView({ trade, onClose, onEdit }) {
     } finally {
       setIsMoving(false);
     }
-  }, [moveTargetId, trade?.id, currentAccountId, refreshTrades, refreshAccounts, onClose]);
+  }, [moveTargetId, trade?.id, trade?.account_id, currentAccountId, refreshTrades, refreshAccounts, onClose]);
 
   useEffect(() => {
     if (!showMoveMenu) return;
