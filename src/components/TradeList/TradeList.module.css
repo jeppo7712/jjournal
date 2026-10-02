@@ -47,6 +47,8 @@
   overflow: hidden;
   text-overflow: ellipsis;
   user-select: none;
+  padding-right: 8px;
+  box-sizing: border-box;
   transition: color 0.15s;
 }
 
@@ -294,6 +296,8 @@
   display: flex;
   align-items: center;
   min-width: 0;
+  padding-right: 8px;
+  box-sizing: border-box;
   color: var(--ui-text-2, #C7CDD8);
   font-variant-numeric: tabular-nums;
   white-space: nowrap;
