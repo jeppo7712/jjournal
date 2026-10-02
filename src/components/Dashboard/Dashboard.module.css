@@ -1,10 +1,20 @@
+/* Dashboard: a strip of stat tiles, an optional slim P&L chart, one filter
+   toolbar, then the trade list. Same cards and colours as Settings. */
+
 .dashboard {
   display: flex;
   flex-direction: column;
-  gap: 0px;
   width: 100%;
   height: 100%;
   box-sizing: border-box;
+}
+
+.topRow {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  margin-bottom: 14px;
+  width: 100%;
 }
 
 .tradeListSection {
@@ -18,457 +28,135 @@
   overflow: auto;
 }
 
-.timeFilterButtonContainer {
-  position: relative;
-  min-width: 80px;
-  z-index: 20;
-  flex-shrink: 1;
-}
-
-.timeFilterContainer {
-  display: flex;
-  align-items: center;
-  position: relative;
-  z-index: 20;
-}
-
-.timeFilterButton {
-  background: #232837;
-  border: 1px solid #32384a;
-  border-right: none;
-  border-radius: 5px 0 0 5px;
-  padding: 4px 10px;
-  height: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 9px;
-  font-family: Arial, sans-serif;
-  font-weight: 500;
-  color: #A5ADBA;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background 0.18s, border-color 0.18s;
-  min-width: 120px;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.timeFilterButton:hover {
-  background: #262B39;
-  border-right: none;
-}
-
-.timeFilterButton.active {
-  background: #262B39;
-  border-color: #3B82F6;
-  border-right: none;
-  color: #fff;
-  /* A 1px border color change was easy to miss at a glance (the original
-     complaint) — a glow around the whole button reads as "this filter is
-     on" without having to notice a thin outline specifically. */
-  box-shadow: 0 0 0 1px #3B82F6, 0 0 12px 2px rgba(59, 130, 246, 0.55);
-}
-
-.timeFilterMenu {
-  background: #232837;
-  border: 1px solid #32384a;
-  border-top: none;
-  border-radius: 0 0 5px 5px;
-  padding: 6px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-  width: calc(100% + 28px);
-  min-width: 120px;
-  overflow: hidden;
-  max-height: 0;
-  transition: max-height 0.3s ease-in-out, opacity 0.3s ease-in-out;
-  opacity: 0;
-  position: absolute;
-  top: 28px;
-  left: 0;
-  z-index: 1000;
-}
-
-.timeFilterMenu.open {
-  max-height: 300px;
-  opacity: 1;
-}
-
-.timeFilterBox {
-  background: #232837;
-  border: 1px solid #32384a;
-  border-radius: 5px;
-  padding: 4px 6px;
-  height: 20px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 9px;
-  font-family: Arial, sans-serif;
-  font-weight: 500;
-  color: #A5ADBA;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background 0.18s, border-color 0.18s;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.timeFilterBox.custom {
-  font-size: 9px;
-  font-family: Arial, sans-serif;
-  font-weight: 500;
-  padding: 4px 4px;
-}
-
-.timeFilterBox:hover {
-  background: #262B39;
-}
-
-.timeFilterBox.active {
-  background: #262B39;
-  border-color: #3B82F6;
-  color: #fff;
-  box-shadow: 0 0 0 1px #3B82F6, 0 0 12px 2px rgba(59, 130, 246, 0.55);
-}
-
-.bullseyeButton {
-  background: #232837;
-  border: 1px solid #3B82F6;
-  border-left: none;
-  border-radius: 0 5px 5px 0;
-  padding: 4px;
-  height: 28px;
-  width: 28px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  transition: background 0.18s, border-color 0.18s;
-}
-
-.bullseyeButton:hover:not(.disabled) {
-  background: #262B39;
-  border-left: none;
-}
-
-.bullseyeButton.active {
-  background: #262B39;
-  border-color: #EF4444;
-  border-left: none;
-  box-shadow: 0 0 0 1px #EF4444, 0 0 12px 2px rgba(239, 68, 68, 0.55);
-}
-
-.bullseyeButton.disabled {
-  background: #232837;
-  border-color: #32384a;
-  border-left: none;
-  cursor: not-allowed;
-  opacity: 0.5;
-}
-
-.bullseyeIcon {
-  width: 16px;
-  height: 16px;
-  fill: #A5ADBA;
-  transition: fill 0.18s;
-}
-
-.bullseyeButton.active .bullseyeIcon {
-  fill: #EF4444;
-}
-
-.bullseyeButton.disabled .bullseyeIcon {
-  fill: #A5ADBA;
-  opacity: 0.5;
-}
-
-.datePickerContainer {
-  position: absolute;
-  top: 28px;
-  right: 28px;
-  z-index: 20;
-}
-
-.datePickerCalendar {
-  background: #c8c8c8 !important;
-  border: none !important;
-  font-family: Arial, sans-serif !important;
-  color: #A5ADBA !important;
-}
-
-.datePickerCalendar .react-datepicker__header {
-  background: #2C3142 !important;
-  border-bottom: none !important;
-  padding: 8px 0 !important;
-}
-
-.datePickerCalendar .react-datepicker__current-month,
-.datePickerCalendar .react-datepicker__day-name {
-  color: #fff !important;
-  font-size: 10px !important;
-}
-
-.datePickerCalendar .react-datepicker__day {
-  color: #F3F4F6 !important;
-  font-size: 10px !important;
-  width: 24px !important;
-  height: 24px !important;
-  line-height: 24px !important;
-  margin: 2px !important;
-}
-
-.datePickerCalendar .react-datepicker__day--selected,
-.datePickerCalendar .react-datepicker__day--in-range,
-.datePickerCalendar .react-datepicker__day--in-selecting-range {
-  background: #3B82F6 !important;
-  color: #fff !important;
-  border-radius: 4px !important;
-}
-
-.datePickerCalendar .react-datepicker__day--in-range {
-  background: rgba(59, 130, 246, 0.2) !important;
-}
-
-.datePickerCalendar .react-datepicker__day--today {
-  color: #3B82F6 !important;
-  font-weight: 700 !important;
-}
-
-.datePickerCalendar .react-datepicker__day--outside-month {
-  color: #4B5266 !important;
-}
-
-.datePickerCalendar .react-datepicker__day:hover {
-  background: #262B39 !important;
-  color: #fff !important;
-  border-radius: 4px !important;
-}
-
-.datePickerCalendar .react-datepicker__navigation {
-  top: 8px !important;
-}
-
-.datePickerCalendar .react-datepicker-box {
-  border-color: #A5ADBA !important;
-}
-
-.datePickerCalendar .react-datepicker__month-container {
-  padding: 4px !important;
-}
-
-.datePickerCalendar .react-datepicker__month {
-  margin: 4px !important;
-}
-
-.topRow {
-  display: flex;
-  flex-direction: row;
-  gap: 16px;
-  align-items: stretch;
-  margin-bottom: 30px;
-  width: 100%;
-}
-
-.graphBubble {
-  display: flex;
-  flex-direction: column;
-  justify-content: space-between;
-  position: relative;
-  background: #292e3a;
-  border: 1.5px solid #32384a;
-  border-radius: 6px;
-  flex: 1;
-  min-width: 200px;
-  padding: 10px 1px 1px 5px;
-  box-shadow: 0 1px 2px 0 rgba(20,22,25,0.08);
-  height: 160px;
-  box-sizing: border-box;
-}
-
-.graphArea {
-  flex: 1;
-  min-height: 80px;
-  max-height: 140px;
-  width: 100%;
-}
-
-.graphPopup {
-  position: fixed;
-  top: 0;
-  left: 0;
-  right: 0;
-  bottom: 0;
-  background: rgba(0, 0, 0, 0.8);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 2000;
-}
-
-.graphPopupContent {
-  position: relative;
-  background: #292e3a;
-  border: 1.5px solid #32384a;
-  border-radius: 6px;
-  padding: 20px;
-  width: 90%;
-  max-width: 600px;
-  height: 70%;
-  max-height: 400px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-}
-
-.graphPopupArea {
-  width: 100%;
-  height: 100%;
-}
-
-.graphPopupClose {
-  position: absolute;
-  top: 10px;
-  right: 10px;
-  background: #232837;
-  border: 1px solid #32384a;
-  border-radius: 4px;
-  width: 24px;
-  height: 24px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  font-size: 16px;
-  color: #A5ADBA;
-  cursor: pointer;
-  transition: background 0.18s, border-color 0.18s, color 0.18s;
-}
-
-.graphPopupClose:hover {
-  background: #262B39;
-  border-color: #3B82F6;
-  color: #F3F4F6;
-}
-
+/* ---------- Stat tiles ---------- */
 .statsContainer {
-  display: flex;
-  flex-direction: column;
-  min-width: 538px;
-  height: 160px;
-  box-sizing: border-box;
+  width: 100%;
 }
 
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
-  grid-template-rows: repeat(2, auto);
-  gap: 6px;
-  flex: 1;
-  align-items: stretch;
-}
-
-.statGridCol {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  height: 100%;
-  min-width: 130px;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: 10px;
 }
 
 .statBox {
-  background: #232837;
-  border: 1px solid #32384a;
-  border-radius: 7px;
-  padding: 8px 12px;
-  height: 50px;
-  transition: background 0.18s, border-color 0.18s;
-  box-sizing: border-box;
   position: relative;
-}
-
-.statBox:hover {
-  background: #262B39;
-  opacity: 0.97;
-}
-
-.statBox.active {
-  background: #262B39;
-  border: 1px solid #3B82F6 !important;
-  box-shadow: 0 0 0 1px #3B82F6, 0 0 12px 2px rgba(59, 130, 246, 0.55);
-}
-
-.statBox.excluded {
-  background: #262B39;
-  border: 1px solid #EF4444 !important;
-  box-shadow: 0 0 0 1px #EF4444, 0 0 12px 2px rgba(239, 68, 68, 0.55);
-}
-
-.statLabel {
-  font-size: 10px;
-  color: #A5ADBA;
-  font-weight: 500;
-  letter-spacing: 0.04em;
-  position: absolute;
-  top: 3px;
-  left: 12px;
-}
-
-.statValue {
-  font-size: 1.1em;
-  font-weight: 600;
-  position: absolute;
-  top: 20px;
-  left: 12px;
-  transform: translateX(10px);
-}
-
-/* Two or more currencies in one stat box. .statBox is a fixed 50px with the
-   value absolutely positioned at top:20px, which leaves room for exactly one
-   line at 1.1em — a second line overflowed the box outright. Stacking starts
-   3px higher (the 10px label only reaches ~15px) so the lines fit inside the
-   remaining height. The font size is not set here: Dashboard.jsx derives it
-   from how many currencies there are, so three or four still fit. Only
-   applied when there really are several currencies; a single value keeps
-   .statValue untouched. */
-.statValueStacked {
   display: flex;
   flex-direction: column;
-  top: 20px;
-  line-height: 1.12;
-  transform: none;
-  white-space: nowrap;
-}
-
-/* R P&L / U P&L have no percentage ring, so the full right edge is free. */
-.statValueStackedRight {
-  left: auto;
-  right: 12px;
-  align-items: flex-end;
-  text-align: right;
-}
-
-/* AVG W / AVG L do have a ring (34px at right:12px), so these stay left and
-   are capped short of it, with smaller type again to fit the narrower run. */
-.statValueStackedLeft {
-  left: 12px;
-  right: auto;
-  align-items: flex-start;
-  text-align: left;
-  max-width: calc(100% - 62px);
+  justify-content: space-between;
+  gap: 6px;
+  min-width: 0;
+  min-height: 70px;
+  padding: 11px 13px 12px;
+  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 14px;
+  box-shadow: var(--ui-shadow);
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s, transform 0.12s, background 0.15s;
+  user-select: none;
   overflow: hidden;
 }
 
-/* A currency figure that can be clicked to chart that currency. Inactive ones
-   are dimmed rather than hidden or given a control of their own — the figures
-   are already there, so they double as the selector and the box gains no
-   extra furniture. */
+.statBox::after {
+  /* a soft wash of the tile's own colour in the corner */
+  content: '';
+  position: absolute;
+  inset: auto -30% -60% auto;
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  background: currentColor;
+  opacity: 0.05;
+  pointer-events: none;
+}
+
+.clickable {
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .clickable:hover {
+    border-color: #3A4258;
+    transform: translateY(-1px);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 14px 30px rgba(0, 0, 0, 0.25);
+  }
+}
+
+.statBox.active {
+  border-color: rgba(59, 130, 246, 0.75);
+  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5), 0 10px 28px rgba(59, 130, 246, 0.16);
+}
+
+.statBox.excluded {
+  border-color: rgba(239, 68, 68, 0.6);
+  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35);
+}
+
+.statBox.excluded .statValue {
+  opacity: 0.45;
+  text-decoration: line-through;
+  text-decoration-thickness: 2px;
+}
+
+.charted {
+  border-color: rgba(59, 130, 246, 0.45);
+}
+
+.statLabel {
+  position: relative;
+  z-index: 1;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-muted, #8B93A3);
+  white-space: nowrap;
+}
+
+.statValue {
+  position: relative;
+  z-index: 1;
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: -0.01em;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  padding-right: 34px;
+}
+
+.tilePnl .statValue {
+  padding-right: 0;
+  text-align: right;
+}
+
+.tilePnl .statLabel {
+  text-align: right;
+}
+
+/* More than one currency: the figures stack, smaller. */
+.statValueStacked {
+  display: flex;
+  flex-direction: column;
+  gap: 1px;
+  line-height: 1.15;
+}
+
+.statValueStackedRight {
+  align-items: flex-end;
+}
+
+.statValueStackedLeft {
+  align-items: flex-start;
+}
+
 .statCurrencyPick {
   cursor: pointer;
   opacity: 0.45;
-  transition: opacity 0.12s ease;
+  transition: opacity 0.15s;
 }
 
 .statCurrencyPick:hover {
@@ -482,484 +170,703 @@
 
 .statPctContainer {
   position: absolute;
-  top: 50%;
-  right: 12px;
-  transform: translateY(-50%);
-  width: 34px;
-  height: 34px;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.statPct {
-  font-size: 9px;
-  color: #A5ADBA;
-  font-weight: 500;
-  position: absolute;
-  text-align: center;
+  right: 10px;
+  bottom: 9px;
+  width: 30px;
+  height: 30px;
+  z-index: 1;
 }
 
 .progressRing {
+  display: block;
+}
+
+.statPct {
   position: absolute;
-}
-
-.progressRingCircle {
-  transition: stroke-dashoffset 0.35s;
-}
-
-.pnlAndButtonsCol {
-  grid-row: 1 / span 1;
-  grid-column: 4 / span 1;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.toggleButton {
-  flex: 1;
-  background: #232837;
-  border: 1px solid #32384a;
-  border-radius: 5px;
-  padding: 4px 6px;
-  height: 28px;
+  inset: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 9px;
-  font-family: Arial, sans-serif;
-  font-weight: 500;
-  color: #A5ADBA;
-  text-transform: uppercase;
-  cursor: pointer;
-  transition: background 0.18s, border-color 0.18s;
+  font-size: 8.5px;
+  font-weight: 700;
+  color: var(--ui-text-2, #C7CDD8);
+  font-variant-numeric: tabular-nums;
 }
 
-.toggleButton:hover {
-  background: #262B39;
-}
-
-.toggleButton.active {
-  background: #262B39;
-  border-color: #3B82F6;
-  color: #fff;
-  box-shadow: 0 0 0 1px #3B82F6, 0 0 12px 2px rgba(59, 130, 246, 0.55);
-}
-
-.toggleButton.excluded {
-  background: #262B39;
-  border-color: #EF4444;
-  color: #fff;
-  box-shadow: 0 0 0 1px #EF4444, 0 0 12px 2px rgba(239, 68, 68, 0.55);
-}
-
-.openTradesButton {
-  display: none;
-}
-
-.openTradesButton.active {
-  background: #262B39;
-  border-color: #3B82F6;
-  color: #fff;
-  box-shadow: 0 0 0 1px #3B82F6, 0 0 12px 2px rgba(59, 130, 246, 0.55);
-}
-
-.openTradesButton.excluded {
-  background: #262B39;
-  border-color: #EF4444;
-  color: #fff;
-  box-shadow: 0 0 0 1px #EF4444, 0 0 12px 2px rgba(239, 68, 68, 0.55);
-}
-
-.symbolFilterContainer {
-  display: flex;
-  align-items: center;
-  height: 28px;
-  position: relative;
-  flex: 2;
-}
-
-.symbolFilterInput {
-  background: #232837;
-  border: 1px solid #32384a;
-  border-radius: 5px;
-  padding: 4px 24px 4px 8px;
-  height: 28px;
-  width: 100%;
-  min-width: 0;
-  font-size: 10px;
-  font-family: Arial, sans-serif;
-  font-weight: 500;
-  color: #F3F4F6;
-  text-transform: uppercase;
-  text-overflow: ellipsis;
-  transition: background 0.18s, border-color 0.18s;
-  box-sizing: border-box;
-}
-
-.symbolFilterInput.active {
-  border-color: #3B82F6;
-}
-
-.symbolFilterInput::placeholder {
-  color: #A5ADBA;
-}
-
-.symbolFilterInput:focus {
-  outline: none;
-  background: #262B39;
-  border-color: #3B82F6;
-}
-
-.clearSymbolFilter {
+.statFlag {
   position: absolute;
-  right: 8px;
-  top: 50%;
-  transform: translateY(-50%);
-  background: transparent;
-  border: none;
-  color: #A5ADBA;
-  font-size: 12px;
-  cursor: pointer;
-  padding: 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.clearSymbolFilter:hover {
-  color: #F3F4F6;
-}
-
-.filterSections {
-  display: flex;
-  gap: 12px;
-  width: 100%;
-  margin-top: 2px;
-}
-
-.filterSection {
-  flex: 1;
-  display: flex;
-  flex-direction: column;
-  align-items: stretch;
-}
-
-.separatorContainer {
-  position: relative;
-  width: 100%;
-  margin: 2px 0;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-}
-
-.separatorLine {
-  flex: 1;
-  height: 1px;
-  background: #32384a;
-}
-
-.separatorText {
-  background: #1e1e2e;
-  padding: 0 8px;
-  font-size: 8px;
-  color: #A5ADBA;
-  text-transform: uppercase;
-  position: relative;
+  top: 9px;
+  right: 10px;
   z-index: 1;
+  padding: 1px 6px;
+  border-radius: 999px;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  background: rgba(239, 68, 68, 0.16);
+  color: #FCA5A5;
+}
+
+.statFlagOn {
+  background: rgba(59, 130, 246, 0.18);
+  color: #93C5FD;
+}
+
+/* ---------- P&L chart ---------- */
+.graphBubble {
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: var(--ui-radius, 16px);
+  box-shadow: var(--ui-shadow);
+  padding: 12px 14px 6px;
+  box-sizing: border-box;
+  animation: panelIn 0.22s ease-out;
+}
+
+@keyframes panelIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.chartHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.chartTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #fff;
+}
+
+.chartSubtitle {
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--ui-faint, #6B7280);
+}
+
+.chartActions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.segmented {
+  display: inline-flex;
+  padding: 3px;
+  border-radius: 10px;
+  background: var(--ui-input, #141822);
+  border: 1px solid var(--ui-border, #2C3244);
+}
+
+.segmented button {
+  border: none;
+  background: transparent;
+  color: var(--ui-muted, #8B93A3);
+  font-size: 12px;
+  font-weight: 600;
+  padding: 4px 11px;
+  border-radius: 7px;
+  transition: background 0.15s, color 0.15s;
+}
+
+.segmented button:hover {
+  color: #fff;
+}
+
+.segmented .segmentOn,
+.segmented .segmentOn:hover {
+  background: rgba(59, 130, 246, 0.2);
+  color: #DBEAFE;
+}
+
+.iconButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ui-muted, #8B93A3);
+  transition: background 0.15s, color 0.15s;
+}
+
+.iconButton svg {
+  width: 18px;
+  height: 18px;
+}
+
+.iconButton:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+.graphArea {
+  position: relative;
+  height: 150px;
+  width: 100%;
+}
+
+.chartEmpty {
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--ui-faint, #6B7280);
+  font-size: 13px;
+}
+
+/* Phone: the chart opens full screen from the P&L tiles. */
+.graphPopup {
+  position: fixed;
+  inset: 0;
+  background: rgba(5, 7, 12, 0.72);
+  -webkit-backdrop-filter: blur(4px);
+  backdrop-filter: blur(4px);
+  z-index: 2000;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 16px;
+}
+
+.graphPopupContent {
+  position: relative;
+  width: 100%;
+  max-width: 900px;
+  background: var(--ui-card, #1D2130);
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: var(--ui-radius, 16px);
+  padding: 36px 12px 12px;
+  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.55);
+}
+
+.graphPopupArea {
+  height: 300px;
+}
+
+.graphPopupClose {
+  position: absolute;
+  top: 6px;
+  right: 8px;
+  width: 32px;
+  height: 32px;
+  border: none;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ui-muted, #8B93A3);
+  font-size: 20px;
+  line-height: 1;
+}
+
+.graphPopupClose:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+/* ---------- Toolbar ---------- */
+.filterSections {
+  position: relative;
+  z-index: 20;
 }
 
 .buttonRow {
   display: flex;
-  gap: 10px;
-  width: 100%;
   align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
 .toggleButtonGroup {
-  display: flex;
-  gap: 10px;
-  align-items: center;
+  display: inline-flex;
+  padding: 3px;
+  gap: 2px;
+  border-radius: 11px;
+  background: var(--ui-input, #141822);
+  border: 1px solid var(--ui-border, #2C3244);
 }
-@media (max-width: 992px) {
+
+.toggleButton,
+.chartToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 7px;
+  height: 30px;
+  padding: 0 11px;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-muted, #8B93A3);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.toggleIcon {
+  width: 15px;
+  height: 15px;
+  flex-shrink: 0;
+}
+
+.toggleButton:hover,
+.chartToggle:hover {
+  color: #fff;
+}
+
+.toggleButton.active {
+  background: rgba(59, 130, 246, 0.18);
+  color: #DBEAFE;
+}
+
+.toggleButton.excluded {
+  color: #5F6778;
+}
+
+.toggleButton.excluded .toggleText {
+  text-decoration: line-through;
+}
+
+/* Open positions: three states — off (plain), only (blue), hidden (red). */
+.openTradesButton.excluded {
+  background: rgba(239, 68, 68, 0.14);
+  color: #FCA5A5;
+}
+
+.openTradesButton.excluded .toggleText {
+  text-decoration: none;
+}
+
+.chartToggle {
+  margin-left: auto;
+  height: 38px;
+  border-color: var(--ui-border, #2C3244);
+  background: var(--ui-input, #141822);
+  border-radius: 11px;
+}
+
+.chartToggle.active {
+  color: #DBEAFE;
+  border-color: rgba(59, 130, 246, 0.45);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+/* Time filter: one button (opens the menu, or clears an active filter)
+   joined to the "fills in range only" button. */
+.timeFilterContainer {
+  display: inline-flex;
+  align-items: stretch;
+  height: 38px;
+}
+
+.timeFilterButtonContainer {
+  position: relative;
+  display: flex;
+}
+
+.timeFilterButton {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border, #2C3244);
+  border-right: none;
+  border-radius: 11px 0 0 11px;
+  background: var(--ui-input, #141822);
+  color: var(--ui-text-2, #C7CDD8);
+  font-size: 12.5px;
+  font-weight: 600;
+  white-space: nowrap;
+  transition: border-color 0.15s, background 0.15s, color 0.15s;
+}
+
+.timeFilterButton:hover {
+  color: #fff;
+  background: #181D29;
+}
+
+.timeFilterButton.active {
+  border-color: rgba(59, 130, 246, 0.55);
+  background: rgba(59, 130, 246, 0.12);
+  color: #DBEAFE;
+}
+
+.timeFilterLabel {
+  text-transform: none;
+}
+
+.clearMark {
+  margin-left: 2px;
+  font-size: 15px;
+  line-height: 1;
+  color: #93C5FD;
+}
+
+.timeFilterMenu {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  width: 260px;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 6px;
+  background: #1B1F2C;
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  z-index: 30;
+  animation: panelIn 0.16s ease-out;
+}
+
+.timeFilterBox {
+  padding: 8px 10px;
+  border-radius: 9px;
+  color: var(--ui-text-2, #C7CDD8);
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  cursor: pointer;
+  transition: background 0.12s, color 0.12s;
+}
+
+.timeFilterBox:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.timeFilterBox.active {
+  background: rgba(59, 130, 246, 0.18);
+  color: #DBEAFE;
+}
+
+.timeFilterBox.custom {
+  grid-column: 1 / -1;
+  text-align: center;
+  border: 1px dashed var(--ui-border, #2C3244);
+}
+
+.bullseyeButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 38px;
+  height: 38px;
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 0 11px 11px 0;
+  background: var(--ui-input, #141822);
+  color: var(--ui-muted, #8B93A3);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.bullseyeButton:hover:not(.disabled) {
+  color: #fff;
+  background: #181D29;
+}
+
+.bullseyeButton.active {
+  color: #93C5FD;
+  border-color: rgba(59, 130, 246, 0.55);
+  background: rgba(59, 130, 246, 0.12);
+}
+
+.bullseyeButton.disabled {
+  cursor: default;
+  opacity: 0.4;
+}
+
+.bullseyeIcon {
+  width: 16px;
+  height: 16px;
+  fill: currentColor;
+}
+
+/* Symbol search */
+.symbolFilterContainer {
+  position: relative;
+  display: flex;
+  align-items: center;
+  width: 170px;
+}
+
+.searchIcon {
+  position: absolute;
+  left: 11px;
+  width: 15px;
+  height: 15px;
+  color: var(--ui-faint, #6B7280);
+  pointer-events: none;
+}
+
+.symbolFilterInput {
+  width: 100%;
+  height: 38px;
+  padding: 0 30px 0 33px;
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 11px;
+  background: var(--ui-input, #141822);
+  color: #fff;
+  font-size: 13px;
+  font-weight: 500;
+  text-transform: uppercase;
+  box-sizing: border-box;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.symbolFilterInput::placeholder {
+  color: var(--ui-faint, #6B7280);
+  text-transform: none;
+}
+
+.symbolFilterInput:focus {
+  outline: none;
+  border-color: rgba(59, 130, 246, 0.65);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.symbolFilterInput.active {
+  border-color: rgba(59, 130, 246, 0.55);
+}
+
+.clearSymbolFilter {
+  position: absolute;
+  right: 6px;
+  width: 24px;
+  height: 24px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ui-muted, #8B93A3);
+  font-size: 16px;
+  line-height: 1;
+}
+
+.clearSymbolFilter:hover {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+/* ---------- Date range picker ---------- */
+.datePickerContainer {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  z-index: 40;
+  padding: 8px;
+  background: #1B1F2C;
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+}
+
+.datePickerCalendar {
+  background: transparent !important;
+  border: none !important;
+  font-family: inherit !important;
+  color: var(--ui-text-2, #C7CDD8) !important;
+}
+
+.datePickerCalendar :global(.react-datepicker__header) {
+  background: transparent !important;
+  border-bottom: 1px solid var(--ui-border, #2C3244) !important;
+  padding: 8px 0 !important;
+}
+
+.datePickerCalendar :global(.react-datepicker__current-month),
+.datePickerCalendar :global(.react-datepicker__day-name) {
+  color: #fff !important;
+  font-size: 12px !important;
+}
+
+.datePickerCalendar :global(.react-datepicker__day-name) {
+  color: var(--ui-faint, #6B7280) !important;
+  width: 30px !important;
+  margin: 2px !important;
+}
+
+.datePickerCalendar :global(.react-datepicker__day) {
+  color: var(--ui-text, #E5E7EB) !important;
+  font-size: 12px !important;
+  width: 30px !important;
+  height: 30px !important;
+  line-height: 30px !important;
+  margin: 2px !important;
+  border-radius: 8px !important;
+}
+
+.datePickerCalendar :global(.react-datepicker__day--in-range),
+.datePickerCalendar :global(.react-datepicker__day--in-selecting-range) {
+  background: rgba(59, 130, 246, 0.2) !important;
+  color: #fff !important;
+}
+
+.datePickerCalendar :global(.react-datepicker__day--selected),
+.datePickerCalendar :global(.react-datepicker__day--range-start),
+.datePickerCalendar :global(.react-datepicker__day--range-end) {
+  background: #3B82F6 !important;
+  color: #fff !important;
+}
+
+.datePickerCalendar :global(.react-datepicker__day--today) {
+  font-weight: 700 !important;
+  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.6);
+}
+
+.datePickerCalendar :global(.react-datepicker__day--outside-month) {
+  color: #4B5266 !important;
+}
+
+.datePickerCalendar :global(.react-datepicker__day:hover) {
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #fff !important;
+}
+
+.datePickerCalendar :global(.react-datepicker__navigation) {
+  top: 10px !important;
+}
+
+.datePickerCalendar :global(.react-datepicker__month-container) {
+  padding: 4px !important;
+}
+
+/* ---------- Narrower screens ---------- */
+@media (max-width: 1350px) {
   .statsGrid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 
-  .statGridCol:nth-child(2) {
-    display: none;
+  .statBox {
+    min-height: 62px;
   }
 
-  .pnlAndButtonsCol {
-    grid-column: 3 / span 1;
-  }
-
-  .statsContainer {
-    min-width: 402px;
-  }
-
-  .openTradesButton {
-    display: flex;
+  .statValue {
+    font-size: 18px;
   }
 }
 
 @media (max-width: 750px) {
-  .topRow {
-    flex-direction: column;
-    gap: 16px;
-  }
-
-  .graphBubble {
+  .chartToggle {
     display: none;
   }
 
-  .statsContainer {
-    min-width: 0;
-    width: 100%;
-  }
-
   .statsGrid {
-    grid-template-columns: repeat(3, 1fr);
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 
-  .statGridCol {
-    min-width: 0;
+  .tileOpen,
+  .tileWash {
+    display: none;
   }
 }
 
+/* ---------- Phone ---------- */
 @media (max-width: 600px) {
-  /* No bottom padding here: .main-content (styles.css) already keeps clear
-     of the bottom bar, and reserving it twice left a gap under the list. */
-
-  .symbolFilterInput {
-    font-size: 14px;
-    padding: 2px 20px 2px 6px;
-    height: 32px;
+  .topRow {
+    gap: 8px;
+    margin-bottom: 8px;
   }
 
-  .clearSymbolFilter {
-    right: 10px;
-    font-size: 14px;
-  }
-
-  .timeFilterButton {
-    font-size: 14px;
-    padding: 2px 8px;
-    height: 32px;
-    min-width: 100px;
-    border-right: none;
-    border-radius: 5px 0 0 5px;
-  }
-
-  .bullseyeButton {
-    height: 32px;
-    width: 32px;
-    padding: 2px;
-    border-left: none;
-    border-radius: 0 5px 5px 0;
-  }
-
-  .bullseyeIcon {
-    width: 20px;
-    height: 20px;
-  }
-
-  .timeFilterMenu {
-    width: calc(100% + 32px);
-    min-width: 100px;
-    top: 32px;
-  }
-
-  .datePickerContainer {
-    right: 32px;
-    top: 32px;
-  }
-
-  .timeFilterBox {
-    font-size: 14px;
-    padding: 2px 4px;
-    height: 24px;
-  }
-
-  .timeFilterBox.custom {
-    font-size: 14px;
-    padding: 2px 4px;
-  }
-
-  .toggleButton {
-    font-size: 0;
-    padding: 2px 6px;
-    height: 32px;
-    position: relative;
-    justify-content: center;
-    align-items: center;
-    min-width: 32px;
-  }
-
-  .openTradesButton {
-    font-size: 0;
-    padding: 2px 6px;
-    height: 32px;
-    min-width: 32px;
-    display: flex;
-    justify-content: center;
-    align-items: center;
-  }
-
-  .openTradesButton.active {
-    background: #262B39;
-    border-color: #3B82F6;
-    color: #fff;
-    box-shadow: 0 0 0 1px #3B82F6, 0 0 12px 2px rgba(59, 130, 246, 0.55);
-  }
-
-  .openTradesButton.excluded {
-    background: #262B39;
-    border-color: #EF4444;
-    color: #fff;
-    box-shadow: 0 0 0 1px #EF4444, 0 0 12px 2px rgba(239, 68, 68, 0.55);
-  }
-
-  .toggleButton::before {
-    display: none;
-    content: '';
-    width: 20px;
-    height: 20px;
-    color: #A5ADBA;
-  }
-
-  .toggleButton.active::before {
-    color: #fff;
-  }
-
-  .toggleButton:nth-child(1)::before {
-    display: block;
-    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23A5ADBA"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>');
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-  }
-
-  .toggleButton.active:nth-child(1)::before {
-    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23fff"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>');
-  }
-
-  .toggleButton:nth-child(2)::before {
-    display: block;
-    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23A5ADBA"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>');
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-  }
-
-  .toggleButton.active:nth-child(2)::before {
-    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23fff"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>');
-  }
-
-  /* Open positions: a clock (still running) instead of a bare letter "O". */
-  .openTradesButton::before {
-    display: block;
-    content: '';
-    width: 20px;
-    height: 20px;
-    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23A5ADBA"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg>');
-    background-size: contain;
-    background-repeat: no-repeat;
-    background-position: center;
-  }
-
-  .openTradesButton.active::before,
-  .openTradesButton.excluded::before {
-    background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23fff"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clip-rule="evenodd"/></svg>');
-  }
-
-  .statPctContainer {
-    display: none;
+  /* Two rows of three compact tiles: WINS/LOSSES, AVG W/AVG L, R/U P&L. */
+  .statsGrid {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-rows: auto auto;
+    grid-auto-flow: column;
+    gap: 6px;
   }
 
   .statBox {
-    height: 30px;
-    display: flex;
+    flex-direction: row;
     align-items: center;
-    padding: 8px 12px;
+    justify-content: space-between;
+    gap: 6px;
+    min-height: 0;
+    height: 36px;
+    padding: 0 10px;
+    border-radius: 10px;
+    touch-action: manipulation;
   }
 
-  .statBox.active {
-    background: #262B39;
-    border: 1px solid #3B82F6 !important;
-    box-shadow: 0 0 0 1px #3B82F6, 0 0 12px 2px rgba(59, 130, 246, 0.55);
-  }
-
-  .statBox.excluded {
-    background: #262B39;
-    border: 1px solid #EF4444 !important;
-    box-shadow: 0 0 0 1px #EF4444, 0 0 12px 2px rgba(239, 68, 68, 0.55);
+  .statBox::after,
+  .statPctContainer,
+  .statFlag {
+    display: none;
   }
 
   .statLabel {
-    font-size: 13px;
-    position: static;
-    margin-right: 6px;
-    white-space: nowrap; /* "AVG W" broke over two lines next to a long value */
+    font-size: 10px;
+    letter-spacing: 0.04em;
   }
 
   .statValue {
-    font-size: 14px;
-    position: static;
-    transform: none;
-    margin-left: auto;
-    white-space: nowrap;
+    font-size: 13.5px;
+    padding-right: 0;
+    text-align: right;
   }
 
-  .topRow {
-    margin-bottom: 10px;
-    flex-direction: column;
-    gap: 10px;
-    max-height: 150px;
-    overflow: visible;
-  }
-
-  .statsContainer {
-    height: auto;
-    min-height: auto;
-    width: 100%;
-    display: flex;
-    justify-content: flex-start;
-    max-height: 140px;
-    overflow: visible;
-  }
-
-  .statsGrid {
-    grid-template-columns: auto auto auto;
+  .buttonRow {
+    flex-wrap: nowrap;
     gap: 6px;
-    flex: none;
-    height: auto;
-    max-height: 100%;
   }
 
-  .statBox {
-    height: 30px;
-    display: flex;
-    align-items: center;
-    padding: 8px 12px;
-    touch-action: manipulation;
-  }
-  
-  .toggleButtonGroup {
-    display: flex;
-    gap: 0;
+  .toggleButton {
+    padding: 0 9px;
+    height: 32px;
   }
 
-  .toggleButtonGroup .toggleButton:first-child {
-    border-radius: 5px 0 0 5px;
+  .toggleText {
+    display: none;
   }
 
-  .toggleButtonGroup .toggleButton:not(:first-child):not(:last-child) {
-    border-radius: 0;
+  .toggleIcon {
+    width: 16px;
+    height: 16px;
   }
 
-  .toggleButtonGroup .toggleButton:last-child {
-    border-radius: 0 5px 5px 0;
+  .timeFilterContainer,
+  .timeFilterButton,
+  .bullseyeButton,
+  .symbolFilterInput {
+    height: 38px;
+  }
+
+  .timeFilterButton {
+    padding: 0 10px;
+    font-size: 13px;
+  }
+
+  .symbolFilterContainer {
+    flex: 1;
+    width: auto;
+    min-width: 0;
+  }
+
+  .symbolFilterInput {
+    font-size: 16px; /* no zoom-in on focus in iOS Safari */
+  }
+
+  .timeFilterMenu {
+    width: min(280px, calc(100vw - 24px));
+  }
+
+  .datePickerContainer {
+    left: 0;
+    right: auto;
+    max-width: calc(100vw - 12px);
+    overflow-x: auto;
+  }
+
+  .graphPopupArea {
+    height: 260px;
   }
 }

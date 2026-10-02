@@ -1,6 +1,6 @@
 /* src/styles.css */
 :root {
-  --primary-dark: #1E1E2E;
+  --primary-dark: #13161F;
   --secondary-dark: #252535;
   --tertiary-dark: #2A2A40;
   --accent-blue: #3B82F6;
@@ -12,7 +12,25 @@
   --border-color: #374151;
   --card-hover: #2D2D45;
   --modal-overlay: rgba(0, 0, 0, 0.7);
-  --nav-width: 180px; /* Matches navigation bar's default width */
+  --nav-width: 212px; /* Matches navigation bar's default width */
+  /* The shared look (same values as the Settings page's --s-* tokens):
+     cards, borders, inputs, text and the accent. */
+  --ui-card: #1D2130;
+  --ui-card-top: #1F2434;
+  --ui-card-2: #1A1E2B;
+  --ui-border: #2C3244;
+  --ui-border-soft: rgba(255, 255, 255, 0.06);
+  --ui-input: #141822;
+  --ui-text: #E5E7EB;
+  --ui-text-2: #C7CDD8;
+  --ui-muted: #8B93A3;
+  --ui-faint: #6B7280;
+  --ui-accent: #3B82F6;
+  --ui-accent-soft: rgba(59, 130, 246, 0.14);
+  --ui-green: #4ADE80;
+  --ui-red: #F87171;
+  --ui-radius: 16px;
+  --ui-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 10px 28px rgba(0, 0, 0, 0.16);
   /* Space taken by the iPhone status bar / home indicator (0 elsewhere);
      needs viewport-fit=cover in public/index.html. */
   --safe-top: env(safe-area-inset-top, 0px);
@@ -32,8 +50,6 @@
   padding: 0;
   box-sizing: border-box;
 }
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
 
 html, body {
   margin: 0;
@@ -91,7 +107,9 @@ body {
 }
 
 body {
-  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   font-size: 13px;
   background-color: var(--primary-dark);
   color: var(--text-primary);
@@ -101,6 +119,46 @@ body {
 button {
   cursor: pointer;
   font-family: inherit;
+}
+
+input, select, textarea {
+  font-family: inherit;
+}
+
+::selection {
+  background: rgba(59, 130, 246, 0.35);
+}
+
+/* Slim, dark scrollbars everywhere (desktop browsers). */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: #343B4D transparent;
+}
+
+*::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+*::-webkit-scrollbar-thumb {
+  background: #343B4D;
+  border-radius: 999px;
+  border: 3px solid transparent;
+  background-clip: padding-box;
+}
+
+*::-webkit-scrollbar-thumb:hover {
+  background-color: #475066;
+}
+
+*::-webkit-scrollbar-track {
+  background: transparent;
+}
+
+/* Visible keyboard focus, without a ring on mouse clicks. */
+:focus-visible {
+  outline: 2px solid rgba(96, 165, 250, 0.65);
+  outline-offset: 2px;
 }
 
 /* Safari (iOS) draws date/time fields with its own taller box and a grey
