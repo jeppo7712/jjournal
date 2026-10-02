@@ -5,6 +5,7 @@ import { Oval } from 'react-loader-spinner';
 import styles from './TradeModal.module.css';
 import { resolveDisplayZone } from '../../utils/timezonePreference';
 import { getWebSocketUrl } from '../../utils/getWebSocketUrl';
+import { formatNumber } from '../../utils/numberFormat';
 
 const TIMEFRAMES = ['1W', '1D', '4H', '1H', '15M', '5M', '1M'];
 
@@ -311,6 +312,15 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
     };
   }, []);
 
+  // Price axis and crosshair label in the number format setting, with the
+  // symbol's precision (which can change after the chart was created).
+  useEffect(() => {
+    if (!chartRef.current) return;
+    chartRef.current.applyOptions({
+      localization: { priceFormatter: (price) => formatNumber(price, pricePrecision) },
+    });
+  }, [pricePrecision]);
+
   // Push data + markers whenever bars, the zone, or the draft actions change.
   useEffect(() => {
     const series = candlestickSeriesRef.current;
@@ -374,7 +384,7 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
             position: a.type === 'BUY' ? 'belowBar' : 'aboveBar',
             color: a.type === 'BUY' ? '#FFFC33' : '#33FFFC',
             shape: a.type === 'BUY' ? 'arrowUp' : 'arrowDown',
-            text: `${a.type} ${a.quantity || ''} @ ${parseFloat(a.price).toFixed(pricePrecision)}`,
+            text: `${a.type} ${a.quantity || ''} @ ${formatNumber(parseFloat(a.price), pricePrecision)}`,
             size: 1,
             textColor: '#e0e2e6',
             textBackgroundColor: a.type === 'BUY' ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)',

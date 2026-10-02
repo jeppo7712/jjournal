@@ -7,6 +7,7 @@ import { useStatus } from '../../context/StatusContext';
 import { DateTime } from 'luxon';
 import { FaPencilAlt, FaTrash } from 'react-icons/fa'; // Example using react-icons
 import { findExchangePreset, findFuturesPreset } from '../../data/marketReference';
+import { NUMBER_FORMATS, getNumberFormat, setNumberFormat } from '../../utils/numberFormat';
 
 // Must match VALID_TIMEFRAMES / DEFAULT_TIMEFRAME_SETTINGS in
 // modules/historical-data-service.js.
@@ -648,6 +649,29 @@ export default function Settings() {
     }
     return ids;
   })();
+
+  // Saved in the server config straight away (it applies on every device),
+  // then applied here; the app redraws its numbers in the new format.
+  const [numberFormat, setNumberFormatChoice] = useState(getNumberFormat);
+  const saveNumberFormat = async (value) => {
+    const previous = numberFormat;
+    setNumberFormatChoice(value);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ numberFormat: value }),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to save the number format');
+      }
+      setNumberFormat(value);
+    } catch (err) {
+      setNumberFormatChoice(previous);
+      alert(err.message);
+    }
+  };
 
   const openAccountModal = (account = null) => {
     setEditingAccountId(account ? account.id : null);
@@ -1693,6 +1717,19 @@ export default function Settings() {
                 <option value={200}>200 trades</option>
                 <option value={500}>500 trades</option>
                 <option value="unlimited">No limit</option>
+              </select>
+            </div>
+            <div className={styles.formField}>
+              <label htmlFor="numberFormat">Number Format</label>
+              <select
+                id="numberFormat"
+                value={numberFormat}
+                onChange={(e) => saveNumberFormat(e.target.value)}
+                className={styles.inputBubble}
+              >
+                {NUMBER_FORMATS.map(f => (
+                  <option key={f.value} value={f.value}>{f.label}</option>
+                ))}
               </select>
             </div>
             <div className={styles.formField} style={{ gridColumn: '1 / -1' }}>

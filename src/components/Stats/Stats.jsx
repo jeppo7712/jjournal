@@ -44,6 +44,7 @@ import {
 } from './statsUtils';
 import styles from './Stats.module.css';
 import { currencyMark } from '../../utils/formatMoney';
+import { formatNumber, formatNumberText } from '../../utils/numberFormat';
 import { Line, Bar, Doughnut, Scatter } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { DateTime } from 'luxon';
@@ -76,7 +77,7 @@ class StatsErrorBoundary extends React.Component {
 // sign — red says "down" on its own and the extra glyph is noise. Only used
 // on figures that are actually coloured: where a value renders in plain
 // white, the sign is the one thing telling a loss from a gain.
-const absAmount = (value) => Math.abs(Number(value)).toFixed(2);
+const absAmount = (value) => formatNumber(Math.abs(Number(value)), 2);
 const pnlColor = (value) => (value === null || value === undefined || Number(value) === 0 ? undefined : Number(value) > 0 ? '#22C55E' : '#EF4444');
 
 const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilterWeek }) => {
@@ -529,7 +530,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         ticks: {
           color: '#9CA3AF',
           font: { size: 11 },
-          callback: value => `${currencyMark(activeCurrency)}${value.toFixed(2)}`,
+          callback: value => `${currencyMark(activeCurrency)}${formatNumber(value, 2)}`,
         },
         grid: { display: true, color: 'rgba(156, 163, 175, 0.1)' },
       },
@@ -541,7 +542,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         mode: 'index',
         intersect: false,
         callbacks: {
-          label: context => `${currencyMark(activeCurrency)}${context.parsed.y.toFixed(2)}`,
+          label: context => `${currencyMark(activeCurrency)}${formatNumber(context.parsed.y, 2)}`,
         },
       },
       verticalLine: { enabled: false },
@@ -577,7 +578,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         ticks: {
           color: '#9CA3AF',
           font: { size: 11 },
-          callback: value => `${value.toFixed(2)}%`,
+          callback: value => `${formatNumber(value, 2)}%`,
         },
         grid: { display: true, color: 'rgba(156, 163, 175, 0.1)' },
       },
@@ -589,7 +590,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         mode: 'index',
         intersect: false,
         callbacks: {
-          label: context => `${context.parsed.y.toFixed(2)}%`,
+          label: context => `${formatNumber(context.parsed.y, 2)}%`,
         },
       },
       verticalLine: { enabled: false },
@@ -625,7 +626,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         ticks: {
           color: '#9CA3AF',
           font: { size: 11 },
-          callback: value => `${value.toFixed(2)}%`,
+          callback: value => `${formatNumber(value, 2)}%`,
         },
         grid: { display: true, color: 'rgba(156, 163, 175, 0.1)' },
       },
@@ -637,7 +638,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         mode: 'index',
         intersect: false,
         callbacks: {
-          label: context => `${context.parsed.y.toFixed(2)}%`,
+          label: context => `${formatNumber(context.parsed.y, 2)}%`,
         },
       },
       verticalLine: {
@@ -698,7 +699,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
       tooltip: {
         enabled: true,
         callbacks: {
-          label: context => `${currencyMark(activeCurrency)}${context.parsed.toFixed(2)}`,
+          label: context => `${currencyMark(activeCurrency)}${formatNumber(context.parsed, 2)}`,
         },
       },
     },
@@ -733,7 +734,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         ticks: {
           color: '#9CA3AF',
           font: { size: 11 },
-          callback: value => `${value.toFixed(2)}%`,
+          callback: value => `${formatNumber(value, 2)}%`,
         },
         grid: { display: true, color: 'rgba(156, 163, 175, 0.1)' },
       },
@@ -745,7 +746,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         mode: 'index',
         intersect: false,
         callbacks: {
-          label: context => `${context.parsed.y.toFixed(2)}%`,
+          label: context => `${formatNumber(context.parsed.y, 2)}%`,
         },
       },
       verticalLine: {
@@ -794,7 +795,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
       tooltip: {
         enabled: true,
         callbacks: {
-          label: context => `Return: ${context.parsed.y.toFixed(2)}%, Hold Time: ${context.parsed.x.toFixed(2)} hrs`,
+          label: context => `Return: ${formatNumber(context.parsed.y, 2)}%, Hold Time: ${formatNumber(context.parsed.x, 2)} hrs`,
         },
       },
       verticalLine: {
@@ -877,39 +878,39 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
               <div className={styles.statsGrid}>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Expectancy</div>
-                  <div className={styles.statValue} title="Avg Win Rate * Avg Win - Loss Rate * Avg Loss">{currencyMark(activeCurrency)}{computedStats.expectancy}</div>
+                  <div className={styles.statValue} title="Avg Win Rate * Avg Win - Loss Rate * Avg Loss">{currencyMark(activeCurrency)}{formatNumberText(computedStats.expectancy)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Risk/Reward Ratio</div>
-                  <div className={styles.statValue} title="Average Win / Average Loss">{computedStats.riskRewardRatio}</div>
+                  <div className={styles.statValue} title="Average Win / Average Loss">{formatNumberText(computedStats.riskRewardRatio)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Recovery Factor</div>
-                  <div className={styles.statValue} title="Total P&L / Max Drawdown">{computedStats.recoveryFactor}</div>
+                  <div className={styles.statValue} title="Total P&L / Max Drawdown">{formatNumberText(computedStats.recoveryFactor)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Trades/Week</div>
-                  <div className={styles.statValue}>{computedStats.avgTradesPerWeek}</div>
+                  <div className={styles.statValue}>{formatNumberText(computedStats.avgTradesPerWeek)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Trades/Month</div>
-                  <div className={styles.statValue}>{computedStats.avgTradesPerMonth}</div>
+                  <div className={styles.statValue}>{formatNumberText(computedStats.avgTradesPerMonth)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Win Size</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{computedStats.avgWinLoss.avgWin}</div>
+                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.avgWinLoss.avgWin)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Loss Size</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{computedStats.avgWinLoss.avgLoss}</div>
+                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.avgWinLoss.avgLoss)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Consecutive Wins</div>
-                  <div className={styles.statValue}>{computedStats.consecutiveStats.avgConsecutiveWins}</div>
+                  <div className={styles.statValue}>{formatNumberText(computedStats.consecutiveStats.avgConsecutiveWins)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Consecutive Losses</div>
-                  <div className={styles.statValue}>{computedStats.consecutiveStats.avgConsecutiveLosses}</div>
+                  <div className={styles.statValue}>{formatNumberText(computedStats.consecutiveStats.avgConsecutiveLosses)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Largest Win Streak</div>
@@ -921,15 +922,15 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Best Daily P&L</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{computedStats.dailyPnLStats.bestDailyPnL}</div>
+                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.dailyPnLStats.bestDailyPnL)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Worst Daily P&L</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{computedStats.dailyPnLStats.worstDailyPnL}</div>
+                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.dailyPnLStats.worstDailyPnL)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Daily P&L</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{computedStats.dailyPnLStats.avgDailyPnL}</div>
+                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.dailyPnLStats.avgDailyPnL)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Best Trading Day</div>
@@ -937,7 +938,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Best Day P&L</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{computedStats.bestWorstDays.bestAmount}</div>
+                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.bestWorstDays.bestAmount)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Worst Trading Day</div>
@@ -945,7 +946,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Worst Day P&L</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{computedStats.bestWorstDays.worstAmount}</div>
+                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.bestWorstDays.worstAmount)}</div>
                 </div>
               </div>
               
@@ -971,7 +972,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                           <td>{month.wins}</td>
                           <td>{month.losses}</td>
                           <td>{month.trades}</td>
-                          <td>{month.winRate}%</td>
+                          <td>{formatNumberText(month.winRate)}%</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1009,7 +1010,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                             <td>{hour.total}</td>
                             <td style={{ color: '#22C55E' }}>{hour.wins}</td>
                             <td style={{ color: '#EF4444' }}>{hour.losses}</td>
-                            <td>{hour.winRate}%</td>
+                            <td>{formatNumberText(hour.winRate)}%</td>
                             <td style={{ color: hour.pnl >= 0 ? '#22C55E' : '#EF4444' }}>{currencyMark(activeCurrency)}{absAmount(hour.pnl)}</td>
                           </tr>
                         )
@@ -1073,7 +1074,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
             const h = computedStats.holdings;
             const mark = currencyMark(activeCurrency);
             const money = (v) => (v === null || v === undefined ? '—' : `${mark}${absAmount(v)}`);
-            const pct = (v) => (v === null || v === undefined ? '—' : `${Math.abs(v).toFixed(2)}%`);
+            const pct = (v) => (v === null || v === undefined ? '—' : `${formatNumber(Math.abs(v), 2)}%`);
             return (
               <div>
                 <div className={styles.statsGrid}>
@@ -1131,9 +1132,9 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                         {h.rows.map(r => (
                           <tr key={r.symbol}>
                             <td>{r.symbol}</td>
-                            <td>{r.quantity}</td>
-                            <td>{r.avgCost === null ? '—' : r.avgCost.toFixed(4)}</td>
-                            <td>{r.currentPrice === null ? (r.priced ? '—' : '…') : Number(r.currentPrice).toFixed(4)}</td>
+                            <td>{formatNumber(r.quantity, 8, true)}</td>
+                            <td>{r.avgCost === null ? '—' : formatNumber(r.avgCost, 4)}</td>
+                            <td>{r.currentPrice === null ? (r.priced ? '—' : '…') : formatNumber(Number(r.currentPrice), 4)}</td>
                             <td>{money(r.marketValue)}</td>
                             <td style={{ color: pnlColor(r.unrealizedPnl) }}>{r.priced ? money(r.unrealizedPnl) : '…'}</td>
                             <td style={{ color: pnlColor(r.unrealizedPct) }}>{pct(r.unrealizedPct)}</td>
@@ -1230,7 +1231,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                         <tr key={`win-${idx}`}>
                           <td>Win</td>
                           <td>{trade.symbol}</td>
-                          <td>{currencyMark(activeCurrency)}{trade.return.toFixed(2)}</td>
+                          <td>{currencyMark(activeCurrency)}{formatNumber(trade.return, 2)}</td>
                           <td>{trade.date}</td>
                         </tr>
                       ))}
@@ -1238,7 +1239,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                         <tr key={`loss-${idx}`}>
                           <td>Loss</td>
                           <td>{trade.symbol}</td>
-                          <td>{currencyMark(activeCurrency)}{trade.return.toFixed(2)}</td>
+                          <td>{currencyMark(activeCurrency)}{formatNumber(trade.return, 2)}</td>
                           <td>{trade.date}</td>
                         </tr>
                       ))}
@@ -1255,11 +1256,11 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
               <div className={styles.statsGrid}>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Total Fees</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{computedStats.feeAnalysis?.totalFees || '0.00'}</div>
+                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.feeAnalysis?.totalFees || '0.00')}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Fees per Trade</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{computedStats.feeAnalysis?.avgFeesPerTrade || '0.00'}</div>
+                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.feeAnalysis?.avgFeesPerTrade || '0.00')}</div>
                 </div>
               </div>
               <div className={styles.tableSection}>
@@ -1276,7 +1277,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                       {Object.entries(computedStats.feeAnalysis.feesPerMonth).sort().map(([month, fees]) => (
                         <tr key={month}>
                           <td>{month}</td>
-                          <td>{currencyMark(activeCurrency)}{fees.toFixed(2)}</td>
+                          <td>{currencyMark(activeCurrency)}{formatNumber(fees, 2)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1299,7 +1300,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                       {Object.entries(computedStats.feeAnalysis.feesPerSymbol).map(([symbol, fees]) => (
                         <tr key={symbol}>
                           <td>{symbol}</td>
-                          <td>{currencyMark(activeCurrency)}{fees.toFixed(2)}</td>
+                          <td>{currencyMark(activeCurrency)}{formatNumber(fees, 2)}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1426,7 +1427,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                       </div>
                       <div className={styles.headerRight}>
                         <span className={`${styles.pnlBadge} ${trade.return >= 0 ? styles.win : styles.loss}`}>
-                          {currencyMark(activeCurrency)}{(Math.abs(trade.return) || 0).toFixed(2)}
+                          {currencyMark(activeCurrency)}{formatNumber((Math.abs(trade.return) || 0), 2)}
                         </span>
                         <span className={styles.dateBadge}>{trade.openDate}</span>
                       </div>

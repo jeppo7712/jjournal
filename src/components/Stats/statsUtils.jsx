@@ -1,5 +1,6 @@
 import { DateTime } from 'luxon';
 import { currencyMark } from '../../utils/formatMoney';
+import { formatNumber, formatNumberText } from '../../utils/numberFormat';
 import { matchLotsFIFO, getTickMultiplier } from '../../context/TradeContext';
 
 // The Stats page scopes itself to exactly one currency before calling into
@@ -82,16 +83,16 @@ export const computeGeneralStats = (trades) => {
   const partialPnl = computePartialRealizations(trades).reduce((sum, e) => sum + e.amount, 0);
 
   return [
-    { label: 'Total Trades', value: totalTrades },
+    { label: 'Total Trades', value: formatNumberText(totalTrades) },
     { label: 'Wins', value: winTrades },
     { label: 'Losses', value: lossTrades },
-    { label: 'Win Rate', value: `${winRate}%` },
-    { label: 'Profit Factor', value: profitFactor },
-    { label: 'Total P&L', value: `${markFor(trades)}${totalPnl.toFixed(2)}` },
-    { label: 'Avg P&L per Trade', value: `${markFor(trades)}${avgPnl}` },
-    { label: 'Total Fees', value: `${markFor(trades)}${totalFees}` },
+    { label: 'Win Rate', value: `${formatNumberText(winRate)}%` },
+    { label: 'Profit Factor', value: formatNumberText(profitFactor) },
+    { label: 'Total P&L', value: `${markFor(trades)}${formatNumber(totalPnl, 2)}` },
+    { label: 'Avg P&L per Trade', value: `${markFor(trades)}${formatNumberText(avgPnl)}` },
+    { label: 'Total Fees', value: `${markFor(trades)}${formatNumberText(totalFees)}` },
     ...(Math.abs(partialPnl) > 1e-9
-      ? [{ label: 'P&L from Partial Sells', value: `${markFor(trades)}${partialPnl.toFixed(2)}` }]
+      ? [{ label: 'P&L from Partial Sells', value: `${markFor(trades)}${formatNumber(partialPnl, 2)}` }]
       : []),
   ];
 };
@@ -104,9 +105,9 @@ export const computeRiskMetrics = (trades) => {
   const sortinoRatio = computeSortinoRatio(closedTrades);
 
   return [
-    { label: 'Max Drawdown', value: `${markFor(trades)}${maxDrawdown.toFixed(2)}` },
-    { label: 'Sharpe Ratio', value: sharpeRatio },
-    { label: 'Sortino Ratio', value: sortinoRatio },
+    { label: 'Max Drawdown', value: `${markFor(trades)}${formatNumber(maxDrawdown, 2)}` },
+    { label: 'Sharpe Ratio', value: formatNumberText(sharpeRatio) },
+    { label: 'Sortino Ratio', value: formatNumberText(sortinoRatio) },
   ];
 };
 
@@ -120,9 +121,9 @@ export const computeTradeAnalysis = (trades) => {
 
   return [
     { label: 'Avg Holding Time', value: avgHoldTime },
-    { label: 'Avg Trades per Day', value: tradesPerDay },
-    { label: 'Best Trade', value: `${markFor(trades)}${bestTrade.toFixed(2)}` },
-    { label: 'Worst Trade', value: `${markFor(trades)}${worstTrade.toFixed(2)}` },
+    { label: 'Avg Trades per Day', value: formatNumberText(tradesPerDay) },
+    { label: 'Best Trade', value: `${markFor(trades)}${formatNumber(bestTrade, 2)}` },
+    { label: 'Worst Trade', value: `${markFor(trades)}${formatNumber(worstTrade, 2)}` },
     { label: 'Win Streak', value: winStreak },
     { label: 'Loss Streak', value: lossStreak },
   ];
@@ -145,9 +146,9 @@ export const computeSymbolStats = (trades) => {
     return {
       symbol,
       stats: [
-        { label: 'Total P&L', value: `${markFor(trades)}${totalPnl.toFixed(2)}` },
-        { label: 'Win Rate', value: `${winRate}%` },
-        { label: 'Total Fees', value: `${markFor(trades)}${totalFees}` },
+        { label: 'Total P&L', value: `${markFor(trades)}${formatNumber(totalPnl, 2)}` },
+        { label: 'Win Rate', value: `${formatNumberText(winRate)}%` },
+        { label: 'Total Fees', value: `${markFor(trades)}${formatNumberText(totalFees)}` },
       ],
     };
   });
@@ -218,7 +219,7 @@ const computeAvgHoldTime = (trades) => {
     }
     return sum;
   }, 0);
-  return trades.length > 0 ? `${(totalHoldTime / trades.length).toFixed(2)} hours` : 'N/A';
+  return trades.length > 0 ? `${formatNumber(totalHoldTime / trades.length, 2)} hours` : 'N/A';
 };
 
 const computeTradesPerDay = (trades) => {
@@ -301,9 +302,9 @@ export const computeOpenTradeStats = (trades) => {
   const avgOpenPnl = totalOpenTrades > 0 ? (totalOpenPnl / totalOpenTrades).toFixed(2) : 'N/A';
 
   return [
-    { label: 'Total Open Trades', value: totalOpenTrades },
-    { label: 'Total Open P&L', value: `${markFor(trades)}${totalOpenPnl.toFixed(2)}` },
-    { label: 'Avg Open P&L per Trade', value: `${markFor(trades)}${avgOpenPnl}` },
+    { label: 'Total Open Trades', value: formatNumberText(totalOpenTrades) },
+    { label: 'Total Open P&L', value: `${markFor(trades)}${formatNumber(totalOpenPnl, 2)}` },
+    { label: 'Avg Open P&L per Trade', value: `${markFor(trades)}${formatNumberText(avgOpenPnl)}` },
   ];
 };
 
@@ -318,8 +319,8 @@ export const computeOpenSymbolStats = (trades) => {
     return {
       symbol,
       stats: [
-        { label: 'Total Open P&L', value: `${markFor(trades)}${totalOpenPnl.toFixed(2)}` },
-        { label: 'Avg Open P&L per Trade', value: `${markFor(trades)}${avgOpenPnl}` },
+        { label: 'Total Open P&L', value: `${markFor(trades)}${formatNumber(totalOpenPnl, 2)}` },
+        { label: 'Avg Open P&L per Trade', value: `${markFor(trades)}${formatNumberText(avgOpenPnl)}` },
       ],
     };
   });

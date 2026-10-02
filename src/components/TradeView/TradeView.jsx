@@ -8,6 +8,7 @@ import { getWebSocketUrl } from '../../utils/getWebSocketUrl';
 import { loadStoredDisplayTimezone, storeDisplayTimezone, resolveDisplayZone, TimezonePicker } from '../../utils/timezonePreference';
 import styles from './TradeView.module.css';
 import { formatMoney, currencyMark } from '../../utils/formatMoney';
+import { formatNumber } from '../../utils/numberFormat';
 import { createChart, LineType } from 'lightweight-charts';
 import { getRealisedPnL } from '../../context/TradeContext';
 import { debounce } from 'lodash';
@@ -92,7 +93,7 @@ function getBarDurationInSeconds(timeframe) {
 function formatQuantity(quantity) {
   const num = Number(quantity);
   if (!Number.isFinite(num)) return String(quantity);
-  return num.toFixed(8).replace(/(\.\d*?)0+$/, '$1').replace(/\.$/, '');
+  return formatNumber(num, 8, true);
 }
 
 function formatTimelineDate(dateTime, pricePrecision = 2) {
@@ -869,7 +870,7 @@ const [dataVersion, setDataVersion] = useState(0);
                 position: action.type === 'BUY' ? 'belowBar' : 'aboveBar',
                 color: action.type === 'BUY' ? '#FFFC33' : '#33FFFC',
                 shape: action.type === 'BUY' ? 'arrowUp' : 'arrowDown',
-                text: `${action.type} ${action.quantity} @ ${adjustedPrice.toFixed(pricePrecision)}`,
+                text: `${action.type} ${formatQuantity(action.quantity)} @ ${formatNumber(adjustedPrice, pricePrecision)}`,
                 size: 1,
                 textColor: '#e0e2e6',
                 textBackgroundColor: action.type === 'BUY' ? 'rgba(34, 197, 94, 0.7)' : 'rgba(239, 68, 68, 0.7)',
@@ -1158,7 +1159,8 @@ useEffect(() => {
             timeFormatter: (timestamp) => {
               return DateTime.fromSeconds(timestamp, { zone: resolveDisplayZone(displayTimezone, exchangeTimezone) })
                 .toFormat(timeframe === '1D' || timeframe === '1W' ? "d LLL ''yy" : "d LLL ''yy HH:mm");
-            }
+            },
+            priceFormatter: (price) => formatNumber(price, pricePrecision),
           }
         });
 
@@ -1345,9 +1347,10 @@ useEffect(() => {
           return DateTime.fromSeconds(timestamp, { zone })
             .toFormat(timeframe === '1D' || timeframe === '1W' ? "d LLL ''yy" : "d LLL ''yy HH:mm");
         },
+        priceFormatter: (price) => formatNumber(price, pricePrecision),
       },
     });
-  }, [displayTimezone, exchangeTimezone, timeframe]);
+  }, [displayTimezone, exchangeTimezone, timeframe, pricePrecision]);
 
   useEffect(() => { // Effect to manage average price, exit price, and stop loss lines
     if (!showChart || !chartRef.current || !candlestickSeriesRef.current || !hasChartDataBars) {
@@ -1652,7 +1655,7 @@ useEffect(() => {
                       className={styles.plValue}
                       style={{ color: realisedPnL > 0 ? '#22C55E' : realisedPnL < 0 ? '#EF4444' : '#A5ADBA' }}
                     >
-                      [R] {currencyMark(trade.currency)}{Math.abs(realisedPnL).toFixed(2)}
+                      [R] {currencyMark(trade.currency)}{formatNumber(Math.abs(realisedPnL), 2)}
                     </span>
                     <span
                       className={styles.plValue}
@@ -1666,7 +1669,7 @@ useEffect(() => {
                     className={styles.plValue}
                     style={{ color: totalPnL > 0 ? '#22C55E' : totalPnL < 0 ? '#EF4444' : '#A5ADBA' }}
                   >
-                    {currencyMark(trade.currency)}{Math.abs(totalPnL).toFixed(2)}
+                    {currencyMark(trade.currency)}{formatNumber(Math.abs(totalPnL), 2)}
                   </span>
                 )}
               </div>
@@ -1848,7 +1851,7 @@ useEffect(() => {
               {trade.rMultiple != null && !isNaN(trade.rMultiple) && (
                 <div className={styles.metaBadge} style={{ background: 'rgb(124, 58, 237, 0.5)' }}>
                   <span className={styles.metaLabel}>R-MULT</span>
-                  <span className={styles.metaValue}>{Number(trade.rMultiple).toFixed(2)}</span>
+                  <span className={styles.metaValue}>{formatNumber(Number(trade.rMultiple), 2)}</span>
                 </div>
               )}
               {risk !== null && (
