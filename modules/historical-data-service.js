@@ -1200,8 +1200,20 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
     // resolveTimeframeConfig if the caller didn't have one — see call site).
     const globalRequiredStartDate = nowInExchangeTimezone.minus(requiredConfig || MAX_LOOKBACK_DURATION);
 
-    // A contract is not relevant after its expiry month. Use end of month as a safe upper bound.
-    const contractExpiryDate = specificContractMonth ? DateTime.fromFormat(specificContractMonth, 'yyyyMM', { zone: exchangeTimezone }).endOf('month') : nowInExchangeTimezone;
+    // A contract is not relevant after it stops trading. IBKR's contract
+    // details give its last trade date (yyyyMMdd); without one, the end of
+    // its month is the safe upper bound. That bound used to be used even
+    // when the date was known, so a contract that stopped trading mid-month
+    // (an index future on its third Friday, say) was asked for "recent"
+    // bars every cycle until two days after month end, re-storing its last
+    // week of bars and dragging the continuous series rebuild back with it.
+    const lastTradeStr = String(validatedContract.lastTradeDateOrContractMonth || '');
+    const lastTradeDate = specificContractMonth && /^\d{8}/.test(lastTradeStr)
+        ? DateTime.fromFormat(lastTradeStr.slice(0, 8), 'yyyyMMdd', { zone: exchangeTimezone })
+        : null;
+    const contractExpiryDate = lastTradeDate && lastTradeDate.isValid
+        ? lastTradeDate.endOf('day')
+        : specificContractMonth ? DateTime.fromFormat(specificContractMonth, 'yyyyMM', { zone: exchangeTimezone }).endOf('month') : nowInExchangeTimezone;
 
     const isExpired = contractExpiryDate.plus({ days: 2 }) < nowInExchangeTimezone; // Add 2 days buffer
 
