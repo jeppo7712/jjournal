@@ -13,8 +13,9 @@ const SECTIONS = [
 ];
 
 const smallBtn = {
-  background: 'transparent', border: '1px solid #4B5563', color: '#A5ADBA', borderRadius: 6,
-  padding: '2px 8px', cursor: 'pointer', fontSize: '0.85em',
+  width: 30, height: 30, flex: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
+  background: '#141822', border: '1px solid #2C3244', color: '#A5ADBA', borderRadius: 8,
+  cursor: 'pointer', fontSize: '0.85em',
 };
 
 function ChecklistSettings({ styles, apiBaseUrl }) {
@@ -94,7 +95,7 @@ function ChecklistSettings({ styles, apiBaseUrl }) {
 
   return (
     <div>
-      <p style={{ color: '#9CA3AF', fontSize: '0.85rem', marginTop: 0 }}>
+      <p className={styles.subtext}>
         Checks you want to tick off for every trade. They appear in each trade's Journal tab, above the
         notes; a trade keeps the wording it was ticked with, so editing a list here never changes older
         trades. Each account has its own lists.
@@ -119,17 +120,17 @@ function ChecklistSettings({ styles, apiBaseUrl }) {
         </div>
       </div>
 
-      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 24, marginTop: 20 }}>
+      <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginTop: 20 }}>
         {SECTIONS.map(({ key, title, hint }) => (
-          <div key={key}>
-            <h3 style={{ margin: '0 0 4px' }}>{title}</h3>
-            <p style={{ color: '#9CA3AF', fontSize: '0.8rem', margin: '0 0 10px' }}>{hint}</p>
+          <div key={key} className={styles.innerCard}>
+            <h4 style={{ margin: '0 0 4px', color: '#fff', fontSize: '0.95rem' }}>{title}</h4>
+            <p style={{ color: '#8B93A3', fontSize: '0.8rem', margin: '0 0 12px' }}>{hint}</p>
             {lists[key].length === 0 && <p style={{ color: '#6B7280', fontSize: '0.85rem' }}>No items yet.</p>}
             {lists[key].map((item, i) => (
               <div key={`${key}-${i}`} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
                 <input
                   className={styles.inputBubble}
-                  style={{ flex: 1, padding: '6px 12px' }}
+                  style={{ flex: 1, padding: '7px 11px' }}
                   value={item}
                   aria-label={`${title} item ${i + 1}`}
                   onChange={e => update(key, items => { items[i] = e.target.value; return items; })}
@@ -142,7 +143,7 @@ function ChecklistSettings({ styles, apiBaseUrl }) {
             <div style={{ display: 'flex', gap: 6, marginTop: 8 }}>
               <input
                 className={styles.inputBubble}
-                style={{ flex: 1, padding: '6px 12px' }}
+                style={{ flex: 1, padding: '7px 11px' }}
                 placeholder={`Add ${title.toLowerCase()} check…`}
                 value={newItem[key]}
                 onChange={e => setNewItem(prev => ({ ...prev, [key]: e.target.value }))}
