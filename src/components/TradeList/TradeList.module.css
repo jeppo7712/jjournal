@@ -1,45 +1,53 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap');
+/* Trade list: one card holding a sticky header and hairline rows on
+   desktop; one card per trade/note on phones. */
 
 .tradeList {
   width: 100%;
-  background: transparent;
-  border-radius: 10px;
-  font-family: 'Inter', 'Segoe UI', Arial, sans-serif;
-  font-size: 12px;
   display: flex;
   flex-direction: column;
   height: 100%;
-  overflow-x: hidden;
+  min-height: 0;
   position: relative;
+  font-size: 12.5px;
+  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: var(--ui-radius, 16px);
+  box-shadow: var(--ui-shadow);
+  overflow: hidden;
 }
 
+/* ---------- Header ---------- */
 .header {
   display: flex;
-  background-color: #2C3142;
-  padding: 10px 14px;
-  font-size: 13px;
-  color: #A5ADBA;
-  border-bottom: 1px solid #262B39;
-  font-weight: 500;
-  letter-spacing: 0.01em;
+  align-items: center;
+  padding: 0 52px 0 18px;
+  height: 42px;
+  background: rgba(255, 255, 255, 0.015);
+  border-bottom: 1px solid var(--ui-border, #2C3244);
   position: sticky;
   top: 0;
-  z-index: 1;
+  z-index: 2;
   flex-shrink: 0;
   width: 100%;
+  box-sizing: border-box;
 }
 
 .headerCell {
   flex: 1;
-  cursor: default;
   display: flex;
   align-items: center;
-  transition: color 0.2s;
-  user-select: none;
+  gap: 4px;
   min-width: 0;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-muted, #8B93A3);
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
+  user-select: none;
+  transition: color 0.15s;
 }
 
 .headerCell.sortable {
@@ -51,211 +59,349 @@
 }
 
 .sorted {
-  color: #fff;
+  color: #93C5FD;
 }
 
 .sortIcon {
-  display: inline-block;
-  margin-left: 5px;
   font-size: 11px;
 }
 
+/* Column picker */
+.columnMenuWrap {
+  position: absolute;
+  right: 10px;
+  top: 50%;
+  transform: translateY(-50%);
+}
+
+.columnMenuButton {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: var(--ui-muted, #8B93A3);
+  transition: background 0.15s, color 0.15s, border-color 0.15s;
+}
+
+.columnMenuButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.columnMenuButton:hover,
+.columnMenuButtonOn {
+  background: rgba(255, 255, 255, 0.06);
+  color: #fff;
+}
+
+/* a dot when some columns are hidden */
+.columnMenuButtonDot::after {
+  content: '';
+  position: absolute;
+  top: 5px;
+  right: 5px;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: #3B82F6;
+  box-shadow: 0 0 0 2px var(--ui-card-top, #1F2434);
+}
+
+.columnMenu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  width: 210px;
+  padding: 6px;
+  background: #1B1F2C;
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 14px;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  z-index: 20;
+  animation: menuIn 0.15s ease-out;
+}
+
+@keyframes menuIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to { opacity: 1; transform: none; }
+}
+
+.columnMenuHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 6px 8px 8px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-muted, #8B93A3);
+}
+
+.columnMenuReset {
+  border: none;
+  background: transparent;
+  color: #60A5FA;
+  font-size: 11.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  padding: 0;
+}
+
+.columnMenuReset:hover {
+  color: #93C5FD;
+}
+
+.columnMenuItem {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 7px 8px;
+  border: none;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--ui-muted, #8B93A3);
+  font-size: 13px;
+  text-align: left;
+  transition: background 0.12s, color 0.12s;
+}
+
+.columnMenuItem:hover {
+  background: rgba(255, 255, 255, 0.05);
+  color: #fff;
+}
+
+.columnMenuItemOn {
+  color: var(--ui-text, #E5E7EB);
+}
+
+.columnCheck {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  border: 1px solid var(--ui-border, #2C3244);
+  background: var(--ui-input, #141822);
+  color: #fff;
+  font-size: 10px;
+  font-weight: 700;
+  flex-shrink: 0;
+}
+
+.columnMenuItemOn .columnCheck {
+  background: #3B82F6;
+  border-color: #3B82F6;
+}
+
+.columnMenuHint {
+  padding: 8px 8px 4px;
+  margin-top: 4px;
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 11px;
+  color: var(--ui-faint, #6B7280);
+}
+
+/* ---------- Rows ---------- */
 .tradeRows {
   flex: 1;
   overflow-y: auto;
   overflow-x: hidden;
-  padding: 12px 0;
-  background: transparent;
   min-height: 0;
   width: 100%;
 }
 
-.tradeRows::-webkit-scrollbar {
-  width: 8px;
-}
-
-.tradeRows::-webkit-scrollbar-track {
-  background: #232837;
-}
-
-.tradeRows::-webkit-scrollbar-thumb {
-  background: #333333;
-  border-radius: 4px;
-}
-
-.tradeRows::-webkit-scrollbar-thumb:hover {
-  background: #434343;
-}
-
-.tradeRow {
+.tradeRow,
+.noteRow {
+  position: relative;
   display: flex;
-  padding: 10px 14px;
-  margin: 8px 0;
-  border-radius: 10px;
-  background: #292e3a;
-  border: 1px solid #32384a;
+  align-items: center;
+  min-height: 46px;
+  padding: 0 52px 0 18px;
+  border-bottom: 1px solid var(--ui-border-soft, rgba(255, 255, 255, 0.05));
   cursor: pointer;
-  transition: background 0.18s, transform 0.18s, box-shadow 0.18s;
-  box-shadow: 0 1px 2px 0 rgba(20,22,25,0.08);
-  font-size: 12px;
-  flex-shrink: 0;
+  box-sizing: border-box;
   width: 100%;
+  flex-shrink: 0;
+  transition: background 0.12s;
 }
 
-/* Only where there's a real pointer: on a touch screen the hover state
-   sticks after a tap, and the shifted row poked out past the right edge. */
+.tradeRow::before,
+.noteRow::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  top: 9px;
+  bottom: 9px;
+  width: 3px;
+  border-radius: 0 3px 3px 0;
+  background: transparent;
+}
+
+.rowWin::before { background: #22C55E; }
+.rowLoss::before { background: #EF4444; }
+.rowOpen::before { background: #3B82F6; }
+.rowWash::before { background: #6B7280; }
+
 @media (hover: hover) {
-  .tradeRow:hover {
-    background: #313745;
-    transform: translateX(5px);
-    box-shadow: 0 2px 8px 0 rgba(20,22,25,0.13);
+  .tradeRow:hover,
+  .noteRow:hover {
+    background: rgba(255, 255, 255, 0.03);
   }
 }
 
+.tradeRow:focus-visible,
+.noteRow:focus-visible {
+  outline: none;
+  background: rgba(59, 130, 246, 0.08);
+  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.5);
+}
+
+/* Still open at the end of the time filter's range. */
 .tradeRowNotClosed {
-  border: 1px dashed #A5ADBA;
+  background: repeating-linear-gradient(135deg, transparent 0 10px, rgba(255, 255, 255, 0.012) 10px 20px);
 }
 
-.cellContainer {
-  display: none;
+.tradeRowNotClosed::before {
+  background: transparent;
+  border-left: 3px dashed #3B82F6;
+  width: 0;
 }
 
-.cellColumn {
-  display: none;
-}
-
-.cellTop, .cellBottom {
+.cellContainer,
+.cellColumn,
+.cellTop,
+.cellBottom {
   display: none;
 }
 
 .desktopCells {
   display: flex;
+  align-items: center;
   width: 100%;
 }
 
 .cell {
   flex: 1;
-  font-size: 12px;
   display: flex;
   align-items: center;
-  color: #A5ADBA;
   min-width: 0;
+  color: var(--ui-text-2, #C7CDD8);
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
-  white-space: nowrap;
 }
 
 .symbol {
-  color: #8FB6FF;
-  font-weight: 500;
-  letter-spacing: 0.2px;
+  color: #fff;
+  font-weight: 650;
+  letter-spacing: 0.01em;
 }
 
 .status {
   display: inline-flex;
   align-items: center;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 12px;
-  border-radius: 999px;
-  background: #343b4b;
-  color: #fff;
-  width: fit-content;
-  min-width: 48px;
   justify-content: center;
+  gap: 5px;
+  min-width: 52px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
 }
 
-.statusWin {
-  background: #28372f;
-  color: #22C55E;
-}
-
-.statusLoss {
-  background: #2b1e1e;
-  color: #EF4444;
-}
-
-.statusOpen {
-  background: #343b4b;
-  color: #A5ADBA;
-}
+.statusWin { background: rgba(34, 197, 94, 0.13); color: #4ADE80; }
+.statusLoss { background: rgba(239, 68, 68, 0.13); color: #F87171; }
+.statusOpen { background: rgba(59, 130, 246, 0.15); color: #93C5FD; }
+.statusWash { background: rgba(148, 163, 184, 0.12); color: #A5ADBA; }
 
 .side {
-  font-size: 12px;
-  font-weight: 500;
-  color: #A5ADBA;
+  color: var(--ui-muted, #8B93A3);
 }
 
 .direction {
-  font-weight: bold;
-  font-size: 14px;
-  display: flex;
+  display: inline-flex;
   align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 22px;
+  border-radius: 7px;
 }
 
 .long {
-  color: #22C55E;
+  color: #4ADE80;
+  background: rgba(34, 197, 94, 0.1);
 }
 
 .short {
-  color: #EF4444;
+  color: #F87171;
+  background: rgba(239, 68, 68, 0.1);
 }
 
 .hold {
-  background: #1e293b;
-  color: #60a5fa;
-  border-radius: 999px;
-  padding: 2px 12px;
-  font-weight: 600;
-  width: fit-content;
   display: inline-block;
-  font-size: 12px;
+  padding: 2px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ui-text-2, #C7CDD8);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
 }
 
+.positive,
 .positiveItalic {
-  color: #22C55E;
-  font-weight: 500;
-  font-style: italic;
+  color: #4ADE80;
+  font-weight: 600;
 }
 
+.negative,
 .negativeItalic {
-  color: #EF4444;
-  font-weight: 500;
-  font-style: italic;
+  color: #F87171;
+  font-weight: 600;
 }
 
-.positive {
-  color: #22C55E;
-  font-weight: 500;
+/* Unrealised figures of open trades */
+.positiveItalic,
+.negativeItalic {
+  font-style: normal;
+  opacity: 0.85;
 }
 
-.negative {
-  color: #EF4444;
-  font-weight: 500;
+.loading {
+  color: var(--ui-faint, #6B7280);
+  letter-spacing: 0.1em;
 }
 
+/* ---------- Day notes ---------- */
 .noteRow {
-  display: flex;
-  align-items: center;
-  padding: 10px 14px;
-  margin: 8px 0;
-  border-radius: 10px;
-  background: #222333;
-  border: 1px solid #32384a;
-  cursor: pointer;
-  transition: background 0.18s, transform 0.18s, box-shadow 0.18s;
-  box-shadow: 0 1px 2px 0 rgba(20,22,25,0.08);
-  font-size: 12px;
+  background: linear-gradient(90deg, rgba(245, 158, 11, 0.05), rgba(245, 158, 11, 0) 40%);
 }
 
-.noteContainer {
-  display: none;
+.noteRow::before {
+  background: #F59E0B;
+  opacity: 0.8;
 }
 
-.noteTop, .noteBottom {
-  display: none;
+@media (hover: hover) {
+  .noteRow:hover {
+    background: linear-gradient(90deg, rgba(245, 158, 11, 0.09), rgba(255, 255, 255, 0.02) 50%);
+  }
 }
 
+.noteContainer,
+.noteTop,
+.noteBottom,
 .noteIconDate {
   display: none;
 }
@@ -266,16 +412,6 @@
   align-items: center;
 }
 
-/* Only where there's a real pointer: on a touch screen the hover state
-   sticks after a tap, and the shifted row poked out past the right edge. */
-@media (hover: hover) {
-  .noteRow:hover {
-    background: #313745;
-    transform: translateX(5px);
-    box-shadow: 0 2px 8px 0 rgba(20,22,25,0.13);
-  }
-}
-
 .noteIcon {
   margin-right: 8px;
   display: flex;
@@ -283,42 +419,45 @@
 }
 
 .noteBadge {
-  width: 16px;
-  height: 16px;
-  transform: rotate(90deg);
-  fill: #a39444;
+  width: 15px;
+  height: 15px;
+  fill: #F59E0B;
 }
 
 .noteDate {
-  min-width: 80px;
-  margin-right: 12px;
-  color: #A5ADBA;
-  font-size: 12px;
+  min-width: 84px;
+  margin-right: 14px;
+  color: #FCD34D;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .noteIcons {
   display: flex;
   gap: 4px;
-  margin-right: 22px;
+  margin-right: 18px;
   align-items: center;
 }
 
 .noteIcons .noteIcon {
-  width: 18px;
-  height: 18px;
+  width: 22px;
+  height: 22px;
   margin-right: 0;
+  justify-content: center;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.04);
 }
 
 .noteIcons .noteIcon svg {
-  width: 100%;
-  height: 100%;
+  width: 14px;
+  height: 14px;
   fill: #A5ADBA;
 }
 
 .noteContent {
   flex: 1;
-  font-size: 12px;
-  color: #A5ADBA;
+  min-width: 0;
+  color: var(--ui-text-2, #C7CDD8);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -327,7 +466,7 @@
 .noteStats {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   min-width: 120px;
   justify-content: flex-end;
 }
@@ -335,115 +474,155 @@
 .dailyPnL {
   display: inline-flex;
   align-items: center;
-  font-size: 12px;
-  font-weight: 600;
-  padding: 2px 12px;
-  border-radius: 999px;
-  width: fit-content;
-  min-width: 48px;
   justify-content: center;
+  min-width: 48px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
 }
 
 .tradeCounts {
-  font-size: 12px;
   display: flex;
   align-items: center;
-  gap: 4px;
+  gap: 3px;
+  font-size: 12px;
+  color: var(--ui-faint, #6B7280);
 }
 
 .wins {
-  color: #22C55E;
-  font-weight: 500;
+  color: #4ADE80;
+  font-weight: 600;
 }
 
 .losses {
-  color: #EF4444;
-  font-weight: 500;
+  color: #F87171;
+  font-weight: 600;
 }
 
 .noTrades {
-  color: #A5ADBA;
-  font-size: 12px;
+  color: var(--ui-faint, #6B7280);
 }
 
-.noteIconWrapper {
-  position: relative;
+/* Notes preview on hover */
+.notesPopup {
+  max-width: 340px;
+  padding: 12px 14px;
+  border-radius: 12px;
+  background: rgba(27, 31, 44, 0.97);
+  border: 1px solid var(--ui-border, #2C3244);
+  color: var(--ui-text-2, #C7CDD8);
+  font-size: 12.5px;
+  line-height: 1.5;
+  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  pointer-events: none;
+  transition: top 0.08s, left 0.08s;
+}
+
+/* ---------- Pagination ---------- */
+.paginationContainer {
   display: flex;
   align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 14px;
+  border-top: 1px solid var(--ui-border, #2C3244);
+  background: rgba(255, 255, 255, 0.015);
+  flex-shrink: 0;
 }
 
-.noteTooltip {
-  visibility: hidden;
-  position: absolute;
-  top: 100%;
-  right: 0;
-  background: #1e293b;
-  color: #A5ADBA;
-  padding: 8px 12px;
-  border-radius: 6px;
-  border: 1px solid #32384a;
-  box-shadow: 0 2px 8px rgba(20,22,25,0.2);
-  z-index: 10;
-  max-width: 300px;
+.paginationBtn {
+  height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 9px;
+  background: var(--ui-input, #141822);
+  color: var(--ui-text-2, #C7CDD8);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: border-color 0.15s, color 0.15s, background 0.15s;
+}
+
+.paginationBtn:hover:not(:disabled) {
+  border-color: rgba(59, 130, 246, 0.55);
+  color: #fff;
+}
+
+.paginationBtn:disabled {
+  opacity: 0.4;
+  cursor: default;
+}
+
+.paginationInfo {
+  color: var(--ui-muted, #8B93A3);
   font-size: 12px;
-  line-height: 1.5;
-  white-space: normal;
-  word-wrap: break-word;
+  white-space: nowrap;
 }
 
-.noteIconWrapper:hover .noteTooltip {
-  visibility: visible;
-}
-
-.loading {
-  color: #888;
-  font-style: italic;
-}
-
-.notesPopup {
-  background-color: rgba(0, 0, 0, 0.8);
-  color: white;
-  padding: 10px;
-  border-radius: 5px;
-  max-width: 300px;
-  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.5);
-  transition: top 0.1s, left 0.1s; /* Smooths out position changes */
-}
-
-/* Hide Entry Total, Exit Total, and Pos columns at 992px or below.
-   Targets stable per-column classes rather than nth-child position, since
-   a hidden column (see hiddenColumns/TRADE_LIST_COLUMNS) can be omitted
-   from the DOM entirely, which would otherwise shift nth-child indices. */
+/* Hide Entry Total, Exit Total and Pos at 992px or below. Targets per-column
+   classes, since a hidden column is left out of the DOM entirely. */
 @media (max-width: 992px) {
   .colEntryTotal,
   .colExitTotal,
   .colPosition {
     display: none;
   }
+
+  .header,
+  .tradeRow,
+  .noteRow {
+    padding-left: 14px;
+  }
 }
 
-/* Mobile layout at 600px or below */
+/* ---------- Phone: one card per row ---------- */
 @media (max-width: 600px) {
+  .tradeList {
+    background: transparent;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    overflow: visible;
+  }
+
   .header {
     display: none;
   }
 
   .tradeRows {
-    padding: 4px 0 8px;
+    padding: 0 0 8px;
     -webkit-overflow-scrolling: touch;
+  }
+
+  .tradeRow,
+  .noteRow {
+    min-height: 0;
+    padding: 10px 12px 10px 14px;
+    margin: 0 0 8px;
+    border: 1px solid var(--ui-border, #2C3244);
+    border-radius: 14px;
+    background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
+    overflow: hidden;
+  }
+
+  .tradeRow::before,
+  .noteRow::before {
+    top: 12px;
+    bottom: 12px;
+  }
+
+  .noteRow {
+    background: linear-gradient(90deg, rgba(245, 158, 11, 0.08), rgba(29, 33, 48, 1) 45%);
   }
 
   .tradeRow:active,
   .noteRow:active {
-    background: #313745;
+    background: #232838;
   }
 
-  .tradeRow {
-    padding: 8px 10px;
-    margin: 6px 0;
-  }
-
-  .desktopCells {
+  .desktopCells,
+  .desktopNote {
     display: none;
   }
 
@@ -457,34 +636,34 @@
     display: flex;
     flex-direction: column;
     flex: 1;
-    gap: 4px;
+    gap: 3px;
+    min-width: 0;
   }
 
-  .cellTop, .cellBottom {
+  .cellTop,
+  .cellBottom {
     display: flex;
     align-items: center;
     min-height: 22px;
     font-size: 14px;
-    color: #A5ADBA;
+    color: var(--ui-text-2, #C7CDD8);
+    font-variant-numeric: tabular-nums;
     overflow: hidden;
     text-overflow: ellipsis;
     white-space: nowrap;
   }
 
-  /* Specific styling for the first column's cellTop to align symbol and arrow */
+  .cellBottom {
+    font-size: 13px;
+    color: var(--ui-muted, #8B93A3);
+  }
+
   .cellColumn:first-child .cellTop {
-    display: flex;
-    align-items: center;
-    gap: 6px; /* Space between symbol and arrow */
+    gap: 8px;
   }
 
   .cellColumn:first-child .cellTop .symbol {
     font-size: 16px;
-  }
-
-  .cellColumn:first-child .cellBottom {
-    font-size: 14px;
-    color: #A5ADBA;
   }
 
   .cellColumn:nth-child(3) .cellTop,
@@ -492,24 +671,20 @@
     justify-content: flex-end;
   }
 
-  .cellBottom .side {
-    font-size: 14px;
+  .cellColumn:nth-child(3) .cellTop {
+    font-size: 15px;
   }
 
-  .noteRow {
-    padding: 8px 10px;
-    margin: 6px 0;
-  }
-
-  .desktopNote {
-    display: none;
+  .direction {
+    width: 24px;
+    height: 20px;
   }
 
   .noteContainer {
     display: flex;
     flex-direction: column;
     width: 100%;
-    gap: 4px;
+    gap: 6px;
   }
 
   .noteTop {
@@ -527,8 +702,8 @@
   .noteIconDate {
     display: flex;
     align-items: center;
-    gap: 6px;
-    min-width: 90px;
+    gap: 4px;
+    min-width: 96px;
   }
 
   .noteDate {
@@ -540,91 +715,44 @@
   .noteIcons {
     flex: 1;
     margin-right: 0;
-    gap: 6px;
   }
 
   .noteIcons .noteIcon {
-    width: 20px;
-    height: 20px;
+    width: 26px;
+    height: 26px;
+  }
+
+  .noteIcons .noteIcon svg {
+    width: 16px;
+    height: 16px;
   }
 
   .noteStats {
-    justify-content: flex-end;
-    min-width: 100px;
+    min-width: 0;
   }
 
-  .dailyPnL {
-    font-size: 14px;
-    padding: 2px 10px;
-  }
-
-  .tradeCounts {
-    font-size: 14px;
-  }
-
-  .noTrades {
-    font-size: 14px;
-  }
-
+  .dailyPnL,
+  .tradeCounts,
+  .noTrades,
   .noteContent {
     font-size: 14px;
   }
 
-  .noteBadge {
-    width: 18px;
-    height: 18px;
+  .noteContent {
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
   }
-  .tradeRows {
-    padding-bottom: 60px;
-  }
-}
 
-/* Pagination Styles */
-.paginationContainer {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 15px;
-  padding: 20px;
-  border-top: 1px solid #32384a;
-  background: transparent;
-  font-size: 12px;
-}
-
-.paginationBtn {
-  background: #3B82F6;
-  color: #fff;
-  border: none;
-  border-radius: 5px;
-  padding: 8px 16px;
-  cursor: pointer;
-  font-size: 12px;
-  font-weight: 500;
-  transition: background 0.2s, opacity 0.2s;
-}
-
-.paginationBtn:hover:not(:disabled) {
-  background: #2563EB;
-}
-
-.paginationBtn:disabled {
-  opacity: 0.5;
-  cursor: not-allowed;
-}
-
-.paginationInfo {
-  color: #A5ADBA;
-  white-space: nowrap;
-}
-/* Phones: compact paging, so it doesn't take a band of the screen. After
-   the base pagination rules above, which would otherwise win. */
-@media (max-width: 600px) {
   .paginationContainer {
     padding: 6px 0 2px;
-    gap: 8px;
+    border: none;
+    background: transparent;
   }
 
   .paginationBtn {
-    padding: 5px 12px;
+    height: 34px;
+    padding: 0 12px;
   }
 }
