@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useContext } from 'react';
+import useDraggableWindow from '../../utils/useDraggableWindow';
 import ReactQuill from 'react-quill';
 import { useDropzone } from 'react-dropzone';
 import 'react-quill/dist/quill.snow.css';
@@ -91,6 +92,9 @@ export default function DayNote({ note, onClose }) {
   const [isSaving, setIsSaving] = useState(false);
 
   const modalRef = useRef(null);
+
+  // Movable window on desktop (phones show it full screen).
+  const drag = useDraggableWindow('dayNote', { enabled: window.matchMedia('(min-width: 601px)').matches });
   const contentWrapperRef = useRef(null);
 
   const summaryError = !summary.trim();
@@ -256,7 +260,7 @@ export default function DayNote({ note, onClose }) {
       style.id = styleId;
       style.innerHTML = `
         .${styles.modal} .${styles.richText} .ql-toolbar {
-          background: #232733 !important;
+          background: #161A24 !important;
           border-radius: 12px 12px 0 0 !important;
           border: none !important;
           color: #e0e2e6 !important;
@@ -274,13 +278,13 @@ export default function DayNote({ note, onClose }) {
           color: #fff !important;
         }
         .${styles.modal} .${styles.richText} .ql-toolbar .ql-picker-options {
-          background: #232733 !important;
+          background: #161A24 !important;
           border: none !important;
           border-radius: 8px !important;
           color: #e0e2e6 !important;
         }
         .${styles.modal} .${styles.richText} .ql-container {
-          background: #353943 !important;
+          background: #141822 !important;
           border-radius: 0 0 12px 12px !important;
           border: none !important;
           color: #e0e2e6 !important;
@@ -302,7 +306,7 @@ export default function DayNote({ note, onClose }) {
         .${styles.modal} .${styles.richText} .ql-editor textarea {
           min-height: 220px !important;
           border: none !important;
-          background: #353943 !important;
+          background: #141822 !important;
           color: #e0e2e6 !important;
           border-radius: 0 0 12px 12px !important;
         }
@@ -342,10 +346,11 @@ export default function DayNote({ note, onClose }) {
   return (
     <div className={styles.overlay}>
       <div
-        className={styles.modal}
-        ref={modalRef}
+        className={`${styles.modal} ${drag.dragging ? styles.dragging : ''}`}
+        ref={el => { modalRef.current = el; drag.setWindowEl(el); }}
+        style={drag.windowStyle}
       >
-        <div className={styles.headerRow}>
+        <div className={styles.headerRow} {...drag.dragHandleProps}>
           <span className={styles.title}>{note ? 'Edit Day Note' : 'New Day Note'}</span>
           <button className={styles.closeBtn} onClick={handleRequestClose} aria-label="Close">×</button>
         </div>
@@ -498,7 +503,7 @@ export default function DayNote({ note, onClose }) {
           >
             <div
               style={{
-                background: '#232733',
+                background: '#161A24',
                 borderRadius: 18,
                 padding: '36px 36px 28px 36px',
                 minWidth: 320,
@@ -512,7 +517,7 @@ export default function DayNote({ note, onClose }) {
                 You have unsaved changes. What do you want to do?
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
-                <BubbleButton color="#353943" onClick={() => setShowUnsavedPopup(false)}>
+                <BubbleButton color="#141822" onClick={() => setShowUnsavedPopup(false)}>
                   Cancel
                 </BubbleButton>
                 <BubbleButton
@@ -550,7 +555,7 @@ export default function DayNote({ note, onClose }) {
           >
             <div
               style={{
-                background: '#232733',
+                background: '#161A24',
                 borderRadius: 18,
                 padding: '36px 36px 28px 36px',
                 minWidth: 320,
@@ -564,7 +569,7 @@ export default function DayNote({ note, onClose }) {
                 Are you sure you want to delete this day note?
               </div>
               <div style={{ display: 'flex', gap: 12 }}>
-                <BubbleButton color="#353943" onClick={() => setShowDeleteConfirm(false)}>
+                <BubbleButton color="#141822" onClick={() => setShowDeleteConfirm(false)}>
                   Cancel
                 </BubbleButton>
                 <BubbleButton
@@ -594,7 +599,7 @@ export default function DayNote({ note, onClose }) {
           >
             <div
               style={{
-                background: '#232733',
+                background: '#161A24',
                 borderRadius: 18,
                 padding: 16,
                 maxWidth: '90vw',

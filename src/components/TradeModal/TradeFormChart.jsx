@@ -272,8 +272,8 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
       height: chartContainerRef.current.clientHeight,
-      layout: { background: { color: '#232733' }, textColor: '#e0e2e6' },
-      grid: { vertLines: { color: '#353943' }, horzLines: { color: '#353943' }, horzLinesVisible: false, vertLinesVisible: false },
+      layout: { background: { color: '#161A24' }, textColor: '#e0e2e6' },
+      grid: { vertLines: { color: '#141822' }, horzLines: { color: '#141822' }, horzLinesVisible: false, vertLinesVisible: false },
       timeScale: {
         timeVisible: true,
         tickMarkFormatter: (timestamp) => {
@@ -281,7 +281,7 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
           return timeframe === '1D' || timeframe === '1W' ? dt.toFormat("d LLL ''yy") : dt.toFormat('HH:mm');
         },
       },
-      rightPriceScale: { borderColor: '#353943' },
+      rightPriceScale: { borderColor: '#141822' },
       crosshair: { mode: 0 },
       autoSize: true,
     });
@@ -492,7 +492,7 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
           // overlay (chartMessageOverlay) sets the same z-index: 10 for
           // exactly this reason — dropped when this component was built from
           // scratch instead of sharing that CSS.
-          <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, background: '#232733' }}>
+          <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, background: '#161A24' }}>
             <Oval height="40" width="40" color="#3B82F6" ariaLabel="loading-indicator" secondaryColor="#ccc" strokeWidth={4} strokeWidthSecondary={4} />
             <p style={{ color: '#e0e2e6', fontSize: '0.9em', textAlign: 'center', padding: '0 20px' }}>
               {awaitingData ? `Fetching ${symbol} (${timeframe}) data for the first time — this can take a bit…` : `Loading ${timeframe} chart…`}
@@ -500,7 +500,7 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
           </div>
         )}
         {error && (
-          <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#232733' }}>
+          <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#161A24' }}>
             <p style={{ color: '#EF4444' }}>{error}</p>
           </div>
         )}

@@ -1,5 +1,6 @@
 import React, { useContext, useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
+import useDraggableWindow from '../../utils/useDraggableWindow';
 import ReactQuill from 'react-quill';
 import TradeChecklist from './TradeChecklist';
 import IconButton from '../common/IconButton';
@@ -185,6 +186,8 @@ export default function TradeModal({ trade, onClose }) {
   // the same element. Without this, the modal silently stayed desktop-sized
   // on mobile no matter what the stylesheet said.
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 600px)').matches);
+  // Movable window on desktop (see useDraggableWindow).
+  const drag = useDraggableWindow('tradeModal', { enabled: !isMobile });
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 600px)');
     const update = () => setIsMobile(mq.matches);
@@ -941,7 +944,7 @@ export default function TradeModal({ trade, onClose }) {
       style.id = styleId;
       style.innerHTML = `
         .${styles.modal} .${styles.richText} .ql-toolbar {
-          background: #232733 !important;
+          background: #161A24 !important;
           border-radius: 12px 12px 0 0 !important;
           border: none !important;
           color: #e0e2e6 !important;
@@ -959,13 +962,13 @@ export default function TradeModal({ trade, onClose }) {
           color: #fff !important;
         }
         .${styles.modal} .${styles.richText} .ql-toolbar .ql-picker-options {
-          background: #232733 !important;
+          background: #161A24 !important;
           border: none !important;
           borderRadius: 8px !important;
           color: #e0e2e6 !important;
         }
         .${styles.modal} .${styles.richText} .ql-container {
-          background: #353943 !important;
+          background: #141822 !important;
           border-radius: 0 0 12px 12px !important;
           border: none !important;
           color: #e0e2e6 !important;
@@ -987,7 +990,7 @@ export default function TradeModal({ trade, onClose }) {
         .${styles.modal} .${styles.richText} .ql-editor textarea {
           min-height: 220px !important;
           border: none !important;
-          background: #353943 !important;
+          background: #141822 !important;
           color: #e0e2e6 !important;
           border-radius: 0 0 12px 12px !important;
         }
@@ -1003,8 +1006,8 @@ export default function TradeModal({ trade, onClose }) {
   return (
     <div className={styles.overlay}>
       <div
-        className={styles.modal}
-        ref={modalRef}
+        className={`${styles.modal} ${drag.dragging ? styles.dragging : ''}`}
+        ref={el => { modalRef.current = el; drag.setWindowEl(el); }}
         style={isMobile ? {
           display: 'flex',
           flexDirection: 'column',
@@ -1034,9 +1037,10 @@ export default function TradeModal({ trade, onClose }) {
           width: showFormChart ? 'min(1500px, 98vw)' : '700px',
           maxWidth: '98vw',
           transition: 'width 0.15s ease',
+          ...drag.windowStyle,
         }}
       >
-        <div className={styles.headerRow}>
+        <div className={styles.headerRow} {...drag.dragHandleProps}>
           <span className={styles.title}>{isEditMode ? 'Edit Trade' : 'New Trade'}</span>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
             <span className={styles.headerTzLabel} style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>
@@ -1404,7 +1408,7 @@ export default function TradeModal({ trade, onClose }) {
               style={{
                 position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 1501,
                 height: 'calc(var(--vh, 1vh) * 82)', maxHeight: 'calc(var(--vh, 1vh) * 82)',
-                background: '#2a2d34', borderRadius: '18px 18px 0 0',
+                background: '#1B1F2C', borderRadius: '18px 18px 0 0',
                 boxShadow: '0 -4px 32px 0 rgba(0,0,0,0.35)',
                 display: 'flex', flexDirection: 'column', overflow: 'hidden',
                 animation: 'tradeFormChartSheetUp 0.2s ease-out',
@@ -1435,12 +1439,12 @@ export default function TradeModal({ trade, onClose }) {
                 the same "overflows off the edge, unreachable" failure as the
                 footer buttons above — just easier to miss since it only shows
                 up with a valid, unsaved trade (Save only renders when canSave). */}
-            <div style={{ background: '#232733', borderRadius: 18, padding: isMobile ? '24px 20px 20px' : '36px 36px 28px 36px', minWidth: isMobile ? 0 : 320, maxWidth: '90vw', boxShadow: '0 4px 32px 0 rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ background: '#161A24', borderRadius: 18, padding: isMobile ? '24px 20px 20px' : '36px 36px 28px 36px', minWidth: isMobile ? 0 : 320, maxWidth: '90vw', boxShadow: '0 4px 32px 0 rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{ color: '#fff', fontSize: '1.12rem', marginBottom: 24, textAlign: 'center' }}>
                 You have unsaved changes. What do you want to do?
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 12 }}>
-                <BubbleButton color="#353943" onClick={() => setShowUnsavedPopup(false)} small={isMobile}>Cancel</BubbleButton>
+                <BubbleButton color="#141822" onClick={() => setShowUnsavedPopup(false)} small={isMobile}>Cancel</BubbleButton>
                 {canSave && <BubbleButton color="#3B82F6" onClick={() => { setShowUnsavedPopup(false); saveTrade(); }} small={isMobile}>Save</BubbleButton>}
                 <BubbleButton color="#EF4444" onClick={() => { setShowUnsavedPopup(false); onClose(); }} small={isMobile}>Don't Save</BubbleButton>
               </div>
@@ -1449,12 +1453,12 @@ export default function TradeModal({ trade, onClose }) {
         )}
         {showDeletePopup && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ background: '#232733', borderRadius: 18, padding: isMobile ? '24px 20px 20px' : '36px 36px 28px 36px', minWidth: isMobile ? 0 : 320, maxWidth: '90vw', boxShadow: '0 4px 32px 0 rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ background: '#161A24', borderRadius: 18, padding: isMobile ? '24px 20px 20px' : '36px 36px 28px 36px', minWidth: isMobile ? 0 : 320, maxWidth: '90vw', boxShadow: '0 4px 32px 0 rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <div style={{ color: '#fff', fontSize: '1.12rem', marginBottom: 24, textAlign: 'center' }}>
                 Are you sure you want to delete this trade? This cannot be undone.
               </div>
               <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 18 }}>
-                <BubbleButton color="#353943" onClick={() => setShowDeletePopup(false)} small={isMobile}>Cancel</BubbleButton>
+                <BubbleButton color="#141822" onClick={() => setShowDeletePopup(false)} small={isMobile}>Cancel</BubbleButton>
                 <BubbleButton color="#EF4444" onClick={deleteTrade} small={isMobile}>Delete</BubbleButton>
               </div>
             </div>
@@ -1462,7 +1466,7 @@ export default function TradeModal({ trade, onClose }) {
         )}
         {selectedAttachment && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ background: '#232733', borderRadius: 18, padding: 16, maxWidth: '90vw', maxHeight: '90vh', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
+            <div style={{ background: '#161A24', borderRadius: 18, padding: 16, maxWidth: '90vw', maxHeight: '90vh', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <img src={selectedAttachment} alt="Full-size attachment" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 8, objectFit: 'contain' }} />
               <button
                 onClick={() => setSelectedAttachment(null)}
@@ -1625,7 +1629,7 @@ export default function TradeModal({ trade, onClose }) {
 
                 return (
                   <div key={group.parentOrderId} style={{
-                    background: '#232733',
+                    background: '#161A24',
                     borderRadius: 12,
                     marginBottom: 12,
                     border: `1px solid ${alreadyApplied ? '#374151' : '#2D3748'}`,
@@ -1830,7 +1834,7 @@ export default function TradeModal({ trade, onClose }) {
                     Ungrouped executions (no bracket order data)
                   </div>
                   {ibkrOrphans.map((item) => (
-                    <div key={item.execId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#232733', borderRadius: 8, marginBottom: 6 }}>
+                    <div key={item.execId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#161A24', borderRadius: 8, marginBottom: 6 }}>
                       <span style={{ color: '#D1D5DB', fontSize: '0.83rem' }}>
                         <b style={{ color: item.action === 'BUY' ? '#60A5FA' : '#F97316' }}>{item.action}</b>{' '}
                         {showNum(item.quantity)} @ {showNum(item.price)} — {item.dateTime.toFormat('LLL d, HH:mm:ss')}
