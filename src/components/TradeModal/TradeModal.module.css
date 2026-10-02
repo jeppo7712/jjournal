@@ -9,7 +9,7 @@
 }
 
 .modal {
-  background: #2a2d34;
+  background: #1B1F2C;
   border-radius: 18px;
   min-width: 700px;
   max-width: 98vw;
@@ -28,8 +28,8 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px 6px 12px;
-  background: #353943;
-  border-bottom: 1px solid #444851;
+  background: #141822;
+  border-bottom: 1px solid #2C3244;
   border-radius: 18px 18px 0 0;
   margin-bottom: 0;
   flex-shrink: 0;
@@ -72,7 +72,7 @@
   position: relative;
   width: 40px;
   height: 20px;
-  background: #444851;
+  background: #2C3244;
   border-radius: 10px;
   transition: background 0.3s ease;
 }
@@ -126,7 +126,7 @@
   display: flex;
   width: 100%;
   margin-top: 0;
-  border-bottom: 1.5px solid #343842;
+  border-bottom: 1.5px solid #2C3244;
   background: transparent;
 }
 
@@ -151,7 +151,7 @@
 .activeTab {
   color: #8FB6FF;
   border-bottom: 2.5px solid #3B82F6;
-  background: #232733;
+  background: #161A24;
   z-index: 1;
 }
 
@@ -160,7 +160,7 @@
   overflow-y: auto;
   flex: 1;
   scrollbar-width: thin;
-  scrollbar-color: #3B82F6 #353943;
+  scrollbar-color: #3B82F6 #141822;
 }
 
 .tabContent::-webkit-scrollbar {
@@ -168,7 +168,7 @@
 }
 
 .tabContent::-webkit-scrollbar-track {
-  background: #353943;
+  background: #141822;
   border-radius: 4px;
 }
 
@@ -203,7 +203,7 @@
 .inputBubble,
 .actionInputBubble,
 select.inputBubble {
-  background: #353943;
+  background: #141822;
   border: none;
   border-radius: 18px;
   color: #e0e2e6;
@@ -222,7 +222,7 @@ select.inputBubble {
 
 .inputBubble:focus,
 .actionInputBubble:focus {
-  background: #414552;
+  background: #181D29;
   color: #fff;
 }
 
@@ -339,7 +339,7 @@ select.inputBubble {
 .actionInputBubble {
   width: 100% !important;
   min-width: 0 !important;
-  background: #353943 !important;
+  background: #141822 !important;
   color: #e0e2e6 !important;
   border: none !important;
   border-radius: 18px !important;
@@ -392,8 +392,8 @@ select.inputBubble {
   align-items: center;
   gap: 16px;
   padding: 10px 32px;
-  background: #232733;
-  border-top: 1px solid #343842;
+  background: #161A24;
+  border-top: 1px solid #2C3244;
   border-radius: 0 0 18px 18px;
   flex-shrink: 0;
 }
@@ -427,7 +427,7 @@ select.inputBubble {
 }
 
 .inputBubble {
-  background: #353943;
+  background: #141822;
   border: none;
   border-radius: 18px;
   color: #e0e2e6;
@@ -444,7 +444,7 @@ select.inputBubble {
 }
 
 .notesEditor {
-  background: #353943;
+  background: #141822;
   border-radius: 12px;
   padding: 0;
   margin-top: 4px;
@@ -455,7 +455,7 @@ select.inputBubble {
 }
 
 .richText .ql-toolbar {
-  background: #232733;
+  background: #161A24;
   border-radius: 12px 12px 0 0;
   border: none;
   color: #e0e2e6;
@@ -467,7 +467,7 @@ select.inputBubble {
 }
 
 .richText .ql-container {
-  background: #353943;
+  background: #141822;
   border-radius: 0 0 12px 12px;
   border: none;
   color: #e0e2e6;
@@ -605,7 +605,7 @@ select.inputBubble {
 .tooltip {
   visibility: hidden;
   opacity: 0;
-  background: #232733;
+  background: #161A24;
   color: #e0e2e6;
   font-size: 0.9em;
   padding: 6px 12px;
@@ -631,7 +631,7 @@ select.inputBubble {
   transform: translateX(-50%);
   border-width: 5px;
   border-style: solid;
-  border-color: #232733 transparent transparent transparent;
+  border-color: #161A24 transparent transparent transparent;
 }
 
 .attachmentRemove {
@@ -683,7 +683,7 @@ select.inputBubble {
 .segmentedGroup {
   display: flex;
   align-items: center;
-  background: #353943;
+  background: #141822;
   border-radius: 999px;
   padding: 4px 8px;
   gap: 6px;
@@ -729,7 +729,7 @@ select.inputBubble {
 .radio-btn-group {
   display: flex;
   align-items: center;
-  background: #353943;
+  background: #141822;
   border-radius: 999px;
   padding: 4px 8px;
   gap: 8px;
@@ -826,7 +826,7 @@ input[type="radio"]:checked+.radio-btn,
 }
 
 ibkrModal {
-  background: #232733;
+  background: #161A24;
   border-radius: 18px;
   padding: 20px;
   min-width: 400px;
@@ -843,18 +843,18 @@ ibkrModal {
 
 .ibkrItem {
   padding: 10px;
-  border-bottom: 1px solid #343842;
+  border-bottom: 1px solid #2C3244;
   cursor: pointer;
   color: #e0e2e6;
   transition: background 0.18s;
 }
 
 .ibkrItem:hover {
-  background: #414552;
+  background: #181D29;
 }
 
 .ibkrItem:nth-child(even) {
-  background: #353943;
+  background: #141822;
 }
 
 /* Media query for screens 600px or less */
@@ -1006,4 +1006,163 @@ ibkrModal {
     bottom: auto;
     height: var(--app-height);
   }
+}
+
+/* ---------- Shared window look (same in TradeModal, TradeView, DayNote):
+   colours everywhere, shapes only above the phone layout. ---------- */
+.overlay {
+  background: rgba(5, 7, 12, 0.62);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: overlayIn 0.18s ease-out;
+}
+
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.modal {
+  background: linear-gradient(180deg, #1F2434 0%, #1B1F2C 120px);
+  color: var(--ui-text, #E5E7EB);
+}
+
+.headerRow {
+  background: transparent;
+  border-bottom: 1px solid var(--ui-border, #2C3244);
+}
+
+.title {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+
+.closeBtn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 10px;
+  color: var(--ui-muted, #8B93A3);
+  transition: background 0.15s, color 0.15s;
+}
+
+.closeBtn:hover {
+  background: rgba(255, 255, 255, 0.07);
+  color: #fff;
+}
+
+.formField label,
+.formFieldFull label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-muted, #8B93A3);
+}
+
+.inputBubble,
+.actionInputBubble {
+  border: 1px solid var(--ui-border, #2C3244) !important;
+  border-radius: 10px !important;
+  background-color: var(--ui-input, #141822) !important;
+  color: #fff;
+  transition: border-color 0.15s, box-shadow 0.15s;
+}
+
+.inputBubble:focus,
+.actionInputBubble:focus {
+  border-color: rgba(59, 130, 246, 0.65) !important;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+}
+
+.saveBtn {
+  border-radius: 10px;
+  background: linear-gradient(180deg, #4F8DF7 0%, #3B82F6 100%);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.saveBtn:hover {
+  background: linear-gradient(180deg, #5B97F8 0%, #4387F7 100%);
+}
+
+.dragging {
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(96, 165, 250, 0.35) !important;
+  transition: none !important;
+}
+
+@media (min-width: 601px) {
+  .modal {
+    border: 1px solid var(--ui-border, #2C3244);
+    border-radius: 18px;
+    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    animation: windowIn 0.2s ease-out;
+  }
+
+  .headerRow {
+    padding: 12px 14px 12px 20px;
+    border-radius: 18px 18px 0 0;
+  }
+
+  .title {
+    font-size: 1.12rem;
+  }
+
+  .headerRow::before {
+    /* a grip, to show the window can be moved */
+    content: '';
+    position: absolute;
+    top: 6px;
+    left: 50%;
+    width: 36px;
+    height: 4px;
+    margin-left: -18px;
+    border-radius: 4px;
+    background: rgba(255, 255, 255, 0.08);
+    pointer-events: none;
+  }
+
+  .headerRow {
+    position: relative;
+  }
+}
+
+@keyframes windowIn {
+  /* translate/scale, not transform: they add to the drag offset (an
+     inline transform) instead of replacing it while this runs */
+  from { opacity: 0; translate: 0 8px; scale: 0.99; }
+  to { opacity: 1; translate: 0 0; scale: 1; }
+}
+
+/* General / Journal as a segmented control */
+.tabsBar {
+  gap: 4px;
+  width: auto;
+  margin: 12px 16px 0;
+  padding: 4px;
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 12px;
+  background: var(--ui-input, #141822);
+}
+
+.tabBtn {
+  padding: 8px 0;
+  border: none;
+  border-radius: 9px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: var(--ui-muted, #8B93A3);
+}
+
+.tabBtn:hover {
+  color: #fff;
+}
+
+.activeTab,
+.activeTab:hover {
+  border: none;
+  background: rgba(59, 130, 246, 0.18);
+  color: #DBEAFE;
 }
