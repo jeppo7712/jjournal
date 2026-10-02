@@ -81,6 +81,42 @@ class StatsErrorBoundary extends React.Component {
 const absAmount = (value) => formatNumber(Math.abs(Number(value)), 2);
 const pnlColor = (value) => (value === null || value === undefined || Number(value) === 0 ? undefined : Number(value) > 0 ? '#22C55E' : '#EF4444');
 
+// Icons and one-line descriptions for the section menu and header.
+const TAB_META = {
+  general: { description: 'Your headline numbers, return and P&L over time.', icon: <path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" /> },
+  calendar: { description: 'Daily and weekly P&L at a glance. Click a day or week to filter the Dashboard.', icon: <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" /> },
+  holdings: { description: 'What you hold now: market value, cost basis and allocation.', icon: <path d="M2 10a8 8 0 018-8v8h8a8 8 0 11-16 0z M12 2.25A8.001 8.001 0 0117.75 8H12V2.25z" /> },
+  advanced: { description: 'Expectancy, streaks, daily extremes and the monthly summary.', icon: <path fillRule="evenodd" d="M3 3a1 1 0 000 2v8a2 2 0 002 2h2.586l-1.293 1.293a1 1 0 101.414 1.414L10 15.414l2.293 2.293a1 1 0 001.414-1.414L12.414 15H15a2 2 0 002-2V5a1 1 0 100-2H3zm11.707 4.707a1 1 0 00-1.414-1.414L10 9.586 8.707 8.293a1 1 0 00-1.414 0l-2 2a1 1 0 101.414 1.414L8 10.414l1.293 1.293a1 1 0 001.414 0l4-4z" clipRule="evenodd" /> },
+  risk: { description: 'Drawdown and risk-adjusted ratios.', icon: <path fillRule="evenodd" d="M10 1.944A11.954 11.954 0 012.166 5C2.056 5.649 2 6.319 2 7c0 5.225 3.34 9.67 8 11.317C14.66 16.67 18 12.225 18 7c0-.682-.057-1.35-.166-2.001A11.954 11.954 0 0110 1.944zM11 14a1 1 0 11-2 0 1 1 0 012 0zm0-7a1 1 0 10-2 0v3a1 1 0 102 0V7z" clipRule="evenodd" /> },
+  tradeAnalysis: { description: 'Hold times, trade frequency and your best and worst trades.', icon: <path fillRule="evenodd" d="M8 4a4 4 0 100 8 4 4 0 000-8zM2 8a6 6 0 1110.89 3.476l4.817 4.817a1 1 0 01-1.414 1.414l-4.816-4.816A6 6 0 012 8z" clipRule="evenodd" /> },
+  bestAssets: { description: 'Every symbol ranked by what it has made overall.', icon: <path d="M9.049 2.927c.3-.921 1.603-.921 1.902 0l1.07 3.292a1 1 0 00.95.69h3.462c.969 0 1.371 1.24.588 1.81l-2.8 2.034a1 1 0 00-.364 1.118l1.07 3.292c.3.921-.755 1.688-1.54 1.118l-2.8-2.034a1 1 0 00-1.175 0l-2.8 2.034c-.784.57-1.838-.197-1.539-1.118l1.07-3.292a1 1 0 00-.364-1.118L2.98 8.72c-.783-.57-.38-1.81.588-1.81h3.461a1 1 0 00.951-.69l1.07-3.292z" /> },
+  hourlyAnalysis: { description: 'How you trade by hour of the day.', icon: <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" /> },
+  feeAnalysis: { description: 'What you pay in fees, by month and by symbol.', icon: <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /> },
+  visualizations: { description: 'Return distribution, win rate over time and return vs. hold time.', icon: <path d="M3 3a1 1 0 011 1v11h12a1 1 0 110 2H3a1 1 0 01-1-1V4a1 1 0 011-1zm13.7 3.3a1 1 0 010 1.4l-4 4a1 1 0 01-1.4 0L9 9.42l-2.3 2.3a1 1 0 01-1.4-1.42l3-3a1 1 0 011.4 0L12 9.58l3.3-3.3a1 1 0 011.4 0z" /> },
+  tradeNotes: { description: 'Your journal entries, ratings and screenshots in one place.', icon: <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /> },
+};
+
+// Green/red for money figures whose sign means something (P&L, expectancy,
+// best/worst days); everything else stays white. Called with just the
+// label when the label alone decides it (e.g. "Worst Day P&L").
+const toneClass = (label, value) => {
+  const l = String(label);
+  if (/worst|loss size|avg l\b/i.test(l)) return styles.valueNeg;
+  if (/best|win size/i.test(l)) return styles.valuePos;
+  if (!/p&l|expectancy/i.test(l)) return '';
+  if (value === undefined) return '';
+  const text = String(value);
+  if (/-\s*[$€£]?\d|[$€£]\s*-|^-/.test(text)) return styles.valueNeg;
+  return /[1-9]/.test(text) ? styles.valuePos : '';
+};
+
+const TAB_GROUPS = [
+  { label: 'Overview', ids: ['general', 'calendar', 'holdings'] },
+  { label: 'Performance', ids: ['advanced', 'risk', 'tradeAnalysis', 'bestAssets'] },
+  { label: 'Habits', ids: ['hourlyAnalysis', 'feeAnalysis', 'visualizations'] },
+  { label: 'Journal', ids: ['tradeNotes'] },
+];
+
 const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilterWeek }) => {
   const { filteredItems: accountFilteredItems, filter, timeFilter, symbolFilter, restrictToActionsInRange, trades: allTrades, accounts, currentAccountId, fetchProcessedTradesForAccount, filterTradeItems } = React.useContext(TradeContext) || { filteredItems: [], filter: [], timeFilter: null, symbolFilter: '', restrictToActionsInRange: false, trades: [] };
 
@@ -833,70 +869,90 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
 
   return (
     <StatsErrorBoundary>
-      {(filter.length > 0 || timeFilter || symbolFilter || restrictToActionsInRange) && (
-        <div className={styles.filterWarning}>Stats are based on currently applied filters — results may not show your full trading history</div>
-      )}
-
       <div className={styles.statsContainer}>
-        {/* Selectors and tabs stay at the top together while the tab's
-            content scrolls under them. */}
-        <div className={styles.stickyHeader}>
-        <div className={styles.scopeControls}>
-          {/* Phones pick the tab here: one line instead of rows of tab
-              buttons taking half the screen (see .tabSelect). */}
-          <select
-            className={styles.tabSelect}
-            value={currentTab}
-            onChange={e => setCurrentTab(e.target.value)}
-            aria-label="Stats section"
-          >
-            {tabs.map(tab => <option key={tab.id} value={tab.id}>{tab.label}</option>)}
-          </select>
-          {availableCurrencies.length > 1 && (
-            <div style={{ display: 'flex', alignItems: 'center', gap: 8, marginBottom: 4 }}>
-              <span style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>Currency</span>
-              <select
-                value={activeCurrency}
-                onChange={e => setCurrencyScope(e.target.value)}
-                style={{ background: '#353943', border: 'none', borderRadius: 18, color: '#e0e2e6', padding: '6px 14px', fontSize: '0.9em', cursor: 'pointer' }}
-                title="These metrics are ratios and distributions over a set of returns, so they're only meaningful within a single currency. Pick which one to analyse."
-              >
-                {availableCurrencies.map(code => (
-                  <option key={code} value={code}>{code}</option>
-                ))}
-              </select>
+        <div className={styles.statsLayout}>
+          {/* Section menu, grouped like the Settings page's (a scrolling bar
+              on tablets; phones use the dropdown in the header). */}
+          <nav className={styles.sideNav} aria-label="Stats sections">
+            {TAB_GROUPS.map(group => (
+              <div key={group.label} className={styles.navGroup}>
+                <span className={styles.navGroupLabel}>{group.label}</span>
+                {group.ids.map(id => {
+                  const tab = tabs.find(t => t.id === id);
+                  if (!tab) return null;
+                  return (
+                    <button
+                      key={id}
+                      type="button"
+                      className={`${styles.navButton} ${currentTab === id ? styles.navActive : ''}`}
+                      onClick={() => setCurrentTab(id)}
+                      aria-current={currentTab === id ? 'page' : undefined}
+                    >
+                      <svg className={styles.navIcon} viewBox="0 0 20 20" fill="currentColor" aria-hidden="true">{TAB_META[id].icon}</svg>
+                      {tab.label}
+                    </button>
+                  );
+                })}
+              </div>
+            ))}
+          </nav>
+
+          <div className={styles.contentColumn}>
+            <div className={styles.stickyHeader}>
+              <div className={styles.sectionHeader}>
+                <div className={styles.sectionHeading}>
+                  <h2>{tabs.find(t => t.id === currentTab)?.label}</h2>
+                  <p>{TAB_META[currentTab]?.description}</p>
+                </div>
+                <div className={styles.scopeControls}>
+                  {/* Phones pick the section here (see .tabSelect). */}
+                  <select
+                    className={styles.tabSelect}
+                    value={currentTab}
+                    onChange={e => setCurrentTab(e.target.value)}
+                    aria-label="Stats section"
+                  >
+                    {tabs.map(tab => <option key={tab.id} value={tab.id}>{tab.label}</option>)}
+                  </select>
+                  {availableCurrencies.length > 1 && (
+                    <label className={styles.scopeField}>
+                      <span>Currency</span>
+                      <select
+                        className={styles.scopeSelect}
+                        value={activeCurrency}
+                        onChange={e => setCurrencyScope(e.target.value)}
+                        title="These metrics are ratios and distributions over a set of returns, so they're only meaningful within a single currency. Pick which one to analyse."
+                      >
+                        {availableCurrencies.map(code => (
+                          <option key={code} value={code}>{code}</option>
+                        ))}
+                      </select>
+                    </label>
+                  )}
+                  {subAccountIds.length > 0 && (
+                    <button
+                      type="button"
+                      className={`${styles.scopeChip} ${includeSubAccounts ? styles.scopeChipOn : ''}`}
+                      onClick={() => setIncludeSubAccounts(!includeSubAccounts)}
+                      aria-pressed={includeSubAccounts}
+                      title="Include the trades of this account's sub-accounts"
+                    >
+                      Sub-accounts
+                    </button>
+                  )}
+                  <div className={styles.scopeField} title="Applies to hour-of-day and calendar-day views (Hourly Analysis, the activity heatmap, Calendar). Trades span many symbols here, so times use this one zone rather than each instrument's own exchange.">
+                    <span>Timezone</span>
+                    <TimezonePicker value={displayTimezone} onChange={setDisplayTimezone} options={STATS_TIMEZONE_OPTIONS} />
+                  </div>
+                </div>
+              </div>
+              {(filter.length > 0 || timeFilter || symbolFilter || restrictToActionsInRange) && (
+                <div className={styles.filterWarning}>
+                  <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
+                  <span><strong>Filtered.</strong> These stats only cover the trades matching the Dashboard's current filters.</span>
+                </div>
+              )}
             </div>
-          )}
-          {subAccountIds.length > 0 && (
-            <label className={styles.subAccountToggle} title="Include the trades of this account's sub-accounts">
-              <input
-                type="checkbox"
-                checked={includeSubAccounts}
-                onChange={e => setIncludeSubAccounts(e.target.checked)}
-              />
-              Include sub-accounts
-            </label>
-          )}
-          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-            <span style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>Timezone</span>
-            <TimezonePicker value={displayTimezone} onChange={setDisplayTimezone} options={STATS_TIMEZONE_OPTIONS} />
-          </div>
-          <span className={styles.timezoneHint} style={{ color: '#A5ADBA', fontSize: '0.75em', opacity: 0.8, maxWidth: 420, textAlign: 'right' }}>
-            Applies to hour-of-day / calendar-day views (Hourly Analysis, Trading Activity Heatmap, Calendar). Trades span many symbols here, so times use this one zone rather than each instrument's own exchange.
-          </span>
-        </div>
-        <div className={styles.tabNavigation}>
-          {tabs.map(tab => (
-            <button
-              key={tab.id}
-              className={currentTab === tab.id ? styles.activeTab : ''}
-              onClick={() => setCurrentTab(tab.id)}
-            >
-              {tab.label}
-            </button>
-          ))}
-        </div>
-        </div>
         <div className={styles.tabContent}>
           {currentTab === 'calendar' && (
             <div>
@@ -912,11 +968,10 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
           )}
           {currentTab === 'advanced' && (
             <div>
-              <h3 style={{ marginBottom: '20px', color: '#fff' }}>Advanced Trading Metrics</h3>
               <div className={styles.statsGrid}>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Expectancy</div>
-                  <div className={styles.statValue} title="Avg Win Rate * Avg Win - Loss Rate * Avg Loss">{currencyMark(activeCurrency)}{formatNumberText(computedStats.expectancy)}</div>
+                  <div className={`${styles.statValue} ${toneClass('Expectancy', computedStats.expectancy)}`} title="Avg Win Rate * Avg Win - Loss Rate * Avg Loss">{currencyMark(activeCurrency)}{formatNumberText(computedStats.expectancy)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Risk/Reward Ratio</div>
@@ -936,11 +991,11 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Win Size</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.avgWinLoss.avgWin)}</div>
+                  <div className={`${styles.statValue} ${toneClass('Avg Win Size')}`}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.avgWinLoss.avgWin)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Loss Size</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.avgWinLoss.avgLoss)}</div>
+                  <div className={`${styles.statValue} ${toneClass('Avg Loss Size')}`}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.avgWinLoss.avgLoss)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Consecutive Wins</div>
@@ -960,15 +1015,15 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Best Daily P&L</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.dailyPnLStats.bestDailyPnL)}</div>
+                  <div className={`${styles.statValue} ${toneClass('Best Daily P&L')}`}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.dailyPnLStats.bestDailyPnL)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Worst Daily P&L</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.dailyPnLStats.worstDailyPnL)}</div>
+                  <div className={`${styles.statValue} ${toneClass('Worst Daily P&L')}`}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.dailyPnLStats.worstDailyPnL)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Daily P&L</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.dailyPnLStats.avgDailyPnL)}</div>
+                  <div className={`${styles.statValue} ${toneClass('Avg Daily P&L', computedStats.dailyPnLStats.avgDailyPnL)}`}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.dailyPnLStats.avgDailyPnL)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Best Trading Day</div>
@@ -976,7 +1031,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Best Day P&L</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.bestWorstDays.bestAmount)}</div>
+                  <div className={`${styles.statValue} ${toneClass('Best Day P&L')}`}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.bestWorstDays.bestAmount)}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Worst Trading Day</div>
@@ -984,7 +1039,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Worst Day P&L</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.bestWorstDays.worstAmount)}</div>
+                  <div className={`${styles.statValue} ${toneClass('Worst Day P&L')}`}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.bestWorstDays.worstAmount)}</div>
                 </div>
               </div>
               
@@ -1023,7 +1078,6 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
           )}
           {currentTab === 'hourlyAnalysis' && (
             <div>
-              <h3 style={{ marginBottom: '20px', color: '#fff' }}>Hourly Trading Analysis</h3>
               <p className={styles.chartExplanation} style={{ marginBottom: '20px' }}>
                 This analysis shows your trading performance by hour of the day, helping you identify your most profitable trading times.
               </p>
@@ -1069,7 +1123,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                   computedStats.generalStats.map((stat, idx) => (
                     <div key={idx} className={styles.statBox}>
                       <div className={styles.statLabel}>{stat.label}</div>
-                      <div className={styles.statValue}>{stat.value}</div>
+                      <div className={`${styles.statValue} ${toneClass(stat.label, stat.value)}`}>{stat.value}</div>
                     </div>
                   ))
                 ) : (
@@ -1522,6 +1576,8 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
               </div>
             </div>
           )}
+        </div>
+          </div>
         </div>
         {viewingTrade && (
             <TradeView

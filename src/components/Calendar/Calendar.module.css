@@ -321,3 +321,112 @@
     font-size: 10px;
   }
 }
+/* ---------- The shared card look (colours and shapes only; the layout and
+   breakpoints above stay as they are) ---------- */
+.calendar {
+  max-width: none;
+  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: var(--ui-radius, 16px);
+  box-shadow: var(--ui-shadow);
+}
+
+.header h2 {
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+
+.navButton {
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 10px;
+  background: var(--ui-input, #141822);
+  color: var(--ui-text-2, #C7CDD8);
+  transition: border-color 0.15s, color 0.15s;
+}
+
+.navButton:hover {
+  border-color: rgba(59, 130, 246, 0.55);
+  color: #fff;
+  background: var(--ui-input, #141822);
+}
+
+.dayName,
+.rowHeader {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-faint, #6B7280);
+  background: transparent;
+}
+
+.grid {
+  gap: 6px;
+}
+
+.dayCell {
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  border-radius: 10px;
+}
+
+.outsideMonth {
+  background: transparent;
+  border-color: transparent;
+  color: #4B5266;
+}
+
+.dayNumber {
+  color: var(--ui-muted, #8B93A3);
+  font-weight: 600;
+}
+
+.positiveDay {
+  background: linear-gradient(180deg, rgba(34, 197, 94, 0.16), rgba(34, 197, 94, 0.06));
+  border: 1px solid rgba(34, 197, 94, 0.4);
+}
+
+.negativeDay {
+  background: linear-gradient(180deg, rgba(239, 68, 68, 0.16), rgba(239, 68, 68, 0.06));
+  border: 1px solid rgba(239, 68, 68, 0.4);
+}
+
+.positiveDay .dayNumber,
+.negativeDay .dayNumber {
+  color: #fff;
+}
+
+.daySummary {
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+}
+
+.dayCell.clickable:hover {
+  background: rgba(59, 130, 246, 0.1);
+  border-color: rgba(96, 165, 250, 0.7);
+}
+
+.weekSummaryCell {
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px dashed rgba(255, 255, 255, 0.08);
+  border-radius: 10px;
+}
+
+.positiveWeek {
+  background: rgba(34, 197, 94, 0.1);
+  border: 1px solid rgba(34, 197, 94, 0.35);
+}
+
+.negativeWeek {
+  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(239, 68, 68, 0.35);
+}
+
+.weekSummaryCell.clickable:hover {
+  border-color: rgba(96, 165, 250, 0.7);
+}
+
+.weekSummaryContent {
+  font-variant-numeric: tabular-nums;
+}
