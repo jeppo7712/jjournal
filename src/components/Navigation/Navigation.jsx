@@ -4,6 +4,7 @@ import { useStatus } from '../../context/StatusContext';
 import styles from './Navigation.module.css';
 import { formatMoney } from '../../utils/formatMoney';
 import { setNumberFormat } from '../../utils/numberFormat';
+import { descendantAccountIds } from '../../utils/accountTree';
 import { sumByCurrency, mergeTotals, toTotalsList } from '../../utils/currencyTotals';
 
 // The TradingView light: green while alerts keep delivering bars, amber once
@@ -119,17 +120,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
   // the account is *actually worth* (Total Portfolio) should reflect the
   // combined real number, matching what IBKR itself would show.
   useEffect(() => {
-    const safeAccountsList = Array.isArray(accounts) ? accounts : [];
-    // Full descendant closure, not just direct children — matches the
-    // recursive roll-up routes/accounts.js already does for cash/holdings.
-    const descendantIds = [];
-    const frontier = [currentAccountId];
-    while (frontier.length > 0) {
-      const parentId = frontier.pop();
-      safeAccountsList
-        .filter(a => String(a.parent_account_id) === String(parentId))
-        .forEach(a => { descendantIds.push(a.id); frontier.push(a.id); });
-    }
+    const descendantIds = descendantAccountIds(accounts, currentAccountId);
     if (descendantIds.length === 0) { setDescendantTrades([]); return; }
     let cancelled = false;
     Promise.all(descendantIds.map(id => fetchProcessedTradesForAccount(id)))
