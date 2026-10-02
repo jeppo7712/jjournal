@@ -155,6 +155,9 @@ function StarRating({ value, onChange, max = 5 }) {
 
 export default function TradeModal({ trade, onClose }) {
   const { refreshTrades, currentAccountId, futuresSettings, trades, accounts } = useContext(TradeContext);
+  // Requests for an existing trade go to the account it's booked in, which
+  // isn't the selected one when it was opened from a parent account's Stats.
+  const tradeAccountId = trade?.account_id ?? currentAccountId;
   const isEditMode = !!trade;
 
   const defaultSettings = futuresSettings.find(s => s.symbol === 'DEFAULT') || {};
@@ -694,7 +697,7 @@ export default function TradeModal({ trade, onClose }) {
         // trade-groups-flex needs to know which account this is for, to pick
         // that account's paper-vs-real Flex Query credentials (see
         // routes/ibkr.js). Harmless no-op for the TWS-live endpoint.
-        { headers: { 'X-Account-ID': currentAccountId } }
+        { headers: { 'X-Account-ID': tradeAccountId } }
       );
       const data = await res.json();
       if (data.error) throw new Error(data.error);
@@ -855,7 +858,7 @@ export default function TradeModal({ trade, onClose }) {
         formData.append('file', attachments[i].file);
         const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/attachments`, {
           method: 'POST',
-          headers: { 'X-Account-ID': currentAccountId },
+          headers: { 'X-Account-ID': tradeAccountId },
           body: formData
         });
         const data = await resp.json();
@@ -886,7 +889,7 @@ export default function TradeModal({ trade, onClose }) {
       method,
       headers: {
         'Content-Type': 'application/json',
-        'X-Account-ID': currentAccountId,
+        'X-Account-ID': tradeAccountId,
       },
       body: JSON.stringify(payload)
     });
@@ -902,7 +905,7 @@ export default function TradeModal({ trade, onClose }) {
     if (!isEditMode) return;
     const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/trades/${trade.id}`, {
       method: 'DELETE',
-      headers: { 'X-Account-ID': currentAccountId },
+      headers: { 'X-Account-ID': tradeAccountId },
     });
     if (resp.ok) {
       refreshTrades();

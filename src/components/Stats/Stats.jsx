@@ -45,6 +45,7 @@ import {
 import styles from './Stats.module.css';
 import { currencyMark } from '../../utils/formatMoney';
 import { formatNumber, formatNumberText } from '../../utils/numberFormat';
+import { descendantAccountIds } from '../../utils/accountTree';
 import { Line, Bar, Doughnut, Scatter } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { DateTime } from 'luxon';
@@ -81,7 +82,33 @@ const absAmount = (value) => formatNumber(Math.abs(Number(value)), 2);
 const pnlColor = (value) => (value === null || value === undefined || Number(value) === 0 ? undefined : Number(value) > 0 ? '#22C55E' : '#EF4444');
 
 const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilterWeek }) => {
-  const { filteredItems, filter, timeFilter, symbolFilter, restrictToActionsInRange, trades: allTrades } = React.useContext(TradeContext) || { filteredItems: [], filter: [], timeFilter: null, symbolFilter: '', restrictToActionsInRange: false, trades: [] };
+  const { filteredItems: accountFilteredItems, filter, timeFilter, symbolFilter, restrictToActionsInRange, trades: allTrades, accounts, currentAccountId, fetchProcessedTradesForAccount, filterTradeItems } = React.useContext(TradeContext) || { filteredItems: [], filter: [], timeFilter: null, symbolFilter: '', restrictToActionsInRange: false, trades: [] };
+
+  // A parent account's stats include its sub-accounts' trades (switchable):
+  // a parent like a broker's main account often holds no trades itself,
+  // they're booked in sub-accounts per instrument type or strategy.
+  const subAccountIds = useMemo(
+    () => descendantAccountIds(accounts, currentAccountId),
+    [accounts, currentAccountId]
+  );
+  const [includeSubAccounts, setIncludeSubAccounts] = useState(true);
+  const [subAccountTrades, setSubAccountTrades] = useState([]);
+  useEffect(() => {
+    if (subAccountIds.length === 0 || !fetchProcessedTradesForAccount) { setSubAccountTrades([]); return; }
+    let cancelled = false;
+    Promise.all(subAccountIds.map(id => fetchProcessedTradesForAccount(id)))
+      .then(results => { if (!cancelled) setSubAccountTrades(results.flat()); })
+      .catch(() => { if (!cancelled) setSubAccountTrades([]); });
+    return () => { cancelled = true; };
+  }, [subAccountIds, fetchProcessedTradesForAccount]);
+  const withSubAccounts = includeSubAccounts && subAccountIds.length > 0;
+  // Own and sub-account trades through the same Dashboard filters.
+  const filteredItems = useMemo(
+    () => (withSubAccounts && filterTradeItems
+      ? filterTradeItems([...(allTrades || []), ...subAccountTrades])
+      : accountFilteredItems),
+    [withSubAccounts, filterTradeItems, allTrades, subAccountTrades, accountFilteredItems]
+  );
   const [currentTab, setCurrentTab] = useState('general');
   const [historicalDataMap, setHistoricalDataMap] = useState({});
   const [isFetching, setIsFetching] = useState(false);
@@ -840,6 +867,16 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
               </select>
             </div>
           )}
+          {subAccountIds.length > 0 && (
+            <label className={styles.subAccountToggle} title="Include the trades of this account's sub-accounts">
+              <input
+                type="checkbox"
+                checked={includeSubAccounts}
+                onChange={e => setIncludeSubAccounts(e.target.checked)}
+              />
+              Include sub-accounts
+            </label>
+          )}
           <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
             <span style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>Timezone</span>
             <TimezonePicker value={displayTimezone} onChange={setDisplayTimezone} options={STATS_TIMEZONE_OPTIONS} />
@@ -869,6 +906,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 currentMonth={calendarMonth}
                 setCurrentMonth={setCalendarMonth}
                 zone={displayTimezone}
+                items={withSubAccounts ? [...(allTrades || []), ...subAccountTrades] : undefined}
               />
             </div>
           )}

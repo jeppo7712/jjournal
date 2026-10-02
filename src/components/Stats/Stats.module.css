@@ -741,3 +741,15 @@
     margin-bottom: 0 !important;
   }
 }
+
+/* Parent accounts: whether the stats include the sub-accounts' trades. */
+.subAccountToggle {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: #A5ADBA;
+  font-size: 0.85em;
+  font-weight: 500;
+  cursor: pointer;
+  margin-bottom: 4px;
+}
