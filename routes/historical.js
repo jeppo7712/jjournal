@@ -529,11 +529,33 @@ module.exports = (db, taskManager, historicalDataService, broadcastStatus, uuidv
             });
 
             // --- Query and Process Non-Continuous Data (Yahoo, Individual IBKR Contracts) ---
+            // First and last bar per (timeframe, source, contract month).
+            // A plain GROUP BY read every bar of the symbol (seconds for a
+            // 1-minute future); this walks idx_historical_data_ranges
+            // instead: jump from one group to the next, then read each
+            // group's first and last time from the same index.
             const nonContinuousQuery = `
-            SELECT timeframe, source, contract_month, MIN(time) AS earliest, MAX(time) AS latest
-            FROM historical_data
-            WHERE futures_setting_id = $1 AND is_continuous = FALSE
-            GROUP BY timeframe, source, contract_month;
+            WITH RECURSIVE groups AS (
+                (SELECT timeframe, source, COALESCE(contract_month, '') AS cm FROM historical_data
+                 WHERE futures_setting_id = $1 AND NOT is_continuous
+                 ORDER BY timeframe, source, COALESCE(contract_month, '') LIMIT 1)
+                UNION ALL
+                SELECT n.timeframe, n.source, n.cm FROM groups g CROSS JOIN LATERAL (
+                    SELECT timeframe, source, COALESCE(contract_month, '') AS cm FROM historical_data
+                    WHERE futures_setting_id = $1 AND NOT is_continuous
+                      AND (timeframe, source, COALESCE(contract_month, '')) > (g.timeframe, g.source, g.cm)
+                    ORDER BY timeframe, source, COALESCE(contract_month, '') LIMIT 1) n
+            )
+            SELECT g.timeframe, g.source, NULLIF(g.cm, '') AS contract_month,
+                (SELECT time FROM historical_data h
+                 WHERE h.futures_setting_id = $1 AND NOT h.is_continuous AND h.timeframe = g.timeframe
+                   AND h.source = g.source AND COALESCE(h.contract_month, '') = g.cm
+                 ORDER BY time ASC LIMIT 1) AS earliest,
+                (SELECT time FROM historical_data h
+                 WHERE h.futures_setting_id = $1 AND NOT h.is_continuous AND h.timeframe = g.timeframe
+                   AND h.source = g.source AND COALESCE(h.contract_month, '') = g.cm
+                 ORDER BY time DESC LIMIT 1) AS latest
+            FROM groups g;
         `;
             const { rows: nonContinuousRows } = await db.getPool().query(nonContinuousQuery, [futuresSettingId]);
 
@@ -558,44 +580,48 @@ module.exports = (db, taskManager, historicalDataService, broadcastStatus, uuidv
             });
 
             // --- Query and Process Continuous Data (for Min/Max and Rollovers) ---
+            // Index lookups only: first/last bar per timeframe, and the
+            // rollover bars (idx_historical_data_rollovers) each with the bar
+            // before it for the contract rolled from. This used to load every
+            // continuous bar of the symbol, millions for a 1-minute future.
             if (type.toUpperCase() === 'FUT') {
-                const continuousQuery = `
-                    SELECT timeframe, time, contract_month, is_rollover, rollover_type
-                FROM historical_data
-                WHERE futures_setting_id = $1 AND is_continuous = TRUE
-                ORDER BY timeframe, time ASC;
-            `;
-                const { rows: continuousRows } = await db.getPool().query(continuousQuery, [futuresSettingId]);
+                const { rows: rangeRows } = await db.getPool().query(
+                    `SELECT tf.timeframe,
+                        (SELECT time FROM historical_data WHERE futures_setting_id = $1 AND timeframe = tf.timeframe AND is_continuous = TRUE ORDER BY time ASC LIMIT 1) AS earliest,
+                        (SELECT time FROM historical_data WHERE futures_setting_id = $1 AND timeframe = tf.timeframe AND is_continuous = TRUE ORDER BY time DESC LIMIT 1) AS latest
+                     FROM unnest($2::text[]) AS tf(timeframe)`,
+                    [futuresSettingId, VALID_TIMEFRAMES]
+                );
+                const { rows: rolloverRows } = await db.getPool().query(
+                    `SELECT r.timeframe, r.time, r.contract_month, r.rollover_type, p.contract_month AS prev_contract_month
+                     FROM historical_data r
+                     CROSS JOIN LATERAL (
+                         SELECT contract_month FROM historical_data p
+                         WHERE p.futures_setting_id = r.futures_setting_id AND p.timeframe = r.timeframe
+                           AND p.is_continuous = TRUE AND p.time < r.time
+                         ORDER BY p.time DESC LIMIT 1
+                     ) p
+                     WHERE r.futures_setting_id = $1 AND r.is_continuous = TRUE AND r.is_rollover = TRUE
+                     ORDER BY r.timeframe, r.time ASC`,
+                    [futuresSettingId]
+                );
 
-                const continuousByTimeframe = continuousRows.reduce((acc, row) => {
-                    if (!acc[row.timeframe]) acc[row.timeframe] = [];
-                    acc[row.timeframe].push(row);
-                    return acc;
-                }, {});
-
-                Object.entries(continuousByTimeframe).forEach(([timeframe, bars]) => {
-                    if (bars.length === 0) return;
+                rangeRows.forEach(({ timeframe, earliest, latest }) => {
+                    if (!earliest || !latest) return;
                     const tfData = response.timeframes[timeframe];
-
-                    const continuousInfo = {
-                        earliest: DateTime.fromJSDate(bars[0].time).toISO(),
-                        latest: DateTime.fromJSDate(bars[bars.length - 1].time).toISO(),
-                        rollovers: []
+                    if (!tfData) return;
+                    tfData.ibkrContinuous = {
+                        earliest: DateTime.fromJSDate(earliest).toISO(),
+                        latest: DateTime.fromJSDate(latest).toISO(),
+                        rollovers: rolloverRows
+                            .filter(r => r.timeframe === timeframe && r.prev_contract_month && r.contract_month && r.prev_contract_month !== r.contract_month)
+                            .map(r => ({
+                                date: DateTime.fromJSDate(r.time).toISO(),
+                                from: r.prev_contract_month,
+                                to: r.contract_month,
+                                rollover_type: r.rollover_type,
+                            })),
                     };
-
-                    for (let i = 1; i < bars.length; i++) {
-                        const prevBar = bars[i - 1];
-                        const currBar = bars[i];
-                        if (currBar.is_rollover && prevBar.contract_month && currBar.contract_month && prevBar.contract_month !== currBar.contract_month) {
-                            continuousInfo.rollovers.push({
-                                date: DateTime.fromJSDate(currBar.time).toISO(),
-                                from: prevBar.contract_month,
-                                to: currBar.contract_month,
-                                rollover_type: currBar.rollover_type
-                            });
-                        }
-                    }
-                    tfData.ibkrContinuous = continuousInfo;
                 });
             }
 
