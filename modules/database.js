@@ -747,6 +747,12 @@ ON trades (symbol, type, contract_month);
     broadcastStatus(uuidv4(), 'Database tables checked/created', 'success');
     isConnected = true;
 
+    // Not part of the migration transaction above: on a large historical_data
+    // these take minutes to build, which would hold up startup and block
+    // writes. Built CONCURRENTLY in the background instead (nothing waits on
+    // them; the queries that use them just run slower until they exist).
+    buildBackgroundIndexes();
+
   } catch (err) {
     isConnected = false;
     // Must happen before pool.end() below: pg's end() only resolves once
@@ -788,6 +794,38 @@ ON trades (symbol, type, contract_month);
  * Returns the active database connection pool.
  * @returns {Pool} The pg Pool object.
  */
+// Indexes on historical_data that only make queries faster, built with
+// CREATE INDEX CONCURRENTLY (see the call in connectDatabase).
+// - idx_historical_data_ranges: first/last bar per timeframe, source and
+//   contract month (the Historical Data summary in Settings, and the
+//   per-contract fetch planning) as index lookups instead of scans.
+// - idx_historical_data_rollovers: the continuous series' rollover bars,
+//   a few hundred rows.
+const BACKGROUND_INDEXES = [
+  ['idx_historical_data_ranges', `ON historical_data (futures_setting_id, timeframe, source, (COALESCE(contract_month, '')), time) WHERE NOT is_continuous`],
+  ['idx_historical_data_rollovers', `ON historical_data (futures_setting_id, timeframe, time) WHERE is_continuous AND is_rollover`],
+];
+
+async function buildBackgroundIndexes() {
+  for (const [name, definition] of BACKGROUND_INDEXES) {
+    try {
+      // An interrupted concurrent build leaves an invalid index behind,
+      // which IF NOT EXISTS would then skip for good.
+      const { rows } = await pool.query(
+        `SELECT i.indisvalid FROM pg_class c JOIN pg_index i ON i.indexrelid = c.oid WHERE c.relname = $1`,
+        [name]
+      );
+      if (rows.length > 0 && rows[0].indisvalid) continue;
+      if (rows.length > 0) await pool.query(`DROP INDEX CONCURRENTLY IF EXISTS ${name}`);
+      logger.info(`[Database] Building index ${name} in the background...`);
+      await pool.query(`CREATE INDEX CONCURRENTLY IF NOT EXISTS ${name} ${definition}`);
+      logger.info(`[Database] Index ${name} ready.`);
+    } catch (err) {
+      logger.warn(`[Database] Could not build index ${name}: ${err.message}`);
+    }
+  }
+}
+
 // When Postgres closes a connection on its side (e.g. it restarts: 57P01
 // "terminating connection due to administrator command"), pg reports that as
 // an 'error' event: on the pool for an idle connection, on the client itself
