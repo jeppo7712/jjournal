@@ -382,3 +382,134 @@
   .formGrid { grid-template-columns: 1fr 1fr; }
   .formFieldWide { grid-column: 1 / -1; }
 }
+
+/* ---------- The shared look (Settings/Stats): left-aligned page with the
+   same header, cards, labels and tabs. Layout rules above are unchanged. ---------- */
+.page {
+  max-width: 1320px;
+  margin: 0;
+  padding: 20px 24px 28px;
+  gap: 16px;
+}
+
+.title {
+  font-size: 1.55rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+}
+
+.section {
+  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: var(--ui-radius, 16px);
+  box-shadow: var(--ui-shadow);
+}
+
+.sectionTitle {
+  font-size: 1.05rem;
+}
+
+.balanceCard {
+  background: var(--ui-input, #141822);
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 14px;
+}
+
+.balanceCurrency {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  color: var(--ui-muted, #8B93A3);
+}
+
+.balanceAmount {
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.01em;
+}
+
+.formField label {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-muted, #8B93A3);
+}
+
+.formField input,
+.formField select {
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 10px;
+  background-color: var(--ui-input, #141822);
+}
+
+.formField input:focus,
+.formField select:focus {
+  border-color: rgba(59, 130, 246, 0.65);
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  outline: none;
+}
+
+.tabRow {
+  display: inline-flex;
+  gap: 4px;
+  padding: 4px;
+  margin-bottom: 18px;
+  border: 1px solid var(--ui-border, #2C3244);
+  border-bottom: 1px solid var(--ui-border, #2C3244);
+  border-radius: 12px;
+  background: var(--ui-input, #141822);
+  width: fit-content;
+  max-width: 100%;
+  overflow-x: auto;
+}
+
+.tabBtn {
+  border: none;
+  border-radius: 9px;
+  padding: 7px 14px;
+  margin: 0;
+  font-weight: 600;
+  color: var(--ui-muted, #8B93A3);
+}
+
+.tabBtn:hover {
+  color: #fff;
+}
+
+.tabBtnActive,
+.tabBtnActive:hover {
+  border: none;
+  background: rgba(59, 130, 246, 0.18);
+  color: #DBEAFE;
+}
+
+.primaryBtn {
+  border-radius: 10px;
+  background: linear-gradient(180deg, #4F8DF7 0%, #3B82F6 100%);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+}
+
+.table th {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ui-muted, #8B93A3);
+  background: rgba(255, 255, 255, 0.015);
+  border-bottom: 1px solid var(--ui-border, #2C3244);
+}
+
+.table td {
+  border-bottom: 1px solid var(--ui-border-soft, rgba(255, 255, 255, 0.05));
+  font-variant-numeric: tabular-nums;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 8px 2px 16px;
+  }
+
+  .title {
+    font-size: 1.25rem;
+  }
+}
