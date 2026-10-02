@@ -16,6 +16,7 @@ const PATHS = {
   pencil: <path d="M13.586 3.586a2 2 0 112.828 2.828l-.793.793-2.828-2.828.793-.793zM11.379 5.793L3 14.172V17h2.828l8.38-8.379-2.83-2.828z" />,
   move: <path d="M8 5a1 1 0 100 2h5.586l-1.293 1.293a1 1 0 001.414 1.414l3-3a1 1 0 000-1.414l-3-3a1 1 0 10-1.414 1.414L13.586 5H8zM12 15a1 1 0 100-2H6.414l1.293-1.293a1 1 0 10-1.414-1.414l-3 3a1 1 0 000 1.414l3 3a1 1 0 001.414-1.414L6.414 15H12z" />,
   cloudDownload: <path fillRule="evenodd" clipRule="evenodd" d="M2 9.5A3.5 3.5 0 005.5 13H9v2.586l-1.293-1.293a1 1 0 00-1.414 1.414l3 3a1 1 0 001.414 0l3-3a1 1 0 00-1.414-1.414L11 15.586V13h2.5a4.5 4.5 0 10-.616-8.958 4.002 4.002 0 10-7.753 1.977A3.5 3.5 0 002 9.5zm9 3.5H9V8a1 1 0 012 0v5z" />,
+  download: <path fillRule="evenodd" clipRule="evenodd" d="M3 17a1 1 0 011-1h12a1 1 0 110 2H4a1 1 0 01-1-1zm3.293-7.707a1 1 0 011.414 0L9 10.586V3a1 1 0 112 0v7.586l1.293-1.293a1 1 0 111.414 1.414l-3 3a1 1 0 01-1.414 0l-3-3a1 1 0 010-1.414z" />,
   desktop: <path fillRule="evenodd" clipRule="evenodd" d="M3 5a2 2 0 012-2h10a2 2 0 012 2v8a2 2 0 01-2 2h-2.22l.123.489.804.804A1 1 0 0113 18H7a1 1 0 01-.707-1.707l.804-.804L7.22 15H5a2 2 0 01-2-2V5zm5.771 7H5V5h10v7H8.771z" />,
 };
 
@@ -25,6 +26,7 @@ export const ACTION_COLORS = {
   chart: '#F59E0B',
   import: '#6366F1', // fetching data: Flex, TWS, historical data
   neutral: '#6B7280', // move and other secondary actions
+  export: '#10B981', // saving data out to a file
 };
 
 const ICON_COLORS = {
@@ -35,6 +37,7 @@ const ICON_COLORS = {
   cloudDownload: ACTION_COLORS.import,
   desktop: ACTION_COLORS.import,
   move: ACTION_COLORS.neutral,
+  download: ACTION_COLORS.export,
 };
 
 function IconButton({ icon, label, onClick, disabled = false, busy = false, caption, size = 'normal', className = '', ...rest }) {
