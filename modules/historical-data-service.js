@@ -278,7 +278,11 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
     logger.info(`[populate][${taskId}] Executing task for ${symbol} (${timeframe}, type=${type}, contractMonth=${contractMonth || 'N/A'}, phase=${fetchPhase})`);
 
     let client; // Define client here to be accessible in finally if connection fails early
-    let earliestInvalidationTimestamp = null; // OPTIMIZATION: Track the earliest time data was changed
+    // Earliest IBKR bar this task wrote: the continuous series is rebuilt
+    // from there. Yahoo bars don't count, the series is built from IBKR bars
+    // only; they used to move this back to Yahoo's first bar (years, for 1D)
+    // and so make the rebuild read far more than had changed.
+    let earliestInvalidationTimestamp = null;
 
     try {
         // Cancellation Check Point
@@ -520,11 +524,6 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
                 if (cancellationSignal.aborted) throw new Error(`Task ${taskId} cancelled during Yahoo processing.`);
 
                 if (yahooBars.length > 0) {
-                    const firstYahooBarTime = DateTime.fromISO(yahooBars[0].time);
-                    if (!earliestInvalidationTimestamp || firstYahooBarTime < earliestInvalidationTimestamp) {
-                        earliestInvalidationTimestamp = firstYahooBarTime;
-                    }
-
                     // FIX: De-duplicate bars from Yahoo before attempting to insert
                     const uniqueBarsMap = new Map();
                     for (const bar of yahooBars) {
@@ -795,34 +794,25 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
             }
         }
 
-        // Runs in its own worker thread now (runContinuousSeriesRebuild),
-        // with its own connection and its own transaction — it deletes the
-        // old continuous range and inserts the rebuilt one, and those two
-        // still need to land together, just no longer on this task's own
-        // client/transaction (a rebuild here can be tens of
-        // seconds-to-minutes for a high-frequency symbol; doing that inline
-        // used to block every other request the app was handling for the
-        // same stretch).
+        // Not rebuilt here: the cron queues one task per contract month for
+        // each timeframe, and each one that brings new bars would rebuild
+        // the same series again. requestContinuousRebuild merges them, and
+        // the task processor runs one rebuild per symbol/timeframe, from the
+        // earliest point, once no more tasks for it are queued (see
+        // runPendingContinuousRebuilds).
         if (type === 'FUT' && (ibkrDataWasModified || continuousSeriesMissing)) {
-            logger.debug(`[populate][${taskId}] IBKR data was modified. Rebuilding continuous series for ${symbol} (${timeframe}) from ${earliestInvalidationTimestamp ? earliestInvalidationTimestamp.toISO() : 'the beginning'}.`);
-            await runContinuousSeriesRebuild(futuresSettingId, timeframe, rollover_months, exchangeInfo, earliestInvalidationTimestamp);
+            logger.debug(`[populate][${taskId}] IBKR data was modified. Continuous series rebuild requested for ${symbol} (${timeframe}) from ${earliestInvalidationTimestamp ? earliestInvalidationTimestamp.toISO() : 'the beginning'}.`);
+            requestContinuousRebuild({
+                symbol, futuresSettingId, timeframe,
+                rolloverMonths: rollover_months, exchangeInfo,
+                invalidationTimestamp: earliestInvalidationTimestamp,
+            });
         }
 
         logger.debug(`[populate][${taskId}] (phase: ${fetchPhase}) completed and committed for ${symbol} (${timeframe}, contract: ${contractMonth || 'N/A'})`);
         broadcastStatus(taskId, `Population (phase: ${fetchPhase}) completed for ${symbol} (${timeframe})`, 'success');
 
-        wss.clients.forEach(wsClient => {
-            if (wsClient.readyState === WebSocket.OPEN) {
-                wsClient.send(JSON.stringify({
-                    type: 'historicalDataUpdate',
-                    symbol,
-                    timeframe,
-                    contractMonth: null,
-                    source: 'IBKR',
-                    insertedCount: 'N/A'
-                }));
-            }
-        });
+        notifyHistoricalDataUpdate(wss, symbol, timeframe);
 
         if (cancellationSignal.aborted) {
             throw new Error(`Task ${taskId} cancelled during commit phase.`);
@@ -1456,6 +1446,31 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
     clearChunkProgress(taskId, specificContractMonth);
     return { upsertedCount: totalUpserted, earliestTime: earliestFetchTime };
 }
+
+// Every contract month with raw IBKR bars for this symbol/timeframe, without
+// reading those bars: a skip scan over historical_data_unique_idx (whose
+// second column is the contract month) that jumps to the next contract month
+// once per row it returns. A few hundred index pages instead of every row.
+async function listContractMonths(client, futuresSettingId, timeframe) {
+    const { rows } = await client.query(
+        `WITH RECURSIVE months AS (
+            (SELECT COALESCE(contract_month, '') AS cm FROM historical_data
+             WHERE futures_setting_id = $1 AND timeframe = $2 AND is_continuous = FALSE AND source = 'IBKR'
+               AND COALESCE(contract_month, '') > ''
+             ORDER BY COALESCE(contract_month, '') LIMIT 1)
+            UNION ALL
+            SELECT (SELECT COALESCE(h.contract_month, '') FROM historical_data h
+                    WHERE h.futures_setting_id = $1 AND h.timeframe = $2 AND h.is_continuous = FALSE AND h.source = 'IBKR'
+                      AND COALESCE(h.contract_month, '') > months.cm
+                    ORDER BY COALESCE(h.contract_month, '') LIMIT 1)
+            FROM months WHERE months.cm IS NOT NULL
+        )
+        SELECT cm FROM months WHERE cm IS NOT NULL`,
+        [futuresSettingId, timeframe]
+    );
+    return rows.map(r => r.cm);
+}
+
 async function _buildAndStoreContinuousSeries(client, futuresSettingId, timeframe, rolloverMonths, exchangeInfo, invalidationTimestamp = null) {
     const logPrefix = `[Historical/DB|${futuresSettingId}|${timeframe}]`;
     logger.debug(`${logPrefix} Rebuilding continuous series. Invalidation point: ${invalidationTimestamp ? invalidationTimestamp.toISO() : 'Full Rebuild'}`);
@@ -1480,9 +1495,6 @@ async function _buildAndStoreContinuousSeries(client, futuresSettingId, timefram
 
     let initialCurrentContract = null;
 
-    // --- FIX: ALWAYS fetch ALL raw data to ensure the rollover algorithm has a complete picture. ---
-    // The invalidationTimestamp will be used later to determine which part of the *output* series to replace.
-
     // Check if a series existed before the invalidation point to determine the starting contract.
     if (invalidationTimestamp) {
         const { rows: existingContinuousRows } = await client.query(
@@ -1496,15 +1508,34 @@ async function _buildAndStoreContinuousSeries(client, futuresSettingId, timefram
         }
     }
 
-    logger.debug(`${logPrefix} Fetching all raw IBKR data for series construction. Initial contract hint: ${initialCurrentContract || 'None'}`);
+    const { timezone: exchangeTimezone, opening_hours: openingHours } = exchangeInfo;
 
-    // This single query provides the complete dataset needed for accurate rollover detection.
+    // Incremental rebuild: only read raw bars from the start of the
+    // invalidation day (exchange time) on. The series loop below skips every
+    // timestamp before the invalidation point without changing any of its
+    // state; the state it would carry over (current contract, last rollover
+    // date) is seeded from the stored series instead. So the only inputs
+    // that reach back further are each day's per-contract volume, needed for
+    // the whole invalidation day (hence its start, not the invalidation time
+    // itself), and the list of contract months, read separately below.
+    // Reading everything instead meant millions of rows (and an on-disk sort)
+    // for a 1-minute symbol on every cron cycle that brought new bars.
+    // Without a seed (first build, or nothing stored before the invalidation
+    // point) the series starts from the first contract, so it reads all.
+    const windowStart = invalidationTimestamp && initialCurrentContract
+        ? invalidationTimestamp.setZone(exchangeTimezone).startOf('day')
+        : null;
+    const windowStartISO = windowStart ? windowStart.toUTC().toISO() : null;
+
+    logger.debug(`${logPrefix} Fetching raw IBKR data ${windowStart ? `from ${windowStartISO}` : 'for the whole history'} for series construction. Initial contract hint: ${initialCurrentContract || 'None'}`);
+
     let { rows: rawHistoricalData } = await client.query(
         `SELECT time, open, high, low, close, volume, source, contract_month
          FROM historical_data
          WHERE futures_setting_id = $1 AND timeframe = $2 AND is_continuous = FALSE AND source = 'IBKR'
+         ${windowStart ? 'AND time >= $3' : ''}
          ORDER BY time ASC;`,
-        [futuresSettingId, timeframe]
+        windowStart ? [futuresSettingId, timeframe, windowStartISO] : [futuresSettingId, timeframe]
     );
 
     if (rawHistoricalData.length === 0) {
@@ -1519,8 +1550,6 @@ async function _buildAndStoreContinuousSeries(client, futuresSettingId, timefram
         await client.query(deleteQuery, deleteParams);
         return;
     }
-
-    const { timezone: exchangeTimezone, opening_hours: openingHours } = exchangeInfo;
 
     // Daily per-contract volumes, aggregated in SQL rather than by summing
     // every raw bar in JS. This used to require grouping the entire raw
@@ -1537,8 +1566,9 @@ async function _buildAndStoreContinuousSeries(client, futuresSettingId, timefram
         `SELECT (time AT TIME ZONE $3)::date AS day, contract_month, SUM(COALESCE(volume, 0))::bigint AS volume
          FROM historical_data
          WHERE futures_setting_id = $1 AND timeframe = $2 AND is_continuous = FALSE AND source = 'IBKR' AND contract_month IS NOT NULL
+         ${windowStart ? 'AND time >= $4' : ''}
          GROUP BY day, contract_month`,
-        [futuresSettingId, timeframe, exchangeTimezone]
+        windowStart ? [futuresSettingId, timeframe, exchangeTimezone, windowStartISO] : [futuresSettingId, timeframe, exchangeTimezone]
     );
 
     const dailyContractVolumes = new Map();
@@ -1565,8 +1595,13 @@ async function _buildAndStoreContinuousSeries(client, futuresSettingId, timefram
 
     // Every contract that has any row in the raw data appears in at least
     // one (day, contract) group above, so this set is exactly the same
-    // sortedContracts the old barsByContractMonth.keys() produced.
-    const sortedContracts = Array.from(new Set(dailyVolumeRows.map(r => r.contract_month))).sort();
+    // sortedContracts the old barsByContractMonth.keys() produced. A
+    // windowed run only sees the contracts traded inside the window there,
+    // but which contract comes next has to be decided from all of them, as
+    // a full run does: listContractMonths gets that list from the index.
+    const sortedContracts = windowStart
+        ? (await listContractMonths(client, futuresSettingId, timeframe)).sort()
+        : Array.from(new Set(dailyVolumeRows.map(r => r.contract_month))).sort();
 
     // Group bars by (normalized) timestamp directly from the raw rows, in a
     // single pass — building barsByContractMonth first, only to immediately
@@ -1856,6 +1891,88 @@ async function _buildAndStoreContinuousSeries(client, futuresSettingId, timefram
         ]
     );
     logger.info(`${logPrefix} Successfully stored ${finalSeriesToStore.length} bars for the continuous series.`);
+}
+
+// Tells open charts of this symbol/timeframe to reload their data.
+function notifyHistoricalDataUpdate(wss, symbol, timeframe) {
+    wss.clients.forEach(wsClient => {
+        if (wsClient.readyState === WebSocket.OPEN) {
+            wsClient.send(JSON.stringify({
+                type: 'historicalDataUpdate',
+                symbol,
+                timeframe,
+                contractMonth: null,
+                source: 'IBKR',
+                insertedCount: 'N/A'
+            }));
+        }
+    });
+}
+
+// Continuous series rebuilds requested by finished tasks, one per
+// futures setting and timeframe, each from the earliest point any of its
+// requests asked for (null: the whole series).
+const pendingContinuousRebuilds = new Map();
+// A rebuild waits while more tasks for its symbol/timeframe are queued, but
+// not longer than this, so a queue that never drains can't hold it forever.
+const CONTINUOUS_REBUILD_MAX_WAIT_MS = 30 * 60 * 1000;
+const CONTINUOUS_REBUILD_ATTEMPTS = 3;
+const CONTINUOUS_REBUILD_RETRY_DELAY_MS = 60 * 1000;
+
+function earlierInvalidation(a, b) {
+    if (!a || !b) return null; // from the beginning covers any other point
+    return a.toMillis() <= b.toMillis() ? a : b;
+}
+
+function requestContinuousRebuild({ symbol, futuresSettingId, timeframe, rolloverMonths, exchangeInfo, invalidationTimestamp, attempts = 0, notBefore = 0 }) {
+    const key = `${futuresSettingId}|${timeframe}`;
+    const pending = pendingContinuousRebuilds.get(key);
+    if (pending) {
+        pending.invalidationTimestamp = earlierInvalidation(pending.invalidationTimestamp, invalidationTimestamp);
+        pending.rolloverMonths = rolloverMonths;
+        pending.exchangeInfo = exchangeInfo;
+        pending.attempts = Math.max(pending.attempts, attempts);
+        pending.notBefore = Math.max(pending.notBefore, notBefore);
+        return;
+    }
+    pendingContinuousRebuilds.set(key, {
+        symbol, futuresSettingId, timeframe, rolloverMonths, exchangeInfo, invalidationTimestamp,
+        requestedAt: Date.now(), attempts, notBefore,
+    });
+}
+
+/**
+ * Runs the requested continuous series rebuilds that are due: those with no
+ * more tasks queued for their symbol/timeframe (or that have waited long
+ * enough). Called by the task processor between tasks. A failed rebuild
+ * (e.g. the database restarting) is retried a minute later, up to
+ * CONTINUOUS_REBUILD_ATTEMPTS times.
+ * @param {function(string, string): boolean} hasQueuedTasksFor - (symbol, timeframe) => whether futures tasks for it are still queued.
+ * @param {object} wss - WebSocket server, to tell open charts the series changed.
+ */
+async function runPendingContinuousRebuilds(hasQueuedTasksFor, wss) {
+    for (const [key, request] of pendingContinuousRebuilds) {
+        const now = Date.now();
+        if (now < request.notBefore) continue;
+        if (now - request.requestedAt < CONTINUOUS_REBUILD_MAX_WAIT_MS && hasQueuedTasksFor(request.symbol, request.timeframe)) continue;
+        pendingContinuousRebuilds.delete(key);
+
+        const { symbol, futuresSettingId, timeframe, rolloverMonths, exchangeInfo, invalidationTimestamp } = request;
+        const from = invalidationTimestamp ? invalidationTimestamp.toISO() : 'the beginning';
+        logger.info(`[ContinuousRebuild] Rebuilding continuous series for ${symbol} (${timeframe}) from ${from}.`);
+        try {
+            await runContinuousSeriesRebuild(futuresSettingId, timeframe, rolloverMonths, exchangeInfo, invalidationTimestamp);
+            notifyHistoricalDataUpdate(wss, symbol, timeframe);
+        } catch (err) {
+            const attempts = request.attempts + 1;
+            if (attempts < CONTINUOUS_REBUILD_ATTEMPTS) {
+                logger.warn(`[ContinuousRebuild] Rebuild for ${symbol} (${timeframe}) from ${from} failed (attempt ${attempts}): ${err.message}. Retrying in a minute.`);
+                requestContinuousRebuild({ ...request, attempts, notBefore: Date.now() + CONTINUOUS_REBUILD_RETRY_DELAY_MS });
+            } else {
+                logger.error(`[ContinuousRebuild] Rebuild for ${symbol} (${timeframe}) from ${from} failed ${attempts} times, giving up until new data arrives: ${err.message}`);
+            }
+        }
+    }
 }
 
 // Runs _buildAndStoreContinuousSeries in a worker thread (see
@@ -2383,6 +2500,7 @@ module.exports = {
     getYahooMaxLookbackDays,
     getIbkrDataBound,
     getActiveChunkProgress,
+    runPendingContinuousRebuilds,
     // Exported only so modules/continuous-series-worker.js can call it with
     // its own connection — not meant to be used directly anywhere else. It
     // has no dependency on this module's other state (db/ibkr/yahoo/caches),
