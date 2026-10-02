@@ -8,6 +8,46 @@ import { DateTime } from 'luxon';
 import { findExchangePreset, findFuturesPreset } from '../../data/marketReference';
 import { NUMBER_FORMATS, getNumberFormat, setNumberFormat } from '../../utils/numberFormat';
 import HistoricalDataSummary from './HistoricalDataSummary';
+import { FaSlidersH, FaTerminal, FaWallet, FaTasks, FaPlug, FaGlobeAmericas, FaChartLine, FaDatabase, FaPlus, FaSyncAlt, FaEye, FaEyeSlash } from 'react-icons/fa';
+
+// The sections of the Settings page, in menu order. Without a database only
+// General and Server Logs can be opened.
+const SECTIONS = [
+  { id: 'general', label: 'General', icon: FaSlidersH, description: 'Database connection and how the journal displays things.' },
+  { id: 'logs', label: 'Server Logs', icon: FaTerminal, description: 'The latest lines of the server log.' },
+  { id: 'accounts', label: 'Accounts', icon: FaWallet, description: 'Trading accounts, where their cash is held and how they nest.' },
+  { id: 'checklists', label: 'Checklists', icon: FaTasks, description: 'Checks to tick off when entering and leaving a trade, per account.' },
+  { id: 'tws', label: 'IBKR API', icon: FaPlug, description: 'TWS and IB Gateway connections, and Flex Web Service imports.' },
+  { id: 'exchanges', label: 'Exchanges', icon: FaGlobeAmericas, description: 'Trading venues with their timezone and opening hours.' },
+  { id: 'symbols', label: 'Symbols', icon: FaChartLine, description: 'Contract specs, fees and which timeframes to fetch.' },
+  { id: 'historical', label: 'Historical Data', icon: FaDatabase, description: "What's stored for each symbol, per timeframe and source." },
+];
+
+// postgresql://user:secret@host/db -> postgresql://user:••••••@host/db, so
+// the password isn't on screen (or in a screenshot) unless asked for.
+function maskDbUrl(url) {
+  if (!url) return '';
+  return url.replace(/^([a-z]+:\/\/[^:/@]+:)([^@]*)(@)/i, (m, a, pass, c) => `${a}${'•'.repeat(6)}${c}`);
+}
+
+// The server log is one JSON object per line ({ level, message, timestamp });
+// anything else is shown as it is.
+function parseLogLines(text) {
+  return String(text || '').split('\n').filter(line => line.trim()).map((line, i) => {
+    try {
+      const entry = JSON.parse(line);
+      if (entry && typeof entry === 'object' && entry.message !== undefined) {
+        return { id: i, level: String(entry.level || 'info').toLowerCase(), message: String(entry.message), timestamp: entry.timestamp || null };
+      }
+    } catch { /* not JSON */ }
+    return { id: i, level: /error/i.test(line) ? 'error' : 'info', message: line, timestamp: null };
+  });
+}
+
+function StatusPill({ ok, okText, badText, neutral }) {
+  const tone = neutral ? styles.pillNeutral : ok ? styles.pillOk : styles.pillBad;
+  return <span className={`${styles.statusPill} ${tone}`}><span className={styles.pillDot} />{ok ? okText : badText}</span>;
+}
 
 // Must match VALID_TIMEFRAMES / DEFAULT_TIMEFRAME_SETTINGS in
 // modules/historical-data-service.js.
@@ -50,18 +90,12 @@ function describeTimeframeLimits(tfLimits) {
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-function BubbleButton({ children, onClick, color = '#3B82F6', disabled, ...rest }) {
+function BubbleButton({ children, onClick, color = '#3B82F6', disabled, className = '', ...rest }) {
   return (
     <button
-      className={styles.saveBtn}
-      style={{
-        background: color,
-        marginRight: 10,
-        borderRadius: 18,
-        padding: '10px 24px',
-        opacity: disabled ? 0.5 : 1,
-        cursor: disabled ? 'not-allowed' : 'pointer'
-      }}
+      type="button"
+      className={`${styles.button} ${className}`}
+      style={{ '--button-color': color }}
       onClick={onClick}
       disabled={disabled}
       {...rest}
@@ -176,6 +210,8 @@ export default function Settings() {
   const [serverLogs, setServerLogs] = useState('');
   const [logsLoading, setLogsLoading] = useState(false);
   const [logLines, setLogLines] = useState(200);
+  const [logLevelFilter, setLogLevelFilter] = useState('all');
+  const [showDbUrl, setShowDbUrl] = useState(false);
 
   const [timeframeLimits, setTimeframeLimits] = useState({});
   const [selectedHistoricalSymbol, setSelectedHistoricalSymbol] = useState('');
@@ -1396,226 +1432,287 @@ export default function Settings() {
 
   return (
     <div className={styles.settings}>
-      <div
-        className={styles.tabsRow}
-        style={{
-          visibility: showFuturesModal || showExchangeModal ? 'hidden' : 'visible',
-        }}
+      <div className={styles.settingsLayout}>
+      <nav
+        className={styles.sideNav}
+        aria-label="Settings sections"
+        style={{ visibility: showFuturesModal || showExchangeModal ? 'hidden' : 'visible' }}
       >
-        {/* Phones pick the tab here: one line instead of rows of tab
-            buttons (see .tabSelect). Without a database only General and
-            Server Logs can be opened, as with the buttons. */}
+        {/* Phones pick the section here: one line instead of a menu (see .tabSelect). */}
         <select
           className={styles.tabSelect}
           value={activeTab}
           onChange={e => setActiveTab(e.target.value)}
           aria-label="Settings section"
         >
-          {[
-            ['general', 'General'], ['logs', 'Server Logs'], ['accounts', 'Accounts'], ['checklists', 'Checklists'],
-            ['tws', 'IBKR API'], ['exchanges', 'Exchanges'], ['symbols', 'Symbols'], ['historical', 'Historical Data'],
-          ].map(([id, label]) => (
+          {SECTIONS.map(({ id, label }) => (
             <option key={id} value={id} disabled={!dbStatus?.isConnected && id !== 'general' && id !== 'logs'}>{label}</option>
           ))}
         </select>
-        <button
-          className={`${styles.tabButton} ${activeTab === 'general' ? styles.activeTab : ''} ${!dbStatus?.isConnected && activeTab !== 'general' ? styles.disabledTab : ''}`}
-          onClick={() => setActiveTab('general')}
-        >
-          General
-        </button>
-        <button
-          className={`${styles.tabButton} ${activeTab === 'logs' ? styles.activeTab : ''}`}
-          onClick={() => setActiveTab('logs')}
-        >
-          Server Logs
-        </button>
-        <button
-          className={`${styles.tabButton} ${activeTab === 'accounts' ? styles.activeTab : ''} ${!dbStatus?.isConnected ? styles.disabledTab : ''}`}
-          onClick={() => setActiveTab('accounts')}
-          disabled={!dbStatus?.isConnected}
-        >
-          Accounts
-        </button>
-        <button
-          className={`${styles.tabButton} ${activeTab === 'checklists' ? styles.activeTab : ''} ${!dbStatus?.isConnected ? styles.disabledTab : ''}`}
-          onClick={() => setActiveTab('checklists')}
-          disabled={!dbStatus?.isConnected}
-        >
-          Checklists
-        </button>
-        <button
-          className={`${styles.tabButton} ${activeTab === 'tws' ? styles.activeTab : ''} ${!dbStatus?.isConnected ? styles.disabledTab : ''}`}
-          onClick={() => setActiveTab('tws')}
-          disabled={!dbStatus?.isConnected}
-        >
-          IBKR API
-        </button>
-        <button
-          className={`${styles.tabButton} ${activeTab === 'exchanges' ? styles.activeTab : ''} ${!dbStatus?.isConnected ? styles.disabledTab : ''}`}
-          onClick={() => setActiveTab('exchanges')}
-          disabled={!dbStatus?.isConnected}
-        >
-          Exchanges
-        </button>
-        <button
-          className={`${styles.tabButton} ${activeTab === 'symbols' ? styles.activeTab : ''} ${!dbStatus?.isConnected ? styles.disabledTab : ''}`}
-          onClick={() => setActiveTab('symbols')}
-          disabled={!dbStatus?.isConnected}
-        >
-          Symbols
-        </button>
-        <button
-          className={`${styles.tabButton} ${activeTab === 'historical' ? styles.activeTab : ''} ${!dbStatus?.isConnected ? styles.disabledTab : ''}`}
-          onClick={() => setActiveTab('historical')}
-          disabled={!dbStatus?.isConnected}
-        >
-          Historical Data
-        </button>
-      </div>
-      <div className={styles.tabContent}>
-        {activeTab === 'general' && (
-          <div className={styles.formGrid}>
-            <div className={styles.formField}>
-              <label htmlFor="databaseUrl">Database URL</label>
-              <input
-                id="databaseUrl"
-                name="databaseUrl"
-                value={settings.databaseUrl}
-                onChange={handleSettingChange}
-                className={styles.inputBubble}
-                autoComplete="off"
-                placeholder="postgresql://user:password@host:port/dbname"
-              />
-              {dbStatus && (
-                <span style={{ color: dbStatus.isConnected ? 'green' : 'red', fontSize: '0.9em' }}>
-                  {dbStatus.status}
-                </span>
+        {SECTIONS.map(({ id, label, icon: Icon }) => (
+          <button
+            key={id}
+            type="button"
+            className={`${styles.navButton} ${activeTab === id ? styles.navActive : ''}`}
+            onClick={() => setActiveTab(id)}
+            disabled={!dbStatus?.isConnected && id !== 'general' && id !== 'logs'}
+            aria-current={activeTab === id ? 'page' : undefined}
+          >
+            <Icon className={styles.navIcon} aria-hidden="true" />
+            <span>{label}</span>
+          </button>
+        ))}
+      </nav>
+      <div className={styles.contentColumn}>
+      {(() => {
+        const section = SECTIONS.find(x => x.id === activeTab) || SECTIONS[0];
+        return (
+          <header className={styles.sectionHeader}>
+            <div className={styles.sectionHeading}>
+              <h2>{section.label}</h2>
+              <p>{section.description}</p>
+            </div>
+            <div className={styles.sectionAction}>
+              {activeTab === 'accounts' && dbStatus?.isConnected && (
+                <BubbleButton onClick={() => openAccountModal(null)}><FaPlus aria-hidden="true" /> Add account</BubbleButton>
+              )}
+              {activeTab === 'symbols' && dbStatus?.isConnected && (
+                <BubbleButton onClick={() => openModalForEdit(null)}><FaPlus aria-hidden="true" /> Add symbol</BubbleButton>
+              )}
+              {activeTab === 'exchanges' && dbStatus?.isConnected && (
+                <BubbleButton onClick={() => openExchangeModal()}><FaPlus aria-hidden="true" /> Add exchange</BubbleButton>
+              )}
+              {activeTab === 'historical' && dbStatus?.isConnected && (
+                <select
+                  value={selectedHistoricalSymbol}
+                  onChange={handleHistoricalSymbolChange}
+                  className={`${styles.inputBubble} ${styles.histSymbolSelect}`}
+                  aria-label="Symbol"
+                >
+                  <option value="">Choose a symbol…</option>
+                  {historicalSymbols.map(({ symbol, type }) => (
+                    <option key={`${symbol}-${type}`} value={`${symbol}-${type}`}>
+                      {symbol} ({type})
+                    </option>
+                  ))}
+                </select>
               )}
             </div>
-            <div className={styles.formField}>
-              <label htmlFor="tradesPerPage">Trades Per Page</label>
-              <select
-                id="tradesPerPage"
-                value={tradesPerPage === null ? 'unlimited' : tradesPerPage}
-                onChange={(e) => {
-                  const value = e.target.value === 'unlimited' ? null : parseInt(e.target.value);
-                  setTradesPerPage(value);
-                }}
-                className={styles.inputBubble}
-              >
-                <option value={10}>10 trades</option>
-                <option value={25}>25 trades</option>
-                <option value={50}>50 trades</option>
-                <option value={100}>100 trades</option>
-                <option value={200}>200 trades</option>
-                <option value={500}>500 trades</option>
-                <option value="unlimited">No limit</option>
-              </select>
-            </div>
-            <div className={styles.formField}>
-              <label htmlFor="numberFormat">Number Format</label>
-              <select
-                id="numberFormat"
-                value={numberFormat}
-                onChange={(e) => saveNumberFormat(e.target.value)}
-                className={styles.inputBubble}
-              >
-                {NUMBER_FORMATS.map(f => (
-                  <option key={f.value} value={f.value}>{f.label}</option>
-                ))}
-              </select>
-            </div>
-            <div className={styles.formField} style={{ gridColumn: '1 / -1' }}>
-              <label>Trade List Columns</label>
-              <p style={{ margin: '0 0 8px', fontSize: '0.85rem', opacity: 0.8 }}>
-                Choose which columns to show in the trade list for this account (e.g. hide Entry/Exit Total for a futures-only account).
-              </p>
-              <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px 20px' }}>
-                {TRADE_LIST_COLUMNS.map(col => (
-                  <label key={col.key} style={{ display: 'flex', alignItems: 'center', gap: '6px', fontWeight: 'normal', cursor: 'pointer' }}>
+          </header>
+        );
+      })()}
+      <div className={styles.tabContent}>
+        {activeTab === 'general' && (
+          <div className={styles.stack}>
+            <section className={styles.card}>
+              <div className={styles.cardHeader}>
+                <div>
+                  <h3>Database</h3>
+                  <p>The PostgreSQL database the journal keeps everything in. Changing it restarts the server.</p>
+                </div>
+                {dbStatus && <StatusPill ok={dbStatus.isConnected} okText="Connected" badText={dbStatus.status || 'Not connected'} />}
+              </div>
+              <div className={styles.formField}>
+                <label htmlFor="databaseUrl">Connection URL</label>
+                <div className={styles.inputWithButton}>
+                  {showDbUrl ? (
                     <input
-                      type="checkbox"
-                      checked={!hiddenColumns.includes(col.key)}
-                      onChange={() => toggleColumnVisibility(col.key)}
+                      id="databaseUrl"
+                      name="databaseUrl"
+                      value={settings.databaseUrl}
+                      onChange={handleSettingChange}
+                      className={styles.inputBubble}
+                      autoComplete="off"
+                      spellCheck={false}
+                      placeholder="postgresql://user:password@host:port/dbname"
                     />
-                    {col.label}
-                  </label>
+                  ) : (
+                    <input
+                      id="databaseUrl"
+                      value={maskDbUrl(settings.databaseUrl)}
+                      readOnly
+                      onFocus={() => setShowDbUrl(true)}
+                      className={styles.inputBubble}
+                      placeholder="postgresql://user:password@host:port/dbname"
+                    />
+                  )}
+                  <button
+                    type="button"
+                    className={styles.ghostIconButton}
+                    onClick={() => setShowDbUrl(v => !v)}
+                    title={showDbUrl ? 'Hide the password' : 'Show and edit'}
+                    aria-label={showDbUrl ? 'Hide the password' : 'Show and edit the connection URL'}
+                  >
+                    {showDbUrl ? <FaEyeSlash /> : <FaEye />}
+                  </button>
+                </div>
+              </div>
+            </section>
+
+            <section className={styles.card}>
+              <div className={styles.cardHeader}>
+                <div>
+                  <h3>Display</h3>
+                  <p>Applied straight away.</p>
+                </div>
+              </div>
+              <div className={styles.formGrid}>
+                <div className={styles.formField}>
+                  <label htmlFor="numberFormat">Number format</label>
+                  <select
+                    id="numberFormat"
+                    value={numberFormat}
+                    onChange={(e) => saveNumberFormat(e.target.value)}
+                    className={styles.inputBubble}
+                  >
+                    {NUMBER_FORMATS.map(f => (
+                      <option key={f.value} value={f.value}>{f.label}</option>
+                    ))}
+                  </select>
+                  <span className={styles.fieldHint}>On every device.</span>
+                </div>
+                <div className={styles.formField}>
+                  <label htmlFor="tradesPerPage">Trades per page</label>
+                  <select
+                    id="tradesPerPage"
+                    value={tradesPerPage === null ? 'unlimited' : tradesPerPage}
+                    onChange={(e) => {
+                      const value = e.target.value === 'unlimited' ? null : parseInt(e.target.value);
+                      setTradesPerPage(value);
+                    }}
+                    className={styles.inputBubble}
+                  >
+                    <option value={10}>10 trades</option>
+                    <option value={25}>25 trades</option>
+                    <option value={50}>50 trades</option>
+                    <option value={100}>100 trades</option>
+                    <option value={200}>200 trades</option>
+                    <option value={500}>500 trades</option>
+                    <option value="unlimited">No limit</option>
+                  </select>
+                  <span className={styles.fieldHint}>For this account.</span>
+                </div>
+              </div>
+            </section>
+
+            <section className={styles.card}>
+              <div className={styles.cardHeader}>
+                <div>
+                  <h3>Trade list columns</h3>
+                  <p>Which columns this account's trade list shows, e.g. no Entry/Exit Total for a futures-only account.</p>
+                </div>
+              </div>
+              <div className={styles.chipGroup}>
+                {TRADE_LIST_COLUMNS.map(col => {
+                  const on = !hiddenColumns.includes(col.key);
+                  return (
+                    <button
+                      key={col.key}
+                      type="button"
+                      className={`${styles.chip} ${on ? styles.chipOn : ''}`}
+                      aria-pressed={on}
+                      onClick={() => toggleColumnVisibility(col.key)}
+                    >
+                      {col.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </section>
+          </div>
+        )}
+        {activeTab === 'logs' && (() => {
+          const entries = parseLogLines(serverLogs);
+          const counts = entries.reduce((acc, e) => ({ ...acc, [e.level]: (acc[e.level] || 0) + 1 }), {});
+          const shown = logLevelFilter === 'all' ? entries : entries.filter(e => e.level === logLevelFilter);
+          return (
+            <section className={styles.card}>
+              <div className={styles.logsToolbar}>
+                <div className={styles.segmented} role="group" aria-label="Show levels">
+                  {['all', 'error', 'warn', 'info', 'debug'].filter(l => l === 'all' || counts[l]).map(level => (
+                    <button
+                      key={level}
+                      type="button"
+                      className={`${styles.segment} ${logLevelFilter === level ? styles.segmentOn : ''}`}
+                      onClick={() => setLogLevelFilter(level)}
+                    >
+                      {level === 'all' ? 'All' : level.charAt(0).toUpperCase() + level.slice(1)}
+                      <span className={styles.segmentCount}>{level === 'all' ? entries.length : counts[level]}</span>
+                    </button>
+                  ))}
+                </div>
+                <div className={styles.logsControls}>
+                  <label htmlFor="logLines">Lines</label>
+                  <select
+                    id="logLines"
+                    value={logLines}
+                    onChange={(e) => { const n = parseInt(e.target.value, 10); setLogLines(n); fetchServerLogs(n); }}
+                    className={`${styles.inputBubble} ${styles.compactSelect}`}
+                  >
+                    {[100, 200, 500, 1000, 2000].map(n => <option key={n} value={n}>{n}</option>)}
+                  </select>
+                  <button
+                    type="button"
+                    className={styles.ghostIconButton}
+                    onClick={() => fetchServerLogs()}
+                    disabled={logsLoading}
+                    title="Refresh"
+                    aria-label="Refresh the log"
+                  >
+                    <FaSyncAlt className={logsLoading ? styles.spinning : ''} />
+                  </button>
+                </div>
+              </div>
+              <div className={styles.logView} role="log">
+                {shown.length === 0 && <div className={styles.logEmpty}>{logsLoading ? 'Loading…' : 'Nothing to show.'}</div>}
+                {shown.map(entry => (
+                  <div key={entry.id} className={styles.logLine}>
+                    <span className={`${styles.logLevel} ${styles[`level_${entry.level}`] || ''}`}>{entry.level}</span>
+                    <span className={styles.logTime}>{entry.timestamp ? DateTime.fromISO(entry.timestamp).toFormat('dd LLL HH:mm:ss') : ''}</span>
+                    <span className={styles.logMessage}>{entry.message}</span>
+                  </div>
                 ))}
               </div>
-            </div>
-          </div>
-        )}
-        {activeTab === 'logs' && (
-          <div className={styles.logsTab}>
-            <div className={styles.logsControls}>
-              <label>
-                Lines:
-                <input
-                  type="number"
-                  min={10}
-                  max={2000}
-                  value={logLines}
-                  onChange={(e) => setLogLines(parseInt(e.target.value, 10) || 200)}
-                  className={styles.inputBubble}
-                  style={{ width: 90, marginLeft: 8 }}
-                />
-              </label>
-              <button
-                className={styles.saveBtn}
-                onClick={() => fetchServerLogs()}
-                disabled={logsLoading}
-              >
-                {logsLoading ? 'Refreshing…' : 'Refresh'}
-              </button>
-            </div>
-            <textarea
-              className={styles.logOutput}
-              value={serverLogs}
-              readOnly
-              rows={20}
-            />
-          </div>
-        )}
+            </section>
+          );
+        })()}
         {activeTab === 'checklists' && dbStatus?.isConnected && (
-          <ChecklistSettings styles={styles} apiBaseUrl={apiBaseUrl} />
+          <section className={styles.card}>
+            <ChecklistSettings styles={styles} apiBaseUrl={apiBaseUrl} />
+          </section>
         )}
         {activeTab === 'accounts' && dbStatus?.isConnected && (
           <div className={styles.accountsTab}>
-            <div style={{marginBottom: '16px', display: 'flex', justifyContent: 'flex-start'}}>
-              <BubbleButton onClick={() => openAccountModal(null)}>Add New Account</BubbleButton>
-            </div>
-            <h3>Accounts</h3>
-            <div style={{overflowX: 'auto'}}>
-              <table className="responsive-table" style={{width: '100%', borderCollapse: 'collapse', background: '#232837', border: '1px solid #32384a', borderRadius: '7px', overflow: 'hidden'}}>
+            <div className={styles.tableCard}>
+              <table className={`responsive-table ${styles.table}`}>
                 <thead>
-                  <tr style={{background: '#353943'}}>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Name</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Parent</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Mode</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}} title="Where this account's cash is actually held">Custodian</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Status</th>
-                    <th style={{padding: '12px', textAlign: 'center', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Actions</th>
+                  <tr>
+                    <th>Name</th>
+                    <th>Parent</th>
+                    <th>Mode</th>
+                    <th title="Where this account's cash is actually held">Custodian</th>
+                    <th>Status</th>
+                    <th className={styles.actionsCell} aria-label="Actions" />
                   </tr>
                 </thead>
                 <tbody>
                   {[...accounts].sort((a, b) => a.name.localeCompare(b.name)).map((acc, index) => (
-                    <tr key={acc.id} style={{background: index % 2 === 0 ? '#232837' : '#2a2f3a', borderBottom: '1px solid #32384a'}}>
-                      <td style={{padding: '12px', color: '#00ebff', fontWeight: '500'}}>{acc.name}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>
+                    <tr key={acc.id}>
+                      <td className={styles.primaryCell}>{acc.name}</td>
+                      <td>
                         {acc.parent_account_id ? (accounts.find(a => a.id === acc.parent_account_id)?.name || '—') : '—'}
                       </td>
-                      <td style={{padding: '12px', color: acc.is_virtual ? '#F59E0B' : '#22C55E'}}>
-                        {acc.is_virtual ? 'Paper' : 'Real'}
+                      <td>
+                        <span className={`${styles.badge} ${acc.is_virtual ? styles.badgeAmber : styles.badgeGreen}`}>{acc.is_virtual ? 'Paper' : 'Real'}</span>
                       </td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>
+                      <td>
                         {acc.custodian || <span style={{ opacity: 0.5 }}>—</span>}
-                        {acc.custodian_is_us === true && <span style={{ marginLeft: '6px', color: '#F59E0B' }}>(US)</span>}
-                        {acc.custodian_is_us === false && <span style={{ marginLeft: '6px', color: '#22C55E' }}>(non-US)</span>}
-                        {(acc.custodian_is_us === null || acc.custodian_is_us === undefined) && <span style={{ marginLeft: '6px', opacity: 0.5 }}>(unclassified)</span>}
+                        {acc.custodian_is_us === true && <span className={`${styles.badge} ${styles.badgeSubtle}`}>US</span>}
+                        {acc.custodian_is_us === false && <span className={`${styles.badge} ${styles.badgeSubtle}`}>non-US</span>}
+                        {(acc.custodian_is_us === null || acc.custodian_is_us === undefined) && <span className={styles.muted}> unclassified</span>}
                       </td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{acc.id === parseInt(currentAccountId) ? 'Current' : ''}</td>
-                      <td style={{padding: '12px', textAlign: 'center'}}>
+                      <td>{acc.id === parseInt(currentAccountId) && <span className={`${styles.badge} ${styles.badgeBlue}`}>Current</span>}</td>
+                      <td className={styles.actionsCell}>
                         <span className={styles.rowActions}>
                           <IconButton size="small" icon="pencil" label={`Edit ${acc.name}`} onClick={() => openAccountModal(acc)} />
                           <IconButton size="small" icon="trash" label={`Delete ${acc.name}`} onClick={() => handleDeleteAccount(acc.id)} />
@@ -1625,7 +1722,7 @@ export default function Settings() {
                   ))}
                   {accounts.length === 0 && (
                     <tr>
-                      <td colSpan="6" style={{padding: '12px', textAlign: 'center', color: '#e0e2e6'}}>No accounts configured</td>
+                      <td colSpan="6" className={styles.emptyCell}>No accounts configured</td>
                     </tr>
                   )}
                 </tbody>
@@ -1634,17 +1731,7 @@ export default function Settings() {
           </div>
         )}
         {showAccountModal && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0,0,0,0.5)',
-              zIndex: 2000,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
+          <div className={styles.overlay}>
             <div className={styles.modal}>
               <div className={styles.header}>
                 <span className={styles.title}>{editingAccountId ? 'Edit Account' : 'Add Account'}</span>
@@ -1764,37 +1851,34 @@ export default function Settings() {
         )}
         {activeTab === 'symbols' && dbStatus?.isConnected && (
           <div className={styles.futuresTab}>
-            <div style={{marginBottom: '16px', display: 'flex', justifyContent: 'flex-start'}}>
-              <BubbleButton onClick={() => openModalForEdit(null)}>Add Symbol</BubbleButton>
-            </div>
-            <h3>Default Settings</h3>
-            <div style={{overflowX: 'auto'}}>
-              <table className="responsive-table" style={{width: '100%', borderCollapse: 'collapse', background: '#232837', border: '1px solid #32384a', borderRadius: '7px', overflow: 'hidden'}}>
+            <h3 className={styles.groupTitle}>Defaults <span>for symbols without their own settings</span></h3>
+            <div className={styles.tableCard}>
+              <table className={`responsive-table ${styles.table}`}>
                 <thead>
-                  <tr style={{background: '#353943'}}>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Symbol</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Type</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Tick Size</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Tick Value</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Rollover Months</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Initial Margin</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Fee</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Exchange</th>
-                    <th style={{padding: '12px', textAlign: 'center', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Actions</th>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Type</th>
+                    <th>Tick Size</th>
+                    <th>Tick Value</th>
+                    <th>Rollover Months</th>
+                    <th>Initial Margin</th>
+                    <th>Fee</th>
+                    <th>Exchange</th>
+                    <th className={styles.actionsCell} aria-label="Actions" />
                   </tr>
                 </thead>
                 <tbody>
                   {defaultSettings.map((setting, index) => (
-                    <tr key={setting.type} style={{background: index % 2 === 0 ? '#232837' : '#2a2f3a', borderBottom: '1px solid #32384a'}}>
-                      <td style={{padding: '12px', color: '#00ebff', fontWeight: '500'}}>{setting.symbol}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.type}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.type === 'FUT' ? setting.tick_size : '-'}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.type === 'FUT' ? setting.tick_value : '-'}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.type === 'FUT' ? setting.rollover_months.join(', ') : '-'}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.type === 'FUT' ? setting.initial_margin : '-'}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.fee}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.exchange || 'N/A'}</td>
-                      <td style={{padding: '12px', textAlign: 'center'}}>
+                    <tr key={setting.type}>
+                      <td className={styles.primaryCell}>{setting.symbol}</td>
+                      <td><span className={`${styles.badge} ${setting.type === 'FUT' ? styles.badgeViolet : styles.badgeTeal}`}>{setting.type}</span></td>
+                      <td>{setting.type === 'FUT' ? setting.tick_size : '-'}</td>
+                      <td>{setting.type === 'FUT' ? setting.tick_value : '-'}</td>
+                      <td>{setting.type === 'FUT' ? setting.rollover_months.join(', ') : '-'}</td>
+                      <td>{setting.type === 'FUT' ? setting.initial_margin : '-'}</td>
+                      <td>{setting.fee}</td>
+                      <td>{setting.exchange || 'N/A'}</td>
+                      <td className={styles.actionsCell}>
                         <span className={styles.rowActions}>
                           <IconButton size="small" icon="pencil" label="Edit the default settings" onClick={() => openModalForEdit(setting)} />
                         </span>
@@ -1803,7 +1887,7 @@ export default function Settings() {
                   ))}
                   {defaultSettings.length === 0 && (
                     <tr>
-                      <td colSpan="9" style={{padding: '12px', textAlign: 'center', color: '#e0e2e6'}}>
+                      <td colSpan="9" className={styles.emptyCell}>
                         No default settings set
                         <div style={{marginTop: '8px'}}>
                           <BubbleButton onClick={() => openModalForEdit({ symbol: 'DEFAULT' })}>Add Default Setting</BubbleButton>
@@ -1814,26 +1898,26 @@ export default function Settings() {
                 </tbody>
               </table>
             </div>
-            <h3>Stock Symbols</h3>
-            <div style={{overflowX: 'auto'}}>
-              <table className="responsive-table" style={{width: '100%', borderCollapse: 'collapse', background: '#232837', border: '1px solid #32384a', borderRadius: '7px', overflow: 'hidden'}}>
+            <h3 className={styles.groupTitle}>Stocks <span>{stkSymbols.length}</span></h3>
+            <div className={styles.tableCard}>
+              <table className={`responsive-table ${styles.table}`}>
                 <thead>
-                  <tr style={{background: '#353943'}}>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Symbol</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Type</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Fee</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Exchange</th>
-                    <th style={{padding: '12px', textAlign: 'center', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Actions</th>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Type</th>
+                    <th>Fee</th>
+                    <th>Exchange</th>
+                    <th className={styles.actionsCell} aria-label="Actions" />
                   </tr>
                 </thead>
                 <tbody>
                   {stkSymbols.map((setting, index) => (
-                    <tr key={`${setting.symbol}-${setting.type}`} style={{background: index % 2 === 0 ? '#232837' : '#2a2f3a', borderBottom: '1px solid #32384a'}}>
-                      <td style={{padding: '12px', color: '#00ebff', fontWeight: '500'}}>{setting.symbol}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.type}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.fee}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.exchange || 'N/A'}</td>
-                      <td style={{padding: '12px', textAlign: 'center'}}>
+                    <tr key={`${setting.symbol}-${setting.type}`}>
+                      <td className={styles.primaryCell}>{setting.symbol}</td>
+                      <td><span className={`${styles.badge} ${setting.type === 'FUT' ? styles.badgeViolet : styles.badgeTeal}`}>{setting.type}</span></td>
+                      <td>{setting.fee}</td>
+                      <td>{setting.exchange || 'N/A'}</td>
+                      <td className={styles.actionsCell}>
                         <span className={styles.rowActions}>
                           <IconButton size="small" icon="pencil" label={`Edit ${setting.symbol}`} onClick={() => openModalForEdit(setting)} />
                           <IconButton size="small" icon="trash" label={`Delete ${setting.symbol}`} onClick={() => handleDeleteSymbol(setting.symbol, setting.type)} />
@@ -1843,40 +1927,40 @@ export default function Settings() {
                   ))}
                   {stkSymbols.length === 0 && (
                     <tr>
-                      <td colSpan="5" style={{padding: '12px', textAlign: 'center', color: '#e0e2e6'}}>No stock symbols configured</td>
+                      <td colSpan="5" className={styles.emptyCell}>No stock symbols configured</td>
                     </tr>
                   )}
                 </tbody>
               </table>
             </div>
-            <h3>Futures Symbols</h3>
-            <div style={{overflowX: 'auto'}}>
-              <table className="responsive-table" style={{width: '100%', borderCollapse: 'collapse', background: '#232837', border: '1px solid #32384a', borderRadius: '7px', overflow: 'hidden'}}>
+            <h3 className={styles.groupTitle}>Futures <span>{futSymbols.length}</span></h3>
+            <div className={styles.tableCard}>
+              <table className={`responsive-table ${styles.table}`}>
                 <thead>
-                  <tr style={{background: '#353943'}}>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Symbol</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Type</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Tick Size</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Tick Value</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Rollover Months</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Initial Margin</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Fee</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Exchange</th>
-                    <th style={{padding: '12px', textAlign: 'center', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Actions</th>
+                  <tr>
+                    <th>Symbol</th>
+                    <th>Type</th>
+                    <th>Tick Size</th>
+                    <th>Tick Value</th>
+                    <th>Rollover Months</th>
+                    <th>Initial Margin</th>
+                    <th>Fee</th>
+                    <th>Exchange</th>
+                    <th className={styles.actionsCell} aria-label="Actions" />
                   </tr>
                 </thead>
                 <tbody>
                   {futSymbols.map((setting, index) => (
-                    <tr key={`${setting.symbol}-${setting.type}`} style={{background: index % 2 === 0 ? '#232837' : '#2a2f3a', borderBottom: '1px solid #32384a'}}>
-                      <td style={{padding: '12px', color: '#00ebff', fontWeight: '500'}}>{setting.symbol}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.type}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.tick_size}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.tick_value}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.rollover_months.join(', ')}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.initial_margin}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.fee}</td>
-                      <td style={{padding: '12px', color: '#e0e2e6'}}>{setting.exchange || 'N/A'}</td>
-                      <td style={{padding: '12px', textAlign: 'center'}}>
+                    <tr key={`${setting.symbol}-${setting.type}`}>
+                      <td className={styles.primaryCell}>{setting.symbol}</td>
+                      <td><span className={`${styles.badge} ${setting.type === 'FUT' ? styles.badgeViolet : styles.badgeTeal}`}>{setting.type}</span></td>
+                      <td>{setting.tick_size}</td>
+                      <td>{setting.tick_value}</td>
+                      <td>{setting.rollover_months.join(', ')}</td>
+                      <td>{setting.initial_margin}</td>
+                      <td>{setting.fee}</td>
+                      <td>{setting.exchange || 'N/A'}</td>
+                      <td className={styles.actionsCell}>
                         <span className={styles.rowActions}>
                           <IconButton size="small" icon="pencil" label={`Edit ${setting.symbol}`} onClick={() => openModalForEdit(setting)} />
                           <IconButton size="small" icon="trash" label={`Delete ${setting.symbol}`} onClick={() => handleDeleteSymbol(setting.symbol, setting.type)} />
@@ -1886,7 +1970,7 @@ export default function Settings() {
                   ))}
                   {futSymbols.length === 0 && (
                     <tr>
-                      <td colSpan="9" style={{padding: '12px', textAlign: 'center', color: '#e0e2e6'}}>No futures symbols configured</td>
+                      <td colSpan="9" className={styles.emptyCell}>No futures symbols configured</td>
                     </tr>
                   )}
                 </tbody>
@@ -1895,8 +1979,15 @@ export default function Settings() {
           </div>
         )}
         {activeTab === 'tws' && dbStatus?.isConnected && (
-          <div className={styles.twsTab}>
-            <h3>Interactive Brokers TWS API</h3>
+          <div className={`${styles.twsTab} ${styles.stack}`}>
+            <section className={styles.card}>
+            <div className={styles.cardHeader}>
+              <div>
+                <h3>TWS</h3>
+                <p>Your own TWS or IB Gateway, logged into the account whose trades get imported. The secondary address is tried when the first doesn't answer.</p>
+              </div>
+              <StatusPill ok={!!dbStatus?.ibkrConnected} okText="Connected" badText="Idle" neutral={!dbStatus?.ibkrConnected} />
+            </div>
             <div className={styles.formGrid}>
               <div className={styles.formField}>
                 <label htmlFor="ibkrHost1">Primary Address</label>
@@ -1949,13 +2040,20 @@ export default function Settings() {
                 />
               </div>
             </div>
-            <h3 style={{ marginTop: '28px' }}>Historical Data Connection (Optional)</h3>
-            <p style={{ color: '#9CA3AF', fontSize: '0.82rem', marginTop: -8, marginBottom: 14 }}>
-              Where historical bars and contract lookups come from — e.g. a headless IB Gateway that
-              is always running, so charts don't need TWS open. Any login with market data works,
-              including a paper login. Leave the address empty to use the TWS addresses above.
-              Trade imports from TWS always use the addresses above.
-            </p>
+            </section>
+            <section className={styles.card}>
+            <div className={styles.cardHeader}>
+              <div>
+                <h3>Historical data connection <span className={styles.optional}>optional</span></h3>
+                <p>
+                  Where historical bars and contract lookups come from, e.g. a headless IB Gateway that
+                  is always running, so charts don't need TWS open. Any login with market data works,
+                  including a paper login. Leave the address empty to use the TWS addresses above.
+                  Trade imports from TWS always use the addresses above.
+                </p>
+              </div>
+              <StatusPill ok={!!dbStatus?.ibkrDataConnected} okText="Connected" badText="Idle" neutral={!dbStatus?.ibkrDataConnected} />
+            </div>
             <div className={styles.formGrid}>
               <div className={styles.formField}>
                 <label htmlFor="ibkrDataHost">Address</label>
@@ -1983,8 +2081,8 @@ export default function Settings() {
                 />
               </div>
             </div>
-            <h4 style={{ marginTop: '20px', marginBottom: 6 }}>Gateway auto-reconnect (Optional)</h4>
-            <p style={{ color: '#9CA3AF', fontSize: '0.82rem', marginTop: 0, marginBottom: 14 }}>
+            <h4 className={styles.subheading}>Gateway auto-reconnect <span className={styles.optional}>optional</span></h4>
+            <p className={styles.subtext}>
               IB Gateway can stay connected while no longer answering historical-data requests
               (the HIS light turns red). If it runs with IBC's command server enabled, the journal
               then asks it to reconnect (RECONNECTDATA), at most every 15 minutes. Enter IBC's
@@ -2017,17 +2115,26 @@ export default function Settings() {
                 />
               </div>
             </div>
-            <h3 style={{ marginTop: '28px' }}>IBKR Flex Web Service (No TWS Required)</h3>
-            <p style={{ color: '#9CA3AF', fontSize: '0.82rem', marginTop: -8, marginBottom: 14 }}>
-              Paper and real IBKR accounts are separate accounts on IB's side, so each needs its own
-              Flex Web Service token and Query IDs — set up below. Which set gets used for a given
-              journal account is decided automatically by that account's own Paper/Real setting
-              (Settings → Accounts), not chosen here. Per account: one token, two saved Flex Queries
-              on IB's side — the Activity query covers your history (up to 365 days, refreshes
-              end-of-day); the Trade Confirmation query fills in today's trades (ready ~15-30 min
-              after each fill). Together they cover everything — TWS is optional.
-            </p>
-            <h4 style={{ margin: '0 0 8px' }}>Real accounts</h4>
+            </section>
+            <section className={styles.card}>
+            <div className={styles.cardHeader}>
+              <div>
+                <h3>Flex Web Service <span className={styles.optional}>no TWS needed</span></h3>
+                <p>
+                  Paper and real IBKR accounts are separate accounts on IB's side, so each needs its own
+                  Flex Web Service token and Query IDs. Which set a journal account uses follows its own
+                  Paper/Real setting (Accounts). Per set: one token and two saved Flex Queries on IB's
+                  side. The Activity query covers your history (up to 365 days, refreshed end of day); the
+                  Trade Confirmation query fills in today's trades (ready ~15-30 min after each fill).
+                </p>
+              </div>
+            </div>
+            <div className={styles.flexSets}>
+            <div className={styles.innerCard}>
+            <div className={styles.innerHeader}>
+              <h4>Real accounts</h4>
+              <StatusPill ok={!!dbStatus?.ibkrFlexTokenRealSet} okText="Token set" badText="No token" neutral={!dbStatus?.ibkrFlexTokenRealSet} />
+            </div>
             <div className={styles.formGrid}>
               <div className={styles.formField}>
                 <label htmlFor="ibkrFlexTokenReal">Flex Token</label>
@@ -2040,7 +2147,6 @@ export default function Settings() {
                   autoComplete="off"
                   placeholder={dbStatus?.ibkrFlexTokenRealSet ? '********' : 'Enter Flex Token'}
                 />
-                <span>{dbStatus?.ibkrFlexTokenRealSet ? 'Configured' : 'Not Configured'}</span>
               </div>
               <div className={styles.formField}>
                 <label htmlFor="ibkrFlexQueryIdActivityReal">Activity Query ID (historical)</label>
@@ -2067,7 +2173,12 @@ export default function Settings() {
                 />
               </div>
             </div>
-            <h4 style={{ margin: '20px 0 8px' }}>Paper accounts</h4>
+            </div>
+            <div className={styles.innerCard}>
+            <div className={styles.innerHeader}>
+              <h4>Paper accounts</h4>
+              <StatusPill ok={!!dbStatus?.ibkrFlexTokenPaperSet} okText="Token set" badText="No token" neutral={!dbStatus?.ibkrFlexTokenPaperSet} />
+            </div>
             <div className={styles.formGrid}>
               <div className={styles.formField}>
                 <label htmlFor="ibkrFlexTokenPaper">Flex Token</label>
@@ -2080,7 +2191,6 @@ export default function Settings() {
                   autoComplete="off"
                   placeholder={dbStatus?.ibkrFlexTokenPaperSet ? '********' : 'Enter Flex Token'}
                 />
-                <span>{dbStatus?.ibkrFlexTokenPaperSet ? 'Configured' : 'Not Configured'}</span>
               </div>
               <div className={styles.formField}>
                 <label htmlFor="ibkrFlexQueryIdActivityPaper">Activity Query ID (historical)</label>
@@ -2107,33 +2217,32 @@ export default function Settings() {
                 />
               </div>
             </div>
+            </div>
+            </div>
+            </section>
           </div>
         )}
         {activeTab === 'exchanges' && dbStatus?.isConnected && (
           <div className={styles.exchangesTab}>
-            <div style={{marginBottom: '16px', display: 'flex', justifyContent: 'flex-start'}}>
-              <BubbleButton onClick={() => openExchangeModal()}>Add Exchange</BubbleButton>
-            </div>
-            <h3>Exchanges</h3>
-            <div style={{overflowX: 'auto'}}>
-              <table className="responsive-table" style={{width: '100%', borderCollapse: 'collapse', background: '#232837', border: '1px solid #32384a', borderRadius: '7px', overflow: 'hidden'}}>
+            <div className={styles.tableCard}>
+              <table className={`responsive-table ${styles.table}`}>
                 <thead>
-                  <tr style={{background: '#353943'}}>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Name</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Timezone</th>
-                    <th style={{padding: '12px', textAlign: 'left', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Open Slots</th>
-                    <th style={{padding: '12px', textAlign: 'center', color: '#e0e2e6', fontWeight: '600', borderBottom: '1px solid #32384a'}}>Actions</th>
+                  <tr>
+                    <th>Name</th>
+                    <th>Timezone</th>
+                    <th>Open Slots</th>
+                    <th className={styles.actionsCell} aria-label="Actions" />
                   </tr>
                 </thead>
                 <tbody>
                   {[...exchanges]
                     .sort((a, b) => a.name.localeCompare(b.name))
                     .map((exchange, index) => (
-                      <tr key={exchange.id} style={{background: index % 2 === 0 ? '#232837' : '#2a2f3a', borderBottom: '1px solid #32384a'}}>
-                        <td style={{padding: '12px', color: '#00ebff', fontWeight: '500'}}>{exchange.name}</td>
-                        <td style={{padding: '12px', color: '#e0e2e6'}}>{exchange.timezone}</td>
-                        <td style={{padding: '12px', color: '#e0e2e6'}}>{exchange.opening_hours.flat().filter(h => h).length}</td>
-                        <td style={{padding: '12px', textAlign: 'center'}}>
+                      <tr key={exchange.id}>
+                        <td className={styles.primaryCell}>{exchange.name}</td>
+                        <td>{exchange.timezone}</td>
+                        <td>{exchange.opening_hours.flat().filter(h => h).length}</td>
+                        <td className={styles.actionsCell}>
                           <span className={styles.rowActions}>
                             <IconButton size="small" icon="pencil" label={`Edit ${exchange.name}`} onClick={() => openExchangeModal(exchange)} />
                             <IconButton size="small" icon="trash" label={`Delete ${exchange.name}`} onClick={() => handleDeleteExchange(exchange.id)} />
@@ -2143,7 +2252,7 @@ export default function Settings() {
                     ))}
                   {(!Array.isArray(exchanges) || exchanges.length === 0) && (
                     <tr>
-                      <td colSpan="4" style={{padding: '12px', textAlign: 'center', color: '#e0e2e6'}}>No exchanges configured</td>
+                      <td colSpan="4" className={styles.emptyCell}>No exchanges configured</td>
                     </tr>
                   )}
                 </tbody>
@@ -2153,25 +2262,6 @@ export default function Settings() {
         )}
         {activeTab === 'historical' && dbStatus?.isConnected && (
           <div className={styles.historicalTab}>
-            <div className={styles.histHeader}>
-              <div>
-                <h3 className={styles.histTitle}>Historical Data</h3>
-                <p className={styles.histSubtitle}>What's stored for each symbol, per timeframe and source.</p>
-              </div>
-              <select
-                value={selectedHistoricalSymbol}
-                onChange={handleHistoricalSymbolChange}
-                className={`${styles.inputBubble} ${styles.histSymbolSelect}`}
-                aria-label="Symbol"
-              >
-                <option value="">Choose a symbol…</option>
-                {historicalSymbols.map(({ symbol, type }) => (
-                  <option key={`${symbol}-${type}`} value={`${symbol}-${type}`}>
-                    {symbol} ({type})
-                  </option>
-                ))}
-              </select>
-            </div>
             {!selectedHistoricalSymbol && !isLoadingSummary && (
               <div className={styles.histPlaceholder}>Choose a symbol to see its coverage, contracts and rollovers.</div>
             )}
@@ -2330,22 +2420,15 @@ export default function Settings() {
         )}
       </div>
       {(activeTab === 'general' || activeTab === 'tws') && (
-        <div className={styles.footerRow}>
+        <div className={styles.saveBar}>
+          <span>Connection changes take effect when saved.</span>
           <IconButton icon="check" caption="Save" label="Save settings" onClick={handleSave} />
         </div>
       )}
+      </div>
+      </div>
       {showFuturesModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.5)',
-            zIndex: 2000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
+        <div className={styles.overlay}>
           <div className={styles.modal}>
             <div className={styles.header}>
               <span className={styles.title}>{editingSetting ? 'Edit Symbol Setting' : 'Add Symbol Setting'}</span>
@@ -2519,16 +2602,16 @@ export default function Settings() {
                 </>
               )}
             </div>
-            <hr style={{ margin: '1.5rem 0 1rem' }} />
+            <div className={styles.divider} />
             <div>
               <h3 style={{ margin: '0 0 4px' }}>Timeframes to Fetch</h3>
               <p style={{ margin: '0 0 12px', fontSize: '0.85rem', opacity: 0.8 }}>
                 Choose which timeframes to fetch and keep updated for this symbol. Each enabled timeframe is always
                 fetched as far back as the data provider allows — no need to specify how much history to keep.
               </p>
-              <table style={{ width: '100%', borderCollapse: 'collapse' }}>
+              <table className={styles.miniTable}>
                 <thead>
-                  <tr style={{ textAlign: 'left', fontSize: '0.8rem', opacity: 0.7 }}>
+                  <tr>
                     <th style={{ padding: '4px 8px' }}>Fetch</th>
                     <th style={{ padding: '4px 8px' }}>Timeframe</th>
                     <th style={{ padding: '4px 8px' }}>Known limits</th>
@@ -2564,17 +2647,7 @@ export default function Settings() {
         </div>
       )}
       {showExchangeModal && (
-        <div
-          style={{
-            position: 'fixed',
-            inset: 0,
-            background: 'rgba(0,0,0,0.5)',
-            zIndex: 2000,
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center'
-          }}
-        >
+        <div className={styles.overlay}>
           <div className={styles.modal}>
             <div className={styles.header}>
               <span className={styles.title}>{editingExchange ? 'Edit Exchange' : 'Add Exchange'}</span>
