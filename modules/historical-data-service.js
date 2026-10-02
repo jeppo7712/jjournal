@@ -1257,10 +1257,13 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
     // thousands of rows fetched and materialized for nothing. With up to
     // IBKR_CONCURRENCY_LIMIT contracts of the same symbol/timeframe running
     // this concurrently, that's several large result sets in flight at once.
-    // A plain min()/max() aggregate answers the same question in one row.
+    // A plain min()/max() aggregate answers the same question in one row,
+    // and written this way (COALESCE, NOT is_continuous) it's two lookups
+    // in idx_historical_data_ranges instead of a scan.
     const { rows: [contractRange] } = await client.query(
         `SELECT min(time) AS oldest, max(time) AS latest FROM historical_data
-         WHERE futures_setting_id = $1 AND (contract_month = $2 OR ($2 IS NULL AND contract_month IS NULL)) AND timeframe = $3 AND source = 'IBKR' AND is_continuous = FALSE`,
+         WHERE futures_setting_id = $1 AND timeframe = $3 AND source = 'IBKR'
+           AND COALESCE(contract_month, '') = COALESCE($2::varchar, '') AND NOT is_continuous`,
         [futuresSettingId, specificContractMonth, timeframe]
     );
 
