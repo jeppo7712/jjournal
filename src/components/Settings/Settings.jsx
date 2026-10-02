@@ -5,9 +5,9 @@ import ChecklistSettings from './ChecklistSettings';
 import IconButton, { ACTION_COLORS } from '../common/IconButton';
 import { useStatus } from '../../context/StatusContext';
 import { DateTime } from 'luxon';
-import { FaPencilAlt, FaTrash } from 'react-icons/fa'; // Example using react-icons
 import { findExchangePreset, findFuturesPreset } from '../../data/marketReference';
 import { NUMBER_FORMATS, getNumberFormat, setNumberFormat } from '../../utils/numberFormat';
+import HistoricalDataSummary from './HistoricalDataSummary';
 
 // Must match VALID_TIMEFRAMES / DEFAULT_TIMEFRAME_SETTINGS in
 // modules/historical-data-service.js.
@@ -71,12 +71,6 @@ function BubbleButton({ children, onClick, color = '#3B82F6', disabled, ...rest 
   );
 }
 
-const ArrowRightIcon = () => (
-  <svg width="16" height="16" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" style={{ margin: '0 8px' }}>
-    <path d="M4 12H20M14 6L20 12L14 18" stroke="#A5ADBA" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-  </svg>
-);
-
 // Helper to back-adjust continuous futures series (same logic as TradeView)
 function getBackAdjustedBars(bars) {
   if (!Array.isArray(bars) || bars.length < 2) {
@@ -113,206 +107,6 @@ function getBackAdjustedBars(bars) {
   }
 
   return adjustedBars;
-}
-
-function HistoricalDataSummary({ summary, type, onEditRollover, onExportCsv }) {
-  const formatDate = (isoString) => {
-    if (!isoString) return 'N/A';
-    const dt = DateTime.fromISO(isoString, { zone: 'utc' }).setZone(summary.exchangeTimezone);
-    return dt.toFormat('yyyy-MM-dd');
-  };
-  const hasData = summary && Object.values(summary.timeframes).some(tf => Object.keys(tf).length > 0);
-
-  if (!hasData) {
-    return <div className={styles.noSettings}><p>No historical data found for this symbol in the database.</p></div>;
-  }
-
-  return (
-    <div className={styles.treeContainer}>
-      <ul className={styles.tree}>
-        {Object.entries(summary.timeframes).map(([timeframe, data]) => {
-          if (Object.keys(data).length === 0) return null;
-          return (
-            <li key={timeframe} className={styles.treeNode}>
-              <div className={styles.treeNodeLabel}>{timeframe}</div>
-              <ul className={styles.treeNodeChildren}>
-                {data.yahoo && (
-                  <li className={styles.treeNode}>
-                    <div className={styles.sourceBlock}>
-                      <h5 className={styles.sourceHeader}>Yahoo Finance</h5>
-                      <div className={styles.dataEntry}>
-                        <span>Earliest</span>
-                        <span>{formatDate(data.yahoo.earliest)}</span>
-                      </div>
-                      <div className={styles.dataEntry}>
-                        <span>Latest</span>
-                        <span>{formatDate(data.yahoo.latest)}</span>
-                      </div>
-
-                      {onExportCsv && (
-                        <div className={styles.exportRow}>
-                          <BubbleButton
-                            color="#10B981"
-                            onClick={() =>
-                              onExportCsv({
-                                timeframe,
-                                source: 'YAHOO',
-                                label: 'Yahoo',
-                                isContinuous: false,
-                                contractMonth: null,
-                              })
-                            }
-                          >
-                            Export to CSV
-                          </BubbleButton>
-                        </div>
-                      )}
-                    </div>
-                  </li>
-                )}
-                {type === 'STK' && data.ibkr && (
-                  <li className={styles.treeNode}>
-                    <div className={styles.sourceBlock}>
-                      <h5 className={styles.sourceHeader}>IBKR Stock</h5>
-                      <div className={styles.dataEntry}>
-                        <span>Earliest</span>
-                        <span>{formatDate(data.ibkr.earliest)}</span>
-                      </div>
-                      <div className={styles.dataEntry}>
-                        <span>Latest</span>
-                        <span>{formatDate(data.ibkr.latest)}</span>
-                      </div>
-
-                      {onExportCsv && (
-                        <div className={styles.exportRow}>
-                          <BubbleButton
-                            color="#10B981"
-                            onClick={() =>
-                              onExportCsv({
-                                timeframe,
-                                source: 'IBKR',
-                                label: 'IBKR_Stock',
-                                isContinuous: false,
-                                contractMonth: null,
-                              })
-                            }
-                          >
-                            Export to CSV
-                          </BubbleButton>
-                        </div>
-                      )}
-                    </div>
-                  </li>
-                )}
-                {type === 'FUT' && data.ibkrContracts && Object.keys(data.ibkrContracts).length > 0 && (
-                  <li className={styles.treeNode}>
-                    <div className={styles.sourceBlock}>
-                      <h5 className={styles.sourceHeader}>IBKR (Individual Contracts)</h5>
-                      <ul className={styles.treeNodeChildren}>
-                        {data.ibkrContinuous && (
-                          <li className={styles.treeNode}>
-                            <div className={styles.sourceBlock}>
-                              <h5 className={styles.sourceHeader}>
-                                IBKR (Continuous Series)
-                              </h5>
-                              <div className={styles.dataEntry}><span>Earliest:</span> <span>{formatDate(data.ibkrContinuous.earliest)}</span></div>
-                              <div className={styles.dataEntry}><span>Latest:</span> <span>{formatDate(data.ibkrContinuous.latest)}</span></div>
-                              {data.ibkrContinuous.rollovers.length > 0 && (
-                                <div className={styles.rolloverSection}>
-                                  <h6 className={styles.rolloverTitle}>Rollover History</h6>
-                                  <ul className={styles.rolloverList}>
-                                    {data.ibkrContinuous.rollovers.map(r => (
-                                      <li key={r.date} className={styles.rolloverItem}>
-                                        <div className={styles.rolloverContracts}>
-                                          <span className={styles.rolloverFrom}>{r.from}</span>
-                                          <ArrowRightIcon />
-                                          <span className={styles.rolloverTo}>{r.to}</span>
-                                        </div>
-                                        <span className={styles.rolloverDate}>{formatDate(r.date)}</span>
-                                        {r.rollover_type && (
-                                          <span className={`${styles.rolloverTypeTag} ${styles[r.rollover_type.toLowerCase()]}`}>
-                                            {r.rollover_type.charAt(0).toUpperCase() + r.rollover_type.slice(1).toLowerCase()}
-                                          </span>
-                                        )}
-                                        <div className={styles.rolloverActions}>
-                                          <button onClick={() => onEditRollover(r)} className={styles.editRolloverBtn} title="Edit Rollover Date">
-                                            <FaPencilAlt />
-                                          </button>
-                                        </div>
-                                      </li>
-                                    ))}
-                                  </ul>
-                                </div>
-                              )}
-
-                              {onExportCsv && (
-                                <div className={styles.exportRow}>
-                                  <BubbleButton
-                                    color="#10B981"
-                                    onClick={() =>
-                                      onExportCsv({
-                                        timeframe,
-                                        source: 'IBKR',
-                                        label: 'IBKR_Continuous',
-                                        isContinuous: true,
-                                        contractMonth: null,
-                                      })
-                                    }
-                                  >
-                                    Export to CSV
-                                  </BubbleButton>
-                                </div>
-                              )}
-                            </div>
-                          </li>
-                        )}
-                        {Object.entries(data.ibkrContracts)
-                          .sort((a, b) => a[0].localeCompare(b[0]))
-                          .map(([month, cData]) => (
-                            <li key={month} className={styles.treeNode}>
-                              <div className={styles.contractData}>
-                                <strong>{month}</strong>
-                                <div className={styles.dataEntry}>
-                                  <span>Earliest</span>
-                                  <span>{formatDate(cData.earliest)}</span>
-                                </div>
-                                <div className={styles.dataEntry}>
-                                  <span>Latest</span>
-                                  <span>{formatDate(cData.latest)}</span>
-                                </div>
-
-                                {onExportCsv && (
-                                  <div className={styles.exportRow}>
-                                    <BubbleButton
-                                      color="#10B981"
-                                      onClick={() =>
-                                        onExportCsv({
-                                          timeframe,
-                                          source: 'IBKR',
-                                          label: `IBKR_${month}`,
-                                          isContinuous: false,
-                                          contractMonth: month,
-                                        })
-                                      }
-                                    >
-                                      Export to CSV
-                                    </BubbleButton>
-                                  </div>
-                                )}
-                              </div>
-                            </li>
-                          ))}
-                      </ul>
-                    </div>
-                  </li>
-                )}
-              </ul>
-            </li>
-          );
-        })}
-      </ul>
-    </div>
-  );
 }
 
 export default function Settings() {
@@ -2359,15 +2153,18 @@ export default function Settings() {
         )}
         {activeTab === 'historical' && dbStatus?.isConnected && (
           <div className={styles.historicalTab}>
-            <h3>Historical Data Summary</h3>
-            <div className={styles.formField}>
-              <label>Select a Symbol to inspect:</label>
+            <div className={styles.histHeader}>
+              <div>
+                <h3 className={styles.histTitle}>Historical Data</h3>
+                <p className={styles.histSubtitle}>What's stored for each symbol, per timeframe and source.</p>
+              </div>
               <select
                 value={selectedHistoricalSymbol}
                 onChange={handleHistoricalSymbolChange}
-                className={styles.inputBubble}
+                className={`${styles.inputBubble} ${styles.histSymbolSelect}`}
+                aria-label="Symbol"
               >
-                <option value="">-- Select Symbol --</option>
+                <option value="">Choose a symbol…</option>
                 {historicalSymbols.map(({ symbol, type }) => (
                   <option key={`${symbol}-${type}`} value={`${symbol}-${type}`}>
                     {symbol} ({type})
@@ -2375,19 +2172,30 @@ export default function Settings() {
                 ))}
               </select>
             </div>
-            {isLoadingSummary && <p>Loading summary...</p>}
-            {historicalSummary && (
+            {!selectedHistoricalSymbol && !isLoadingSummary && (
+              <div className={styles.histPlaceholder}>Choose a symbol to see its coverage, contracts and rollovers.</div>
+            )}
+            {isLoadingSummary && (
+              <div className={styles.histPlaceholder}>
+                <span className={styles.inlineSpinner} />
+                Loading {splitSymbolKey(selectedHistoricalSymbol)[0]}… a symbol with years of 1-minute bars takes a few seconds.
+              </div>
+            )}
+            {historicalSummary && !isLoadingSummary && (
               <>
                 <HistoricalDataSummary
+                  key={selectedHistoricalSymbol}
                   summary={historicalSummary}
                   type={splitSymbolKey(selectedHistoricalSymbol)[1]}
                   onEditRollover={handleEditRollover}
                   onExportCsv={handleExportCsv}
                 />
-                <hr style={{ margin: '2rem 0' }} />
-                <div className={styles.globalActions}>
-                  <h3>{splitSymbolKey(selectedHistoricalSymbol)[0]} Data Actions</h3>
-                  <div className={styles.buttonContainer} style={{ marginTop: '1rem' }}>
+                <section className={styles.histCard}>
+                  <h4 className={styles.histCardTitle}>{splitSymbolKey(selectedHistoricalSymbol)[0]} actions</h4>
+                  <div className={styles.histActions}>
+                    <BubbleButton onClick={handleFetchSymbolHistoricalData} color={ACTION_COLORS.import} disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
+                      {isFetchingSymbolHistoricalData ? 'Fetching…' : 'Fetch Historical Data'}
+                    </BubbleButton>
                     {splitSymbolKey(selectedHistoricalSymbol)[1] === 'FUT' && (
                       <BubbleButton onClick={handleRecalculateContinuous} color={ACTION_COLORS.primary} disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
                         Recalculate Continuous Series
@@ -2396,30 +2204,24 @@ export default function Settings() {
                     <BubbleButton onClick={handleDeleteHistoricalData} color={ACTION_COLORS.danger} disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
                       Delete Historical Data
                     </BubbleButton>
-                    <BubbleButton onClick={handleFetchSymbolHistoricalData} color={ACTION_COLORS.import} disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
-                      {isFetchingSymbolHistoricalData ? 'Fetching…' : 'Fetch Historical Data'}
-                    </BubbleButton>
                   </div>
-
-                </div>
+                </section>
               </>
             )}
-            <hr style={{ margin: '2rem 0' }} />
-            <div className={styles.globalActions}>
-              <h3>Global Data Actions</h3>
-              <p>These actions affect all symbols in the historical database.</p>
-              <div className={styles.buttonContainer} style={{ marginTop: '1rem' }}>
+            <section className={styles.histCard}>
+              <h4 className={styles.histCardTitle}>All symbols</h4>
+              <p className={styles.histCardHint}>These actions affect every symbol in the historical database.</p>
+              <div className={styles.histActions}>
                 <BubbleButton onClick={handleFetchAllHistoricalData} color={ACTION_COLORS.import} disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
                   {isFetchingAllHistoricalData ? 'Fetching all…' : 'Fetch All Historical Data'}
-                </BubbleButton>
-                <BubbleButton onClick={handleDeleteAllHistoricalData} color={ACTION_COLORS.danger} disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
-                  Delete All Historical Data
                 </BubbleButton>
                 <BubbleButton onClick={handleRebuildAllContinuousData} color={ACTION_COLORS.primary} disabled={isRebuildingAllContinuous}>
                   {isRebuildingAllContinuous ? 'Starting rebuild…' : 'Rebuild All Continuous Series'}
                 </BubbleButton>
+                <BubbleButton onClick={handleDeleteAllHistoricalData} color={ACTION_COLORS.danger} disabled={isFetchingSymbolHistoricalData || isFetchingAllHistoricalData}>
+                  Delete All Historical Data
+                </BubbleButton>
               </div>
-
               {(queueStatus?.currentTask || queueStatus?.pendingCount > 0) && (
                 <div className={styles.actionStatus}>
                   <span className={styles.inlineSpinner} />
@@ -2523,7 +2325,7 @@ export default function Settings() {
                   </button>
                 </div>
               )}
-            </div>
+            </section>
           </div>
         )}
       </div>
