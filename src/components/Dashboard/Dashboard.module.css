@@ -130,19 +130,23 @@
 
 .tilePnl .statValue {
   padding-right: 0;
-  text-align: right;
+  text-align: left;
 }
 
-.tilePnl .statLabel {
-  text-align: right;
+/* Several currencies: the figures start right under the label (in both P&L
+   tiles alike, so a currency shown in both sits on the same line) and the
+   tile row grows to give each line the full size. */
+.tileStacked {
+  justify-content: flex-start;
 }
 
-/* More than one currency: the figures stack, smaller. */
+/* More than one currency: one line per figure. */
 .statValueStacked {
   display: flex;
   flex-direction: column;
-  gap: 1px;
-  line-height: 1.15;
+  gap: 2px;
+  line-height: 1.1;
+  text-overflow: clip;
 }
 
 .statValueStackedRight {
@@ -812,6 +816,19 @@
     font-size: 13.5px;
     padding-right: 0;
     text-align: right;
+  }
+
+  /* Label left, figure(s) right, as on every other phone tile */
+  .tilePnl .statValue {
+    text-align: right;
+  }
+
+  .tilePnl .statValueStacked {
+    align-items: flex-end;
+  }
+
+  .tileStacked {
+    justify-content: space-between;
   }
 
   .buttonRow {
