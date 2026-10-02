@@ -12,6 +12,7 @@ import { DateTime } from 'luxon';
 import { loadStoredDisplayTimezone, storeDisplayTimezone, resolveDisplayZone, TimezonePicker } from '../../utils/timezonePreference';
 import TradeFormChart from './TradeFormChart';
 import { formatNumber } from '../../utils/numberFormat';
+import { notify } from '../common/Dialogs';
 
 // Prices, sizes and fees from IBKR as they came, in the number format
 // setting: their own decimals (trailing zeros dropped), '—' when missing.
@@ -927,7 +928,7 @@ export default function TradeModal({ trade, onClose }) {
       refreshTrades();
       onClose();
     } else {
-      alert('Error saving trade');
+      notify('Error saving trade');
     }
   }
 
@@ -941,7 +942,7 @@ export default function TradeModal({ trade, onClose }) {
       refreshTrades();
       onClose();
     } else {
-      alert('Error deleting trade');
+      notify('Error deleting trade');
     }
   }
 

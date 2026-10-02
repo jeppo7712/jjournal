@@ -8,6 +8,7 @@ import { TradeContext } from '../../context/TradeContext';
 import { formatMoney } from '../../utils/formatMoney';
 import { sumByCurrency, toTotalsList } from '../../utils/currencyTotals';
 import IconButton from '../common/IconButton';
+import { notify } from '../common/Dialogs';
 
 const getCurrentDate = () => {
   const now = new Date();
@@ -189,7 +190,7 @@ export default function DayNote({ note, onClose }) {
             attachments[i].attachment_id = data.attachment_id;
           } catch (err) {
             console.error('Error uploading attachment:', err);
-            alert('Failed to upload attachment');
+            notify('Failed to upload attachment');
             return;
           }
         }
@@ -222,11 +223,11 @@ export default function DayNote({ note, onClose }) {
         } else {
           const errorText = await resp.text();
           console.error('Error saving day note:', errorText);
-          alert(`Error saving day note: ${errorText}`);
+          notify(`Error saving day note: ${errorText}`);
         }
       } catch (err) {
         console.error('Network error saving day note:', err);
-        alert('Network error saving day note');
+        notify('Network error saving day note');
       }
     } finally {
       setIsSaving(false);
@@ -248,11 +249,11 @@ export default function DayNote({ note, onClose }) {
       } else {
         const errorText = await resp.text();
         console.error(`Error deleting day note ${note.id}:`, errorText);
-        alert(`Error deleting day note: ${errorText}`);
+        notify(`Error deleting day note: ${errorText}`);
       }
     } catch (err) {
       console.error(`Network error deleting day note ${note.id}:`, err);
-      alert('Network error deleting day note');
+      notify('Network error deleting day note');
     }
   }
 

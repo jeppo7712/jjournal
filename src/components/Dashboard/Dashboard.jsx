@@ -749,7 +749,11 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     const list = toTotalsList(stat.totals || {});
     const lines = Math.max(groupLines, list.length);
     if (lines <= 1) {
-      return <div className={styles.statValue} style={{ color: stat.color }}>{stat.value}</div>;
+      // Large amounts ("$18.627,22") were cut off with an ellipsis at the
+      // fixed 20px: shrink with the length instead, so the whole figure fits.
+      const length = String(stat.value ?? '').length;
+      const singlePx = length <= 8 ? 20 : Math.max(13, (20 * 8) / length);
+      return <div className={styles.statValue} style={{ color: stat.color, fontSize: `${singlePx.toFixed(1)}px` }}>{stat.value}</div>;
     }
     // .statBox is a fixed 50px and the stack starts at top:16px, leaving
     // the lines ~30px to share (34px to the border, less a little margin).
@@ -841,10 +845,21 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
   // conversion happens anywhere in this app, so blending currencies would
   // produce a confident-looking number that means nothing. One currency in,
   // one value out, rendered exactly as before.
-  const unrealisedPnlByCurrency = useMemo(() => sumByCurrency(
-    filteredItems.filter(item => (item.type === 'FUT' || item.type === 'STK') && item.status === 'OPEN'),
-    trade => trade.currentReturn || 0
-  ), [filteredItems]);
+  //
+  // Every currency of the trades shown gets a figure, 0 when nothing in it is
+  // open right now: the unrealised chart covers each currency that had an
+  // open position at any time in range, and the figure is how that chart is
+  // picked. Without the 0, a currency whose positions are all closed again
+  // could only be charted by first clicking it under R P&L.
+  const unrealisedPnlByCurrency = useMemo(() => {
+    const trades = filteredItems.filter(item => item.type === 'FUT' || item.type === 'STK');
+    const totals = sumByCurrency(trades.filter(item => item.status === 'OPEN'), trade => trade.currentReturn || 0);
+    trades.forEach(trade => {
+      const code = String(trade.currency || 'USD').toUpperCase();
+      if (!(code in totals)) totals[code] = 0;
+    });
+    return totals;
+  }, [filteredItems]);
 
   // Same rule as the chart: a still-open position has realised nothing, so it
   // must not put its currency on the realised board. Without this an account

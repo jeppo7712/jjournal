@@ -9,6 +9,7 @@ import { findExchangePreset, findFuturesPreset } from '../../data/marketReferenc
 import { NUMBER_FORMATS, getNumberFormat, setNumberFormat } from '../../utils/numberFormat';
 import HistoricalDataSummary from './HistoricalDataSummary';
 import { FaSlidersH, FaTerminal, FaWallet, FaTasks, FaPlug, FaGlobeAmericas, FaChartLine, FaDatabase, FaPlus, FaSyncAlt, FaEye, FaEyeSlash } from 'react-icons/fa';
+import { notify, confirmDialog } from '../common/Dialogs';
 
 // The sections of the Settings page, in menu order. Without a database only
 // General and Server Logs can be opened.
@@ -310,7 +311,7 @@ export default function Settings() {
           setApiBaseUrl(process.env.REACT_APP_API_URL);
         }
         if (!data.isConnected && !data.databaseUrl) {
-          alert('Database not configured. Please set a valid database URL.');
+          notify('Database not configured. Please set a valid database URL.');
         }
       })
       .catch(err => {
@@ -411,7 +412,7 @@ export default function Settings() {
           : null;
       }
       if (Object.keys(body).length === 0) {
-        alert('No changes to save.');
+        notify('No changes to save.');
         return;
       }
       const res = await fetch(`${apiBaseUrl}/api/config`, {
@@ -427,17 +428,31 @@ export default function Settings() {
         throw new Error(error.error || 'Failed to update configuration');
       }
       const data = await res.json();
-      alert(data.message || 'Configuration updated successfully');
       setNewIbkrFlexTokenReal('');
       setNewIbkrFlexTokenPaper('');
+      // A new database URL or port restarts the server: wait until it
+      // answers again, then reload so everything reconnects. Any other
+      // change applies straight away and the page stays as it is.
+      if (data.needsRestart) {
+        notify('Saved. The server is restarting; the page reloads when it is back.', 'success');
+        const started = Date.now();
+        await new Promise(resolve => setTimeout(resolve, 3000));
+        while (Date.now() - started < 60000) {
+          try {
+            const ping = await fetch(`${apiBaseUrl}/api/config/status`);
+            if (ping.ok) break;
+          } catch { /* still restarting */ }
+          await new Promise(resolve => setTimeout(resolve, 2000));
+        }
+        window.location.reload();
+        return;
+      }
+      notify(data.message || 'Settings saved.', 'success');
       const statusRes = await fetch(`${apiBaseUrl}/api/config/status`);
       const statusData = await statusRes.json();
       setDbStatus(statusData);
-      if (statusData.isConnected) {
-        window.location.reload();
-      }
     } catch (err) {
-      alert('Error updating configuration: ' + err.message);
+      notify('Error updating configuration: ' + err.message);
     }
   };
 
@@ -499,7 +514,7 @@ export default function Settings() {
       setNumberFormat(value);
     } catch (err) {
       setNumberFormatChoice(previous);
-      alert(err.message);
+      notify(err.message);
     }
   };
 
@@ -520,7 +535,7 @@ export default function Settings() {
 
   const saveAccountForm = async () => {
     if (!accountForm.name.trim()) {
-      alert('Account name is required.');
+      notify('Account name is required.');
       return;
     }
     try {
@@ -548,16 +563,16 @@ export default function Settings() {
       await refreshAccountsList();
       setShowAccountModal(false);
     } catch (err) {
-      alert('Error saving account: ' + err.message);
+      notify('Error saving account: ' + err.message);
     }
   };
 
   const handleDeleteAccount = async (id) => {
     if (accounts.length <= 1) {
-      alert('Cannot delete the last account.');
+      notify('Cannot delete the last account.');
       return;
     }
-    if (window.confirm('Are you sure you want to delete this account? All associated data will be deleted.')) {
+    if (await confirmDialog('Are you sure you want to delete this account? All associated data will be deleted.')) {
       try {
         // Step 1: DELETE the account
         const deleteRes = await fetch(`${apiBaseUrl}/api/accounts/${id}`, {
@@ -581,7 +596,7 @@ export default function Settings() {
           setCurrentAccountId(refreshedAccounts[0].id);
         }
       } catch (err) {
-        alert('Error deleting account: ' + err.message);
+        notify('Error deleting account: ' + err.message);
       }
     }
   };
@@ -776,16 +791,16 @@ export default function Settings() {
     const { symbol, type, tickSize, tickValue, fee, exchange, currency, rolloverMonths, initialMargin, timeframeSettings, ibkrSymbol, ibkrExchange } = form;
 
     if (!symbol || !type || !fee) {
-      alert('Symbol, type, and fee are required.');
+      notify('Symbol, type, and fee are required.');
       return;
     }
 
     if (type === 'FUT' && (!tickSize || !tickValue || !rolloverMonths || !initialMargin)) {
-      alert('Tick size, tick value, rollover months, and initial margin are required for Futures.');
+      notify('Tick size, tick value, rollover months, and initial margin are required for Futures.');
       return;
     }
     if (type === 'FUT' && parseFloat(initialMargin) <= 0) {
-      alert('Initial margin must be a positive number.');
+      notify('Initial margin must be a positive number.');
       return;
     }
     const normalizedTimeframeSettings = {};
@@ -794,7 +809,7 @@ export default function Settings() {
       normalizedTimeframeSettings[tf] = { enabled: !!entry.enabled };
     }
     if (!Object.values(normalizedTimeframeSettings).some(t => t.enabled)) {
-      alert('At least one timeframe must be enabled.');
+      notify('At least one timeframe must be enabled.');
       return;
     }
     try {
@@ -862,18 +877,18 @@ export default function Settings() {
         ibkrExchange: '',
       });
     } catch (err) {
-      alert('Error saving symbol setting: ' + err.message);
+      notify('Error saving symbol setting: ' + err.message);
     }
   };
 
   const saveExchange = async () => {
     const { name, timezone, opening_hours } = exchangeForm;
     if (!name || !timezone || !opening_hours) {
-      alert('Name, timezone, and opening hours are required.');
+      notify('Name, timezone, and opening hours are required.');
       return;
     }
     if (!currentAccountId) {
-      alert('No account selected. Please select an account.');
+      notify('No account selected. Please select an account.');
       return;
     }
     try {
@@ -902,12 +917,12 @@ export default function Settings() {
         opening_hours: Array(7).fill().map(() => Array(48).fill(false))
       });
     } catch (err) {
-      alert('Error saving exchange: ' + err.message);
+      notify('Error saving exchange: ' + err.message);
     }
   };
 
   const handleDeleteSymbol = async (symbol, type) => {
-    if (window.confirm(`Are you sure you want to delete the settings for ${symbol}?`)) {
+    if (await confirmDialog(`Are you sure you want to delete the settings for ${symbol}?`)) {
       try {
         const res = await fetch(`${apiBaseUrl}/api/futures-settings?symbol=${symbol}&type=${type}`, {
           method: 'DELETE',
@@ -918,7 +933,7 @@ export default function Settings() {
           throw new Error(error.error || 'Failed to delete symbol setting');
         }
       } catch (err) {
-        alert('Error deleting symbol setting: ' + err.message);
+        notify('Error deleting symbol setting: ' + err.message);
       }
       await refreshFuturesSettings();
     }
@@ -927,7 +942,7 @@ export default function Settings() {
   const handleDeleteHistoricalData = async () => {
     if (!selectedHistoricalSymbol) return;
     const [symbol, type] = splitSymbolKey(selectedHistoricalSymbol);
-    if (window.confirm(`Are you sure you want to delete all historical data for ${symbol} (${type})? This action cannot be undone.`)) {
+    if (await confirmDialog(`Are you sure you want to delete all historical data for ${symbol} (${type})? This action cannot be undone.`)) {
       try {
         const res = await fetch(`${apiBaseUrl}/api/historical-data?symbol=${symbol}&type=${type}`, {
           method: 'DELETE',
@@ -937,16 +952,16 @@ export default function Settings() {
           const error = await res.json();
           throw new Error(error.error || 'Failed to delete historical data');
         }
-        alert('Historical data deleted successfully');
+        notify('Historical data deleted successfully');
         await refreshHistoricalSummary();
       } catch (err) {
-        alert('Error deleting historical data: ' + err.message);
+        notify('Error deleting historical data: ' + err.message);
       }
     }
   };
 
   const handleDeleteExchange = async (id) => {
-    if (window.confirm(`Are you sure you want to delete the exchange?`)) {
+    if (await confirmDialog(`Are you sure you want to delete the exchange?`)) {
       try {
         const res = await fetch(`${apiBaseUrl}/api/exchanges/${id}`, {
           method: 'DELETE',
@@ -961,7 +976,7 @@ export default function Settings() {
         }).then(res => res.json());
         setExchanges(Array.isArray(data) ? data : []);
       } catch (err) {
-        alert('Error deleting exchange: ' + err.message);
+        notify('Error deleting exchange: ' + err.message);
       }
     }
   };
@@ -1034,7 +1049,7 @@ export default function Settings() {
         setHistoricalSummary(data);
       } catch (err) {
         console.error(err);
-        alert(`Error: ${err.message}`);
+        notify(`Error: ${err.message}`);
         setHistoricalSummary(null);
       } finally {
         setIsLoadingSummary(false);
@@ -1069,7 +1084,7 @@ export default function Settings() {
       setHistoricalSummary(data);
     } catch (err) {
       console.error(err);
-      alert(`Error refreshing summary: ${err.message}`);
+      notify(`Error refreshing summary: ${err.message}`);
     } finally {
       setIsLoadingSummary(false);
     }
@@ -1100,14 +1115,14 @@ export default function Settings() {
         const errData = await res.json();
         throw new Error(errData.error || 'Failed to save override');
       }
-      alert('Rollover override saved. The continuous series is rebuilt.');
+      notify('Rollover override saved. The continuous series is rebuilt.');
       handleCloseRolloverModal();
       await refreshHistoricalSummary();
     } catch (err) {
       if (err.name === 'AbortError') {
-        alert('Save operation timed out. The rebuild might still be in progress. Please check back later.');
+        notify('Save operation timed out. The rebuild might still be in progress. Please check back later.');
       } else {
-        alert(`Error saving rollover: ${err.message}`);
+        notify(`Error saving rollover: ${err.message}`);
       }
     } finally {
       setIsSaving(false);
@@ -1123,7 +1138,7 @@ export default function Settings() {
     setIsFetchingSymbolHistoricalData(true);
 
     try {
-      if (!window.confirm(`Are you sure you want to queue data fetching tasks for ${symbol} (${type}) for all timeframes? This may take some time.`)) {
+      if (!await confirmDialog(`Are you sure you want to queue data fetching tasks for ${symbol} (${type}) for all timeframes? This may take some time.`)) {
         setHistoricalFetchStatus('');
         return;
       }
@@ -1142,10 +1157,10 @@ export default function Settings() {
       }
       const result = await res.json();
       setHistoricalFetchStatus(result.message || `Successfully queued fetching tasks for ${symbol}. Check the fetch queue below for progress.`);
-      alert(result.message || `Successfully queued fetching tasks for ${symbol}. Check the fetch queue below for progress.`);
+      notify(result.message || `Successfully queued fetching tasks for ${symbol}. Check the fetch queue below for progress.`);
     } catch (err) {
       setHistoricalFetchStatus(`Error: ${err.message}`);
-      alert('Error: ' + err.message);
+      notify('Error: ' + err.message);
     } finally {
       setIsFetchingSymbolHistoricalData(false);
     }
@@ -1153,10 +1168,10 @@ export default function Settings() {
 
   const handleDeleteRolloverOverride = async () => {
     if (!editingRollover || !editingRollover.rollover_type === 'MANUAL') {
-      alert('This is not a manual override and cannot be deleted.');
+      notify('This is not a manual override and cannot be deleted.');
       return;
     }
-    if (!window.confirm('Are you sure you want to delete this manual override? The system will revert to volume-based rollover for this date.')) return;
+    if (!await confirmDialog('Are you sure you want to delete this manual override? The system will revert to volume-based rollover for this date.')) return;
 
     setIsDeleting(true); // Set deleting state
     const [symbol, type] = splitSymbolKey(selectedHistoricalSymbol);
@@ -1180,14 +1195,14 @@ export default function Settings() {
         const errData = await res.json();
         throw new Error(errData.error || 'Failed to delete override');
       }
-      alert('Override deleted. The continuous series is rebuilt.');
+      notify('Override deleted. The continuous series is rebuilt.');
       handleCloseRolloverModal();
       await refreshHistoricalSummary();
     } catch (err) {
       if (err.name === 'AbortError') {
-        alert('Delete operation timed out. The rebuild might still be in progress. Please check back later.');
+        notify('Delete operation timed out. The rebuild might still be in progress. Please check back later.');
       } else {
-        alert(`Error deleting override: ${err.message}`);
+        notify(`Error deleting override: ${err.message}`);
       }
     } finally {
       setIsDeleting(false); // Reset deleting state
@@ -1200,7 +1215,7 @@ export default function Settings() {
     setIsFetchingAllHistoricalData(true);
 
     try {
-      if (!window.confirm('Are you sure you want to queue data fetching tasks for all configured symbols? This may take a long time and consume API resources.')) {
+      if (!await confirmDialog('Are you sure you want to queue data fetching tasks for all configured symbols? This may take a long time and consume API resources.')) {
         setHistoricalFetchStatus('');
         return;
       }
@@ -1215,17 +1230,17 @@ export default function Settings() {
       }
       const result = await res.json();
       setHistoricalFetchStatus(result.message || 'Successfully queued all fetching tasks. Check the fetch queue below for progress.');
-      alert(result.message || 'Successfully queued all fetching tasks. Check the fetch queue below for progress.');
+      notify(result.message || 'Successfully queued all fetching tasks. Check the fetch queue below for progress.');
     } catch (err) {
       setHistoricalFetchStatus(`Error: ${err.message}`);
-      alert('Error: ' + err.message);
+      notify('Error: ' + err.message);
     } finally {
       setIsFetchingAllHistoricalData(false);
     }
   };
 
   const handleDeleteAllHistoricalData = async () => {
-    if (window.confirm('DANGER: Are you sure you want to delete ALL historical data from the database? This action cannot be undone.')) {
+    if (await confirmDialog('DANGER: Are you sure you want to delete ALL historical data from the database? This action cannot be undone.')) {
       try {
         const res = await fetch(`${apiBaseUrl}/api/historical-data/all`, {
           method: 'DELETE',
@@ -1235,19 +1250,19 @@ export default function Settings() {
           const error = await res.json();
           throw new Error(error.error || 'Failed to delete historical data');
         }
-        alert('All historical data has been deleted.');
+        notify('All historical data has been deleted.');
         // Refresh the summary if a symbol is selected, which will now show as empty
         if (selectedHistoricalSymbol) {
           refreshHistoricalSummary();
         }
       } catch (err) {
-        alert('Error: ' + err.message);
+        notify('Error: ' + err.message);
       }
     }
   };
 
   const handleRebuildAllContinuousData = async () => {
-    if (!window.confirm('Rebuild the continuous series for every futures symbol? This scans each symbol\'s full history and can take a while — progress is reported via the status log.')) {
+    if (!await confirmDialog('Rebuild the continuous series for every futures symbol? This scans each symbol\'s full history and can take a while — progress is reported via the status log.')) {
       return;
     }
     setIsRebuildingAllContinuous(true);
@@ -1263,9 +1278,9 @@ export default function Settings() {
       }
       const result = await res.json();
       setCurrentRebuildRequestId(result.requestId || null);
-      alert(result.message || 'Continuous series rebuild started for all symbols.');
+      notify(result.message || 'Continuous series rebuild started for all symbols.');
     } catch (err) {
-      alert('Error: ' + err.message);
+      notify('Error: ' + err.message);
     } finally {
       setIsRebuildingAllContinuous(false);
     }
@@ -1274,7 +1289,7 @@ export default function Settings() {
   const handleRecalculateContinuous = async (timeframe) => {
     if (!selectedHistoricalSymbol) return;
     const [symbol, type] = splitSymbolKey(selectedHistoricalSymbol);
-    alert(`Continuous series rebuild initiated for ${symbol} (${type}). The summary will refresh automatically upon completion.`);
+    notify(`Continuous series rebuild initiated for ${symbol} (${type}). The summary will refresh automatically upon completion.`);
 
     try {
       const res = await fetch(`${apiBaseUrl}/api/historical/rebuild-continuous`, {
@@ -1291,7 +1306,7 @@ export default function Settings() {
       }
       await refreshHistoricalSummary();
     } catch (err) {
-      alert('Error initiating rebuild: ' + err.message);
+      notify('Error initiating rebuild: ' + err.message);
     }
   };
 
@@ -1303,13 +1318,13 @@ export default function Settings() {
   contractMonth,
 }) => {
   if (!selectedHistoricalSymbol) {
-    alert('Please select a symbol first.');
+    notify('Please select a symbol first.');
     return;
   }
 
   const [symbol, type] = splitSymbolKey(selectedHistoricalSymbol);
   if (!symbol || !type) {
-    alert('Invalid selected symbol/type.');
+    notify('Invalid selected symbol/type.');
     return;
   }
 
@@ -1340,7 +1355,7 @@ export default function Settings() {
     }
 
     if (!Array.isArray(data) || data.length === 0) {
-      alert('No historical data available for this selection.');
+      notify('No historical data available for this selection.');
       return;
     }
 
@@ -1352,7 +1367,7 @@ export default function Settings() {
     );
 
     if (filtered.length === 0) {
-      alert(`No ${source} data found for this selection.`);
+      notify(`No ${source} data found for this selection.`);
       return;
     }
 
@@ -1421,7 +1436,7 @@ export default function Settings() {
     URL.revokeObjectURL(urlObject);
   } catch (err) {
     console.error('Error exporting CSV:', err);
-    alert(`Error exporting CSV: ${err.message}`);
+    notify(`Error exporting CSV: ${err.message}`);
   }
 };
 

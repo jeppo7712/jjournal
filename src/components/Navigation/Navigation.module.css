@@ -308,9 +308,13 @@
   scrollbar-color: #3A4152 transparent;
 }
 
+/* Label and values share a line when they fit; large amounts (or several
+   currencies that don't fit beside the label) wrap below it, right-aligned,
+   instead of running past the card's edge. */
 .navStat {
-  display: grid;
-  grid-template-columns: auto 1fr;
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
   align-items: baseline;
   column-gap: 8px;
   padding: 5px 0;
@@ -324,13 +328,18 @@
 }
 
 .navStat > span:first-child {
-  grid-row: span 9;
   white-space: nowrap;
 }
 
+.navStatValues {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  margin-left: auto;
+  min-width: 0;
+}
+
 .accountBalance {
-  grid-column: 2;
-  justify-self: end;
   font-size: 13px;
   font-weight: 650;
   font-variant-numeric: tabular-nums;
