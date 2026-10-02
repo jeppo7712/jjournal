@@ -1,12 +1,15 @@
 const winston = require('winston');
 const path = require('path');
 const fs = require('fs');
+const { isMainThread } = require('worker_threads');
 
 const USER_PATH_LOCAL = process.env.USER_PATH || "./";
 
 // In production, truncate old log files so they don't grow indefinitely.
-// This keeps the log output focused on the current run.
-if (process.env.NODE_ENV === 'production') {
+// This keeps the log output focused on the current run. Only on the main
+// thread: worker threads (continuous-series-worker.js) load this module
+// too, and used to wipe the running server's logs on every rebuild.
+if (process.env.NODE_ENV === 'production' && isMainThread) {
   const truncateIfExists = (filename) => {
     try {
       const fullPath = path.join(USER_PATH_LOCAL, filename);
