@@ -55,7 +55,22 @@ function describeIbkrDataLight(status) {
   return { color: '#6b7280', title: 'IBKR historical data: no requests since the server started' };
 }
 
-const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
+const NAV_ICONS = {
+  dashboard: <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />,
+  stats: <path fillRule="evenodd" d="M5 3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2H5zm9 4a1 1 0 10-2 0v6a1 1 0 102 0V7zm-3 2a1 1 0 10-2 0v4a1 1 0 102 0V9zm-3 3a1 1 0 10-2 0v1a1 1 0 102 0v-1z" clipRule="evenodd" />,
+  capital: <><path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" /><path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" /></>,
+  settings: <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />,
+};
+
+// The pages, in menu order. `key` is the keyboard shortcut (see App.jsx).
+const NAV_PAGES = [
+  { view: 'dashboard', label: 'Dashboard', key: '1' },
+  { view: 'stats', label: 'Stats', key: '2' },
+  { view: 'capital', label: 'Capital', key: '3' },
+  { view: 'settings', label: 'Settings', key: '4' },
+];
+
+const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   const { stats, accounts, currentAccountId, setCurrentAccountId, trades, fetchProcessedTradesForAccount, holdings } = useContext(TradeContext);
   const { statusLogs } = useStatus();
   const [isDatabaseConnected, setIsDatabaseConnected] = useState(false);
@@ -434,46 +449,38 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
         )}
       </div>
 
-      <div className={styles.navItems}> {/* */}
-        {isDatabaseConnected ? (
-          <>
-            <div className={styles.navItem} onClick={() => setCurrentView('dashboard')} title="Dashboard"> {/* */}
-              <svg className={styles.navIcon} viewBox="0 0 20 20" fill="currentColor"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" /></svg>
-              <span className={styles.navLabel}>Dashboard</span>
-            </div>
-            <div className={styles.navItem} onClick={() => setCurrentView('stats')} title="Stats"> {/* */}
-              <svg className={styles.navIcon} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M5 3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2H5zm9 4a1 1 0 10-2 0v6a1 1 0 102 0V7zm-3 2a1 1 0 10-2 0v4a1 1 0 102 0V9zm-3 3a1 1 0 10-2 0v1a1 1 0 102 0v-1z" clipRule="evenodd" /></svg>
-              <span className={styles.navLabel}>Stats</span>
-            </div>
-            <div className={styles.navItem} onClick={() => setCurrentView('capital')} title="Capital"> {/* */}
-              <svg className={styles.navIcon} viewBox="0 0 20 20" fill="currentColor"><path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" /><path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" /></svg>
-              <span className={styles.navLabel}>Capital</span>
-            </div>
-            <div className={styles.navItem} onClick={() => setCurrentView('settings')} title="Settings"> {/* */}
-              <svg className={styles.navIcon} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /></svg>
-              <span className={styles.navLabel}>Settings</span>
-            </div>
-          </>
-        ) : (
-          <div className={styles.navItem} onClick={() => setCurrentView('settings')} title="Settings"> {/* */}
-            <svg className={styles.navIcon} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" /></svg>
-            <span className={styles.navLabel}>Settings</span>
-          </div>
-        )}
-      </div>
-
       {showRegularActionButtons && isDatabaseConnected && (
-        <div className={styles.actionButtons}> {/* */}
-          <button className={styles.newTradeBtn} onClick={onNewTrade}> {/* */}
-            <svg className={styles.btnIcon} viewBox="0 0 20 20" fill="currentColor"><path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM14 11a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1v-1a1 1 0 011-1z" /></svg>
+        <div className={styles.actionButtons}>
+          <button className={styles.newTradeBtn} onClick={onNewTrade} title="New trade (N)">
+            <svg className={styles.btnIcon} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 4a1 1 0 011 1v4h4a1 1 0 110 2h-4v4a1 1 0 11-2 0v-4H5a1 1 0 110-2h4V5a1 1 0 011-1z" clipRule="evenodd" /></svg>
             <span className={styles.btnText}>New Trade</span>
+            <kbd className={styles.btnKey}>N</kbd>
           </button>
-           <button className={styles.noteBtn} onClick={onNewNote}> {/* */}
+          <button className={styles.noteBtn} onClick={onNewNote} title="New day note (J)">
             <svg className={styles.btnIcon} viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>
             <span className={styles.btnText}>New Note</span>
+            <kbd className={styles.btnKey}>J</kbd>
           </button>
         </div>
       )}
+
+      <div className={styles.navItems}>
+        <span className={styles.navSectionLabel}>Menu</span>
+        {(isDatabaseConnected ? NAV_PAGES : NAV_PAGES.filter(p => p.view === 'settings')).map(page => (
+          <button
+            key={page.view}
+            type="button"
+            className={`${styles.navItem} ${currentView === page.view ? styles.navActive : ''}`}
+            onClick={() => setCurrentView(page.view)}
+            title={`${page.label} (${page.key})`}
+            aria-current={currentView === page.view ? 'page' : undefined}
+          >
+            <svg className={styles.navIcon} viewBox="0 0 20 20" fill="currentColor">{NAV_ICONS[page.view]}</svg>
+            <span className={styles.navLabel}>{page.label}</span>
+            <kbd className={styles.navKey}>{page.key}</kbd>
+          </button>
+        ))}
+      </div>
 
       {showPlusButton && isDatabaseConnected && (
          <div className={`${styles.plusButtonContainer} ${navMode === 'medium' ? styles.plusButtonContainerMedium : ''}`}> {/* */}

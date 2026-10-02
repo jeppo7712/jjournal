@@ -1207,7 +1207,9 @@ export const TradeProvider = ({ children }) => {
             const openTradeIndex = openTrades.findIndex(ot => ot.id === trade.id);
             if (openTradeIndex !== -1) {
               const priceData = priceDataResults[openTradeIndex];
-              if (priceData) return { ...trade, ...priceData };
+              if (priceData) return { ...trade, ...priceData, priceUnavailable: false };
+              // Fetched, but no price came back: say so instead of "loading".
+              if (trade.currentPrice == null) return { ...trade, priceUnavailable: true };
             }
             return trade;
           }));
@@ -1243,7 +1245,12 @@ export const TradeProvider = ({ children }) => {
       // An account switch or reload in the meantime replaced these trades.
       if (requestSeq !== refreshSeqRef.current) return;
       const byId = new Map(openTrades.map((t, i) => [t.id, results[i]]));
-      setTrades(prev => prev.map(t => (byId.get(t.id) ? { ...t, ...byId.get(t.id) } : t)));
+      setTrades(prev => prev.map(t => {
+        if (!byId.has(t.id)) return t;
+        const priceData = byId.get(t.id);
+        if (priceData) return { ...t, ...priceData, priceUnavailable: false };
+        return t.currentPrice == null ? { ...t, priceUnavailable: true } : t;
+      }));
     } catch (err) {
       console.error('Failed to refresh live prices:', err);
     }

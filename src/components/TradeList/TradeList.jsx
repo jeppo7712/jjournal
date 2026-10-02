@@ -67,6 +67,27 @@ function renderDailyPnL(totals, styles) {
   ));
 }
 
+// The header, in TRADE_LIST_COLUMNS order. `className` keeps a column's
+// width rules (hidden on narrower screens) in step with its cells.
+const HEADER_COLUMNS = [
+  { key: 'openDate', label: 'Open Date', sortable: true },
+  { key: 'symbol', label: 'Symbol', sortable: true },
+  { key: 'status', label: 'Status', sortable: true },
+  { key: 'side', label: 'Side', sortable: true },
+  { key: 'quantity', label: 'Qty' },
+  { key: 'entry', label: 'Entry' },
+  { key: 'exit', label: 'Exit' },
+  { key: 'entryTotal', label: 'Ent Tot', className: 'colEntryTotal' },
+  { key: 'exitTotal', label: 'Ext Tot', className: 'colExitTotal' },
+  { key: 'position', label: 'Pos', className: 'colPosition' },
+  { key: 'holdTime', label: 'Hold' },
+  { key: 'return', label: 'Return', sortable: true },
+  { key: 'returnPercentage', label: 'Return %', sortable: true },
+];
+
+// A thin colour edge per row, by status.
+const ROW_STATUS_CLASS = { WIN: 'rowWin', LOSS: 'rowLoss', OPEN: 'rowOpen', WASH: 'rowWash' };
+
 const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
   const {
     filteredItems,
@@ -82,7 +103,26 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
     currentPage,
     setCurrentPage,
     hiddenColumns,
+    toggleColumnVisibility,
   } = useContext(TradeContext);
+
+  // The column picker (the icon at the right end of the header). Changes
+  // are saved per account, the same setting as Settings → General.
+  const [showColumnMenu, setShowColumnMenu] = useState(false);
+  const columnMenuRef = useRef(null);
+  useEffect(() => {
+    if (!showColumnMenu) return undefined;
+    const close = (e) => {
+      if (columnMenuRef.current && !columnMenuRef.current.contains(e.target)) setShowColumnMenu(false);
+    };
+    const onKey = (e) => { if (e.key === 'Escape') setShowColumnMenu(false); };
+    document.addEventListener('pointerdown', close);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', close);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [showColumnMenu]);
 
   const isColumnVisible = (key) => !hiddenColumns.includes(key);
   const safeFilteredItems = Array.isArray(filteredItems) ? filteredItems : [];
@@ -213,91 +253,62 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
   return (
     <div className={styles.tradeList} onMouseMove={handleMouseMove}>
       <div className={styles.header}>
-        {isColumnVisible('openDate') && (
+        {HEADER_COLUMNS.filter(col => isColumnVisible(col.key)).map(col => (
           <div
-            className={`${styles.headerCell} ${styles.sortable} ${sortField === 'openDate' ? styles.sorted : ''}`}
-            onClick={() => handleSort('openDate')}
+            key={col.key}
+            className={`${styles.headerCell} ${col.className ? styles[col.className] : ''} ${col.sortable ? styles.sortable : ''} ${sortField === col.key ? styles.sorted : ''}`}
+            onClick={col.sortable ? () => handleSort(col.key) : undefined}
+            title={col.sortable ? `Sort by ${col.label.toLowerCase()}` : undefined}
           >
-            Open Date
-            {sortField === 'openDate' && (
+            {col.label}
+            {col.sortable && sortField === col.key && (
               <span className={styles.sortIcon}>
                 {sortDirection === 'asc' ? '↑' : '↓'}
               </span>
             )}
           </div>
-        )}
-        {isColumnVisible('symbol') && (
-          <div
-            className={`${styles.headerCell} ${styles.sortable} ${sortField === 'symbol' ? styles.sorted : ''}`}
-            onClick={() => handleSort('symbol')}
+        ))}
+        <div className={styles.columnMenuWrap} ref={columnMenuRef}>
+          <button
+            type="button"
+            className={`${styles.columnMenuButton} ${showColumnMenu ? styles.columnMenuButtonOn : ''} ${hiddenColumns.length ? styles.columnMenuButtonDot : ''}`}
+            onClick={() => setShowColumnMenu(open => !open)}
+            title="Choose columns"
+            aria-label="Choose columns"
+            aria-expanded={showColumnMenu}
           >
-            Symbol
-            {sortField === 'symbol' && (
-              <span className={styles.sortIcon}>
-                {sortDirection === 'asc' ? '↑' : '↓'}
-              </span>
-            )}
-          </div>
-        )}
-        {isColumnVisible('status') && (
-          <div
-            className={`${styles.headerCell} ${styles.sortable} ${sortField === 'status' ? styles.sorted : ''}`}
-            onClick={() => handleSort('status')}
-          >
-            Status
-            {sortField === 'status' && (
-              <span className={styles.sortIcon}>
-                {sortDirection === 'asc' ? '↑' : '↓'}
-              </span>
-            )}
-          </div>
-        )}
-        {isColumnVisible('side') && (
-          <div
-            className={`${styles.headerCell} ${styles.sortable} ${sortField === 'side' ? styles.sorted : ''}`}
-            onClick={() => handleSort('side')}
-          >
-            Side
-            {sortField === 'side' && (
-              <span className={styles.sortIcon}>
-                {sortDirection === 'asc' ? '↑' : '↓'}
-              </span>
-            )}
-          </div>
-        )}
-        {isColumnVisible('quantity') && <div className={styles.headerCell}>Qty</div>}
-        {isColumnVisible('entry') && <div className={styles.headerCell}>Entry</div>}
-        {isColumnVisible('exit') && <div className={styles.headerCell}>Exit</div>}
-        {isColumnVisible('entryTotal') && <div className={`${styles.headerCell} ${styles.colEntryTotal}`}>Ent Tot</div>}
-        {isColumnVisible('exitTotal') && <div className={`${styles.headerCell} ${styles.colExitTotal}`}>Ext Tot</div>}
-        {isColumnVisible('position') && <div className={`${styles.headerCell} ${styles.colPosition}`}>Pos</div>}
-        {isColumnVisible('holdTime') && <div className={styles.headerCell}>Hold</div>}
-        {isColumnVisible('return') && (
-          <div
-            className={`${styles.headerCell} ${styles.sortable} ${sortField === 'return' ? styles.sorted : ''}`}
-            onClick={() => handleSort('return')}
-          >
-            Return
-            {sortField === 'return' && (
-              <span className={styles.sortIcon}>
-                {sortDirection === 'asc' ? '↑' : '↓'}
-              </span>
-            )}
-          </div>
-        )}
-        {isColumnVisible('returnPercentage') && (
-          <div
-            className={`${styles.headerCell} ${styles.sortable} ${sortField === 'returnPercentage' ? styles.sorted : ''}`}
-            onClick={() => handleSort('returnPercentage')}
-          >
-            Return %
-            {sortField === 'returnPercentage' && (
-              <span className={styles.sortIcon}>
-                {sortDirection === 'asc' ? '↑' : '↓'}
-              </span>
-            )}
-          </div>
-        )}
+            <svg viewBox="0 0 20 20" fill="currentColor"><path d="M3 4.75A1.75 1.75 0 014.75 3h1.5A1.75 1.75 0 018 4.75v10.5A1.75 1.75 0 016.25 17h-1.5A1.75 1.75 0 013 15.25V4.75zM9.5 4.75A1.75 1.75 0 0111.25 3h0A1.75 1.75 0 0113 4.75v10.5A1.75 1.75 0 0111.25 17h0a1.75 1.75 0 01-1.75-1.75V4.75zM14.5 4.75A1.75 1.75 0 0116.25 3h0A1.75 1.75 0 0118 4.75v10.5A1.75 1.75 0 0116.25 17h0a1.75 1.75 0 01-1.75-1.75V4.75z" /></svg>
+          </button>
+          {showColumnMenu && (
+            <div className={styles.columnMenu} role="menu">
+              <div className={styles.columnMenuHeader}>
+                <span>Columns</span>
+                {hiddenColumns.length > 0 && (
+                  <button type="button" className={styles.columnMenuReset} onClick={() => hiddenColumns.forEach(key => toggleColumnVisibility(key))}>
+                    Show all
+                  </button>
+                )}
+              </div>
+              {TRADE_LIST_COLUMNS.map(col => {
+                const visible = isColumnVisible(col.key);
+                return (
+                  <button
+                    key={col.key}
+                    type="button"
+                    role="menuitemcheckbox"
+                    aria-checked={visible}
+                    className={`${styles.columnMenuItem} ${visible ? styles.columnMenuItemOn : ''}`}
+                    onClick={() => toggleColumnVisibility(col.key)}
+                  >
+                    <span className={styles.columnCheck} aria-hidden="true">{visible ? '✓' : ''}</span>
+                    {col.label}
+                  </button>
+                );
+              })}
+              <div className={styles.columnMenuHint}>Saved for this account</div>
+            </div>
+          )}
+        </div>
       </div>
       <div className={styles.tradeRows}>
         {paginatedItems.map(item => {
@@ -311,7 +322,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
             return (
               <div
                 key={`trade-${item.id}`}
-                className={`${styles.tradeRow} ${isNotClosed ? styles.tradeRowNotClosed : ''}`}
+                className={`${styles.tradeRow} ${ROW_STATUS_CLASS[item.status] ? styles[ROW_STATUS_CLASS[item.status]] : ''} ${isNotClosed ? styles.tradeRowNotClosed : ''}`}
                 onClick={() => handleTradeClick(item)} // Updated to use new handler
                 onMouseEnter={(e) => handleMouseEnterTrade(e, item)}
                 onMouseLeave={handleMouseLeaveTrade}
@@ -354,7 +365,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                             ({currencyMark(item.currency)}{formatNumber(Math.abs(item.currentReturn), 2)})
                           </span>
                         ) : (
-                          <span className={styles.loading}>Loading...</span>
+                          <span className={styles.loading} title={item.priceUnavailable ? 'No live price available' : 'Fetching the live price'}>{item.priceUnavailable ? '—' : '···'}</span>
                         )
                       ) : (
                         item.return !== undefined && item.return !== null ? (
@@ -373,7 +384,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                             ({item.currentReturnPercentage >= 0 ? '' : ''}{formatNumber(Math.abs(item.currentReturnPercentage), 2)}%)
                           </span>
                         ) : (
-                          <span className={styles.loading}>Loading...</span>
+                          <span className={styles.loading} title={item.priceUnavailable ? 'No live price available' : 'Fetching the live price'}>{item.priceUnavailable ? '—' : '···'}</span>
                         )
                       ) : (
                         item.returnPercentage !== undefined && item.returnPercentage !== null ? (
@@ -398,6 +409,8 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                           ? styles.statusWin
                           : item.status === 'LOSS'
                           ? styles.statusLoss
+                          : item.status === 'WASH'
+                          ? styles.statusWash
                           : styles.statusOpen)
                       }>
                         {getStatusText(item.status)}
@@ -454,7 +467,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                             ({currencyMark(item.currency)}{formatNumber(Math.abs(item.currentReturn), 2)})
                           </span>
                         ) : (
-                          <span className={styles.loading}>Loading...</span>
+                          <span className={styles.loading} title={item.priceUnavailable ? 'No live price available' : 'Fetching the live price'}>{item.priceUnavailable ? '—' : '···'}</span>
                         )
                       ) : (
                         item.return !== undefined && item.return !== null ? (
@@ -475,7 +488,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                             ({item.currentReturnPercentage >= 0 ? '' : ''}{formatNumber(Math.abs(item.currentReturnPercentage), 2)}%)
                           </span>
                         ) : (
-                          <span className={styles.loading}>Loading...</span>
+                          <span className={styles.loading} title={item.priceUnavailable ? 'No live price available' : 'Fetching the live price'}>{item.priceUnavailable ? '—' : '···'}</span>
                         )
                       ) : (
                         item.returnPercentage !== undefined && item.returnPercentage !== null ? (

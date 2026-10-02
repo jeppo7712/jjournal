@@ -58,6 +58,16 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
   const [showOpenTrades, setShowOpenTrades] = useState(false);
   const [showGraphPopup, setShowGraphPopup] = useState(false);
   const [isGraphHidden, setIsGraphHidden] = useState(false);
+  // Whether the P&L chart panel is open (desktop/tablet). Remembered per
+  // browser, so a collapsed chart stays out of the way of the trade list.
+  const [chartOpen, setChartOpenState] = useState(() => {
+    try { return localStorage.getItem('jj.dashboard.chartOpen') !== 'false'; } catch { return true; }
+  });
+  const setChartOpen = (next) => setChartOpenState(prev => {
+    const value = typeof next === 'function' ? next(prev) : next;
+    try { localStorage.setItem('jj.dashboard.chartOpen', String(value)); } catch { /* storage unavailable */ }
+    return value;
+  });
   const [pnlChartType, setPnlChartType] = useState('realised'); // 'realised' or 'unrealised'
   // Which currency the P&L chart is showing. null means "whichever comes
   // first", so a single-currency account never has to choose. Set by clicking
@@ -567,8 +577,8 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     },
     layout: {
       padding: {
-        top: 20,
-        bottom: 15,
+        top: 18,
+        bottom: 6,
         right: 60,
       },
     },
@@ -585,7 +595,8 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       y: {
         display: true,
         ticks: {
-          color: '#9CA3AF',
+          color: '#6B7280',
+          maxTicksLimit: 4,
           font: {
             size: 11
           },
@@ -593,9 +604,10 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
           // mark has to follow it rather than always saying dollars.
           callback: value => signedMoney(value, displayedChartCurrency),
         },
-        grid: { // Added to hide y-axis grid lines
-          display: false
-        }
+        grid: {
+          color: 'rgba(255, 255, 255, 0.04)',
+        },
+        border: { display: false },
       },
     },
     plugins: {
@@ -862,6 +874,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     onClick: () => {
       setPnlChartType('realised');
       if (isGraphHidden) setShowGraphPopup(true);
+      else setChartOpen(true);
     },
     // Clicking one of the figures charts that currency specifically.
     onCurrency: code => {
@@ -881,6 +894,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     onClick: () => {
       setPnlChartType('unrealised');
       if (isGraphHidden) setShowGraphPopup(true);
+      else setChartOpen(true);
     },
     onCurrency: code => {
       setPnlChartType('unrealised');
@@ -970,18 +984,98 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     return filter ? filter.label : 'TIME FILTER';
   };
 
+  // One tile of the overview strip. Status tiles (WINS/LOSSES/OPEN/WASH)
+  // toggle that status filter: include, exclude, off.
+  const renderTile = (stat, { align = 'left', lines = stat.lines, ring = true, extraClass = '' } = {}) => {
+    const percentage = parseFloat(stat.pct) || 0;
+    const circumference = 2 * Math.PI * 12;
+    const strokeDashoffset = circumference - (Math.min(100, Math.max(0, percentage)) / 100) * circumference;
+    const filterState = stat.filterValue ? filter.find(f => f.type === stat.filterValue) : null;
+    const isActive = filterState?.mode === 'include';
+    const isExcluded = filterState?.mode === 'exclude';
+    const clickable = !!stat.onClick;
+    return (
+      <div
+        key={stat.label}
+        className={`${styles.statBox} ${extraClass} ${isActive ? styles.active : ''} ${isExcluded ? styles.excluded : ''} ${clickable ? styles.clickable : ''}`}
+        style={{ color: stat.color }}
+        onClick={stat.onClick}
+        role={clickable ? 'button' : undefined}
+        tabIndex={clickable ? 0 : undefined}
+        onKeyDown={clickable ? (e => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); stat.onClick(); } }) : undefined}
+        title={stat.filterValue ? `${isActive ? 'Showing only' : isExcluded ? 'Hiding' : 'Filter'} ${stat.label.toLowerCase()} — click to ${isActive ? 'hide them' : isExcluded ? 'clear' : 'show only these'}` : stat.title}
+      >
+        <div className={styles.statLabel}>{stat.label}</div>
+        {renderStatValue(stat, align, lines)}
+        {ring && stat.pct !== undefined && (
+          <div className={styles.statPctContainer}>
+            <svg className={styles.progressRing} width="30" height="30" viewBox="0 0 30 30">
+              <circle stroke="rgba(255,255,255,0.08)" strokeWidth="3" fill="transparent" r="12" cx="15" cy="15" />
+              <circle
+                stroke={stat.color}
+                strokeWidth="3"
+                strokeLinecap="round"
+                fill="transparent"
+                r="12"
+                cx="15"
+                cy="15"
+                strokeDasharray={circumference}
+                strokeDashoffset={strokeDashoffset}
+                style={{ transform: 'rotate(-90deg)', transformOrigin: 'center', transition: 'stroke-dashoffset 0.4s ease' }}
+              />
+            </svg>
+            <div className={styles.statPct}>{stat.pct}</div>
+          </div>
+        )}
+        {isExcluded && <span className={styles.statFlag}>hidden</span>}
+        {isActive && <span className={`${styles.statFlag} ${styles.statFlagOn}`}>only</span>}
+      </div>
+    );
+  };
+
+  const showChartPanel = !isGraphHidden && chartOpen;
+  const chartToggleTitle = chartOpen ? 'Hide the P&L chart' : 'Show the P&L chart';
+
   return (
     <div className={styles.dashboard}>
       <div className={styles.topRow}>
-        <div className={styles.graphBubble}>
-          <div className={styles.graphArea}>
+        <div className={styles.statsContainer}>
+          <div className={styles.statsGrid}>
+            {renderTile(statGrid[0][0], { extraClass: styles.tileWins })}
+            {renderTile(statGrid[0][1], { extraClass: styles.tileLosses })}
+            {renderTile(statGrid[1][0], { extraClass: styles.tileOpen })}
+            {renderTile(statGrid[1][1], { extraClass: styles.tileWash })}
+            {renderTile(statGrid[2][0], { extraClass: styles.tileAvgWin })}
+            {renderTile(statGrid[2][1], { extraClass: styles.tileAvgLoss })}
+            {renderTile({ ...realisedPnlStat, title: isGraphHidden ? 'Show the realised P&L chart' : 'Chart realised P&L' }, { align: 'right', lines: pnlStatLines, ring: false, extraClass: `${styles.tilePnl} ${styles.tileRealised} ${pnlChartType === 'realised' && showChartPanel ? styles.charted : ''}` })}
+            {renderTile({ ...unrealisedPnlStat, title: isGraphHidden ? 'Show the unrealised P&L chart' : 'Chart unrealised P&L' }, { align: 'right', lines: pnlStatLines, ring: false, extraClass: `${styles.tilePnl} ${styles.tileUnrealised} ${pnlChartType === 'unrealised' && showChartPanel ? styles.charted : ''}` })}
+          </div>
+        </div>
+
+        {showChartPanel && (
+          <div className={styles.graphBubble}>
+            <div className={styles.chartHeader}>
+              <div className={styles.chartTitle}>
+                {pnlChartType === 'realised' ? 'Realised P&L' : 'Unrealised P&L'}
+                <span className={styles.chartSubtitle}>{pnlChartType === 'realised' ? 'cumulative, by close date' : 'open positions over time'}</span>
+              </div>
+              <div className={styles.chartActions}>
+                <div className={styles.segmented} role="tablist" aria-label="P&L chart">
+                  <button type="button" role="tab" aria-selected={pnlChartType === 'realised'} className={pnlChartType === 'realised' ? styles.segmentOn : ''} onClick={() => setPnlChartType('realised')}>Realised</button>
+                  <button type="button" role="tab" aria-selected={pnlChartType === 'unrealised'} className={pnlChartType === 'unrealised' ? styles.segmentOn : ''} onClick={() => setPnlChartType('unrealised')}>Unrealised</button>
+                </div>
+                <button type="button" className={styles.iconButton} onClick={() => setChartOpen(false)} title="Hide the chart" aria-label="Hide the chart">
+                  <svg viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M14.77 12.79a.75.75 0 01-1.06-.02L10 8.83l-3.71 3.94a.75.75 0 11-1.08-1.04l4.25-4.5a.75.75 0 011.08 0l4.25 4.5a.75.75 0 01-.02 1.06z" clipRule="evenodd" /></svg>
+                </button>
+              </div>
+            </div>
             <div className={styles.graphArea}>
-              {pnlChartType === 'unrealised' && isFetching && <div>Loading unrealised P&L data...</div>}
+              {pnlChartType === 'unrealised' && isFetching && <div className={styles.chartEmpty}>Loading unrealised P&L…</div>}
               {pnlChartType === 'unrealised' && !isFetching && sortedTrades.filter(trade => ['OPEN', 'WIN', 'LOSS', 'WASH'].includes(trade.status)).length === 0 ? (
-                <div>No relevant trades for unrealised P&L</div>
+                <div className={styles.chartEmpty}>No trades to chart yet</div>
               ) : (
                 pnlChartType === 'unrealised' && !isFetching && unrealisedLabels.length === 0 ? (
-                  <div>No historical data available for unrealised P&L</div>
+                  <div className={styles.chartEmpty}>No price history for the open positions yet</div>
                 ) : (
                   !isFetching && (
                     <Line
@@ -991,256 +1085,114 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
                   )
                 )
               )}
-            </div>          </div>
-        </div>
-        <div className={styles.statsContainer}>
-          <div className={styles.statsGrid}>
-            <div className={styles.statGridCol}>
-              {statGrid[0].map((stat, idx) => {
-                const percentage = parseFloat(stat.pct) || 0;
-                const circumference = 2 * Math.PI * 15;
-                const strokeDashoffset = circumference - (percentage / 100) * circumference;
-                const filterState = filter.find(f => f.type === stat.filterValue);
-                const isActive = filterState?.mode === 'include';
-                const isExcluded = filterState?.mode === 'exclude';
-                return (
-                  <div
-                    key={idx}
-                    className={`${styles.statBox} ${isActive ? styles.active : ''} ${isExcluded ? styles.excluded : ''}`}
-                    style={{ borderColor: '#32384a', color: stat.color, cursor: stat.onClick ? 'pointer' : 'default' }}
-                    onClick={stat.onClick}
-                  >
-                    <div className={styles.statLabel}>{stat.label}</div>
-                    {renderStatValue(stat, 'left', stat.lines)}
-                    <div className={styles.statPctContainer}>
-                      <svg className={styles.progressRing} width="34" height="34">
-                        <circle
-                          className={styles.progressRingCircle}
-                          stroke="#3A3F4A"
-                          strokeWidth="2"
-                          fill="transparent"
-                          r="15"
-                          cx="17"
-                          cy="17"
-                        />
-                        <circle
-                          className={styles.progressRingCircle}
-                          stroke={stat.color}
-                          strokeWidth="2"
-                          fill="transparent"
-                          r="15"
-                          cx="17"
-                          cy="17"
-                          strokeDasharray={circumference}
-                          strokeDashoffset={strokeDashoffset}
-                          style={{ transform: 'rotate(-90deg)', transformOrigin: 'center' }}
-                        />
-                      </svg>
-                      <div className={styles.statPct}>{stat.pct}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className={styles.statGridCol}>
-              {statGrid[1].map((stat, idx) => {
-                const percentage = parseFloat(stat.pct) || 0;
-                const circumference = 2 * Math.PI * 15;
-                const strokeDashoffset = circumference - (percentage / 100) * circumference;
-                const filterState = filter.find(f => f.type === stat.filterValue);
-                const isActive = filterState?.mode === 'include';
-                const isExcluded = filterState?.mode === 'exclude';
-                return (
-                  <div
-                    key={idx}
-                    className={`${styles.statBox} ${isActive ? styles.active : ''} ${isExcluded ? styles.excluded : ''}`}
-                    style={{ borderColor: '#32384a', color: stat.color, cursor: stat.onClick ? 'pointer' : 'default' }}
-                    onClick={stat.onClick}
-                  >
-                    <div className={styles.statLabel}>{stat.label}</div>
-                    {renderStatValue(stat, 'left', stat.lines)}
-                    <div className={styles.statPctContainer}>
-                      <svg className={styles.progressRing} width="34" height="34">
-                        <circle
-                          className={styles.progressRingCircle}
-                          stroke="#3A3F4A"
-                          strokeWidth="2"
-                          fill="transparent"
-                          r="15"
-                          cx="17"
-                          cy="17"
-                        />
-                        <circle
-                          className={styles.progressRingCircle}
-                          stroke={stat.color}
-                          strokeWidth="2"
-                          fill="transparent"
-                          r="15"
-                          cx="17"
-                          cy="17"
-                          strokeDasharray={circumference}
-                          strokeDashoffset={strokeDashoffset}
-                          style={{ transform: 'rotate(-90deg)', transformOrigin: 'center' }}
-                        />
-                      </svg>
-                      <div className={styles.statPct}>{stat.pct}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className={styles.statGridCol}>
-              {statGrid[2].map((stat, idx) => {
-                const percentage = parseFloat(stat.pct) || 0;
-                const circumference = 2 * Math.PI * 15;
-                const strokeDashoffset = circumference - (percentage / 100) * circumference;
-                return (
-                  <div
-                    key={idx}
-                    className={styles.statBox}
-                    style={{ borderColor: '#32384a', color: stat.color }}
-                  >
-                    <div className={styles.statLabel}>{stat.label}</div>
-                    {renderStatValue(stat, 'left', stat.lines)}
-                    <div className={styles.statPctContainer}>
-                      <svg className={styles.progressRing} width="34" height="34">
-                        <circle
-                          className={styles.progressRingCircle}
-                          stroke="#3A3F4A"
-                          strokeWidth="2"
-                          fill="transparent"
-                          r="15"
-                          cx="17"
-                          cy="17"
-                        />
-                        <circle
-                          className={styles.progressRingCircle}
-                          stroke={stat.color}
-                          strokeWidth="2"
-                          fill="transparent"
-                          r="15"
-                          cx="17"
-                          cy="17"
-                          strokeDasharray={circumference}
-                          strokeDashoffset={strokeDashoffset}
-                          style={{ transform: 'rotate(-90deg)', transformOrigin: 'center' }}
-                        />
-                      </svg>
-                      <div className={styles.statPct}>{stat.pct}</div>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-            <div className={styles.pnlAndButtonsCol}>
-              <div
-                className={styles.statBox}
-                style={{ borderColor: '#32384a', color: realisedPnlStat.color, cursor: isGraphHidden ? 'pointer' : 'default' }}
-                onClick={realisedPnlStat.onClick}
-              >
-                <div className={styles.statLabel}>{realisedPnlStat.label}</div>
-                {renderStatValue(realisedPnlStat, 'right', pnlStatLines)}
-              </div>
-              <div
-                className={styles.statBox}
-                style={{ borderColor: '#32384a', color: unrealisedPnlStat.color, cursor: isGraphHidden ? 'pointer' : 'default' }}
-                onClick={unrealisedPnlStat.onClick}
-              >
-                <div className={styles.statLabel}>{unrealisedPnlStat.label}</div>
-                {renderStatValue(unrealisedPnlStat, 'right', pnlStatLines)}
-              </div>
             </div>
           </div>
-          <div className={styles.filterSections}>
-            <div className={styles.filterSection}>
-              <div className={styles.separatorContainer}>
-                <div className={styles.separatorLine}></div>
-                <div className={styles.separatorText}>more filters</div>
-                <div className={styles.separatorLine}></div>
-              </div>
-              <div className={styles.buttonRow}>
-                <div className={styles.toggleButtonGroup}>
-                  <div
-                    className={`${styles.toggleButton} ${showTrades ? styles.active : styles.excluded}`}
-                    onClick={toggleShowTrades}
-                  >
-                    TRADES
-                  </div>
-                  <div
-                    className={`${styles.toggleButton} ${showDayNotes ? styles.active : styles.excluded}`}
-                    onClick={toggleShowDayNotes}
-                  >
-                    NOTES
-                  </div>
-                  <div
-                    className={`${styles.toggleButton} ${styles.openTradesButton} ${filter.find(f => f.type === 'OPEN')?.mode === 'include' ? styles.active : ''} ${filter.find(f => f.type === 'OPEN')?.mode === 'exclude' ? styles.excluded : ''}`}
-                    onClick={toggleShowOpenTrades}
-                  >
-                    OPENS
-                  </div>
-                </div>
-                <div className={styles.timeFilterContainer}>
-                  <div className={styles.timeFilterButtonContainer}>
-                    <button
-                      ref={timeFilterRef}
-                      className={`${styles.timeFilterButton} ${timeFilter ? styles.active : ''}`}
-                      onClick={handleTimeFilterButtonClick}
-                      title="Set time filter"
-                    >
-                      {getTimeFilterLabel()}
-                    </button>
-                    {showTimeFilterMenu && (
-                      <div ref={menuRef} className={`${styles.timeFilterMenu} ${showTimeFilterMenu ? styles.open : ''}`}>
-                        {timeFilters.map((filter, idx) => (
-                          <div
-                            key={idx}
-                            className={`${styles.timeFilterBox} ${timeFilter === filter.value ? styles.active : ''} ${filter.value === 'CUSTOM' ? styles.custom : ''}`}
-                            onClick={() => handleTimeFilterClick(filter.value)}
-                          >
-                            {filter.label}
-                          </div>
-                        ))}
-                      </div>
-                    )}
-                  </div>
-                  <button
-                    ref={bullseyeButtonRef}
-                    className={`${styles.bullseyeButton} ${restrictToActionsInRange ? styles.active : ''} ${!timeFilter ? styles.disabled : ''}`}
-                    onClick={handleBullseyeClick}
-                    title="Show only trades with actions in time range"
-                    disabled={!timeFilter}
-                    aria-pressed={restrictToActionsInRange}
-                  >
-                    <svg
-                      xmlns="http://www.w3.org/2000/svg"
-                      viewBox="0 0 24 24"
-                      fill="currentColor"
-                      className={styles.bullseyeIcon}
-                    >
-                      <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
-                    </svg>
-                  </button>
-                </div>
-                <div className={styles.symbolFilterContainer}>
-                  <input
-                    type="text"
-                    className={`${styles.symbolFilterInput} ${symbolFilter.length > 0 ? styles.active : ''}`}
-                    placeholder="Symbol Filter"
-                    value={symbolFilter}
-                    onChange={handleSymbolFilterChange}
-                  />
-                  {symbolFilter && (
-                    <button
-                      className={styles.clearSymbolFilter}
-                      onClick={clearSymbolFilter}
-                      title="Clear symbol filter"
-                    >
-                      x
-                    </button>
-                  )}
-                </div>
-              </div>
+        )}
+
+        <div className={styles.filterSections}>
+          <div className={styles.buttonRow}>
+            <div className={styles.toggleButtonGroup} role="group" aria-label="Show">
+              <button
+                type="button"
+                className={`${styles.toggleButton} ${showTrades ? styles.active : styles.excluded}`}
+                onClick={toggleShowTrades}
+                aria-pressed={showTrades}
+                title={showTrades ? 'Hide trades' : 'Show trades'}
+              >
+                <svg className={styles.toggleIcon} viewBox="0 0 20 20" fill="currentColor"><path d="M2 11a1 1 0 011-1h2a1 1 0 011 1v5a1 1 0 01-1 1H3a1 1 0 01-1-1v-5zM8 7a1 1 0 011-1h2a1 1 0 011 1v9a1 1 0 01-1 1H9a1 1 0 01-1-1V7zM14 4a1 1 0 011-1h2a1 1 0 011 1v12a1 1 0 01-1 1h-2a1 1 0 01-1-1V4z" /></svg>
+                <span className={styles.toggleText}>Trades</span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.toggleButton} ${showDayNotes ? styles.active : styles.excluded}`}
+                onClick={toggleShowDayNotes}
+                aria-pressed={showDayNotes}
+                title={showDayNotes ? 'Hide day notes' : 'Show day notes'}
+              >
+                <svg className={styles.toggleIcon} viewBox="0 0 20 20" fill="currentColor"><path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /></svg>
+                <span className={styles.toggleText}>Notes</span>
+              </button>
+              <button
+                type="button"
+                className={`${styles.toggleButton} ${styles.openTradesButton} ${filter.find(f => f.type === 'OPEN')?.mode === 'include' ? styles.active : ''} ${filter.find(f => f.type === 'OPEN')?.mode === 'exclude' ? styles.excluded : ''}`}
+                onClick={toggleShowOpenTrades}
+                title="Open positions: only / hidden / all"
+              >
+                <svg className={styles.toggleIcon} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" /></svg>
+                <span className={styles.toggleText}>Open</span>
+              </button>
             </div>
+            <div className={styles.timeFilterContainer}>
+              <div className={styles.timeFilterButtonContainer}>
+                <button
+                  ref={timeFilterRef}
+                  className={`${styles.timeFilterButton} ${timeFilter ? styles.active : ''}`}
+                  onClick={handleTimeFilterButtonClick}
+                  title={timeFilter ? 'Clear the time filter' : 'Filter by time'}
+                >
+                  <svg className={styles.toggleIcon} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm0 5a1 1 0 000 2h8a1 1 0 100-2H6z" clipRule="evenodd" /></svg>
+                  <span className={styles.timeFilterLabel}>{timeFilter ? getTimeFilterLabel() : 'All time'}</span>
+                  {timeFilter && <span className={styles.clearMark} aria-hidden="true">×</span>}
+                </button>
+                {showTimeFilterMenu && (
+                  <div ref={menuRef} className={`${styles.timeFilterMenu} ${showTimeFilterMenu ? styles.open : ''}`}>
+                    {timeFilters.map((filter, idx) => (
+                      <div
+                        key={idx}
+                        className={`${styles.timeFilterBox} ${timeFilter === filter.value ? styles.active : ''} ${filter.value === 'CUSTOM' ? styles.custom : ''}`}
+                        onClick={() => handleTimeFilterClick(filter.value)}
+                      >
+                        {filter.label}
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+              <button
+                ref={bullseyeButtonRef}
+                className={`${styles.bullseyeButton} ${restrictToActionsInRange ? styles.active : ''} ${!timeFilter ? styles.disabled : ''}`}
+                onClick={handleBullseyeClick}
+                title={restrictToActionsInRange ? 'Showing only trades with a fill in the range' : 'Show only trades with a fill in the range'}
+                disabled={!timeFilter}
+                aria-pressed={restrictToActionsInRange}
+              >
+                <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="currentColor" className={styles.bullseyeIcon}>
+                  <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm0-14c-3.31 0-6 2.69-6 6s2.69 6 6 6 6-2.69 6-6-2.69-6-6-6zm0 10c-2.21 0-4-1.79-4-4s1.79-4 4-4 4 1.79 4 4-1.79 4-4 4zm0-6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z" />
+                </svg>
+              </button>
+            </div>
+            <div className={styles.symbolFilterContainer}>
+              <svg className={styles.searchIcon} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.45 4.39l3.08 3.08a.75.75 0 11-1.06 1.06l-3.08-3.08A7 7 0 012 9z" clipRule="evenodd" /></svg>
+              <input
+                type="text"
+                className={`${styles.symbolFilterInput} ${symbolFilter.length > 0 ? styles.active : ''}`}
+                placeholder="Symbol"
+                value={symbolFilter}
+                onChange={handleSymbolFilterChange}
+                aria-label="Filter by symbol"
+              />
+              {symbolFilter && (
+                <button
+                  className={styles.clearSymbolFilter}
+                  onClick={clearSymbolFilter}
+                  title="Clear symbol filter"
+                >
+                  ×
+                </button>
+              )}
+            </div>
+            {!isGraphHidden && (
+              <button
+                type="button"
+                className={`${styles.chartToggle} ${chartOpen ? styles.active : ''}`}
+                onClick={() => setChartOpen(open => !open)}
+                title={chartToggleTitle}
+                aria-pressed={chartOpen}
+              >
+                <svg className={styles.toggleIcon} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M3 3a1 1 0 011 1v11h12a1 1 0 110 2H3a1 1 0 01-1-1V4a1 1 0 011-1zm13.7 3.3a1 1 0 010 1.4l-4 4a1 1 0 01-1.4 0L9 9.42l-2.3 2.3a1 1 0 01-1.4-1.42l3-3a1 1 0 011.4 0L12 9.58l3.3-3.3a1 1 0 011.4 0z" clipRule="evenodd" /></svg>
+                <span className={styles.toggleText}>Chart</span>
+              </button>
+            )}
           </div>
           {showDatePicker && (
             <div ref={datePickerRef} className={styles.datePickerContainer}>

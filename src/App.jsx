@@ -93,6 +93,25 @@ function App() {
     setSelectedDayNote(null);
   };
 
+  // Keyboard shortcuts: N new trade, J new day note, 1-4 switch pages. Only
+  // when no trade/note window is open and nothing is being typed into.
+  const anyWindowOpen = showTradeModal || showTradeView || showDayNote;
+  useEffect(() => {
+    const VIEWS = { '1': 'dashboard', '2': 'stats', '3': 'capital', '4': 'settings' };
+    const onKeyDown = (e) => {
+      if (anyWindowOpen || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      const el = e.target;
+      const tag = el && el.tagName;
+      if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;
+      const key = e.key.toLowerCase();
+      if (key === 'n') { e.preventDefault(); handleNewTrade(); }
+      else if (key === 'j') { e.preventDefault(); handleNewNote(); }
+      else if (VIEWS[key]) { e.preventDefault(); setCurrentView(VIEWS[key]); }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  });
+
   const handleDayClick = (date, trades) => {
     if (trades.length === 1) {
       handleViewTrade(trades[0]);
@@ -117,6 +136,7 @@ function App() {
             onNewTrade={handleNewTrade}
             onNewNote={handleNewNote}
             setCurrentView={setCurrentView}
+            currentView={currentView}
           />
           <main className="main-content" key={numberFormat}>
             {currentView === 'dashboard' && (
