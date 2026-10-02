@@ -1,6 +1,7 @@
 import React, { useContext, useState, useEffect, useCallback } from 'react';
 import { TradeContext } from '../../context/TradeContext';
 import styles from './Capital.module.css';
+import { formatNumber } from '../../utils/numberFormat';
 
 const apiBaseUrl = process.env.REACT_APP_API_URL || '';
 
@@ -353,7 +354,7 @@ const Capital = () => {
                 <div className={`${styles.balanceAmount} ${Number(b.balance) >= 0 ? styles.positive : styles.negative}`}>
                   {/* No minus sign: the card is already red when the balance
                       is negative, so the glyph only adds noise. */}
-                  {Math.abs(Number(b.balance)).toFixed(2)}
+                  {formatNumber(Math.abs(Number(b.balance)), 2)}
                 </div>
               </div>
             ))}
@@ -539,7 +540,7 @@ const Capital = () => {
             </div>
             <div className={styles.formActions}>
               <span style={{ fontSize: '0.85rem', color: '#A5ADBA' }}>
-                Net: <span className={formNet >= 0 ? styles.positive : styles.negative}>{formNet.toFixed(2)} {dividendForm.currency}</span>
+                Net: <span className={formNet >= 0 ? styles.positive : styles.negative}>{formatNumber(formNet, 2)} {dividendForm.currency}</span>
               </span>
               <span>
                 {editingDividendId && (
@@ -568,9 +569,9 @@ const Capital = () => {
                       <td>{formatISODate(d.pay_date)}</td>
                       {hasChildAccounts && <td className={!isOwnAccount ? styles.mutedCell : undefined}>{d.account_name}</td>}
                       <td>{d.symbol}{d.kind === 'PAYMENT_IN_LIEU' && <span className={styles.mutedCell}> (in lieu)</span>}</td>
-                      <td>{Number(d.gross_amount).toFixed(2)} {d.currency}</td>
-                      <td>{Number(d.withholding_tax) ? `${Number(d.withholding_tax).toFixed(2)} ${d.currency}` : '—'}</td>
-                      <td className={net >= 0 ? styles.positive : styles.negative}>{net.toFixed(2)} {d.currency}</td>
+                      <td>{formatNumber(Number(d.gross_amount), 2)} {d.currency}</td>
+                      <td>{Number(d.withholding_tax) ? `${formatNumber(Number(d.withholding_tax), 2)} ${d.currency}` : '—'}</td>
+                      <td className={net >= 0 ? styles.positive : styles.negative}>{formatNumber(net, 2)} {d.currency}</td>
                       <td>{d.source === 'MANUAL' ? 'Manual' : `${d.source}${d.edited ? ' (edited)' : ''}`}{d.dismissed ? ' — removed' : ''}</td>
                       <td>
                         {!isOwnAccount ? (
@@ -621,7 +622,7 @@ const Capital = () => {
                       {hasChildAccounts && <td className={!isOwnAccount ? styles.mutedCell : undefined}>{tx.account_name}</td>}
                       <td>{tx.type}</td>
                       <td className={Number(tx.amount) >= 0 ? styles.positive : styles.negative}>
-                        {Number(tx.amount) >= 0 ? '+' : ''}{Number(tx.amount).toFixed(2)} {tx.currency}
+                        {Number(tx.amount) >= 0 ? '+' : ''}{formatNumber(Number(tx.amount), 2)} {tx.currency}
                       </td>
                       <td>{tx.note}</td>
                       <td>
@@ -733,7 +734,7 @@ const Capital = () => {
                     <td>{h.name}</td>
                     {hasChildAccounts && <td className={!isOwnAccount ? styles.mutedCell : undefined}>{h.account_name}</td>}
                     <td>{h.type}</td>
-                    <td>{Number(h.face_value).toFixed(2)} {h.currency}</td>
+                    <td>{formatNumber(Number(h.face_value), 2)} {h.currency}</td>
                     <td>{new Date(h.purchase_date).toLocaleDateString()}</td>
                     <td>{h.maturity_date ? new Date(h.maturity_date).toLocaleDateString() : '—'}</td>
                     <td>{h.status}</td>

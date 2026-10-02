@@ -7,13 +7,12 @@
 // rendered with a hardcoded '$' is wrong even before any aggregation is
 // involved.
 //
-// Deliberately NOT Intl.NumberFormat: the existing display style is
-// `$1234.56` with no thousands separators, and negatives are conveyed by
-// colour with Math.abs() at the call site rather than a minus sign. Intl
-// would render `$1,234.56` and `-$1,234.56`, silently changing every number
-// already on screen. This reproduces the current format exactly so a USD-only
-// account looks identical to before, and only the currency mark changes when
-// a value genuinely isn't USD.
+// Deliberately NOT Intl.NumberFormat: negatives are conveyed by colour with
+// Math.abs() at the call site rather than a minus sign, and the grouping and
+// decimal mark follow the user's number format setting (numberFormat.js),
+// not the browser's locale.
+
+import { formatNumber } from './numberFormat';
 
 const CURRENCY_SYMBOLS = {
   USD: '$',
@@ -40,7 +39,7 @@ export function currencyMark(currency) {
   return CURRENCY_SYMBOLS[code] || `${code} `;
 }
 
-// formatMoney(12.5, 'EUR') -> "€12.50"
+// formatMoney(12.5, 'EUR') -> "€12.50" (grouping per the number format setting)
 // formatMoney(12.5)        -> "$12.50"   (USD default, matches previous behaviour)
 //
 // Does not apply a sign: call sites pass Math.abs() and colour the value,
@@ -48,7 +47,7 @@ export function currencyMark(currency) {
 export function formatMoney(amount, currency = 'USD', decimals = 2) {
   const n = Number(amount);
   if (!Number.isFinite(n)) return '-';
-  return `${currencyMark(currency)}${n.toFixed(decimals)}`;
+  return `${currencyMark(currency)}${formatNumber(n, decimals)}`;
 }
 
 // For the "amount then code" style used where several currencies are listed
@@ -57,5 +56,5 @@ export function formatMoney(amount, currency = 'USD', decimals = 2) {
 export function formatMoneyWithCode(amount, currency = 'USD', decimals = 2) {
   const n = Number(amount);
   if (!Number.isFinite(n)) return '-';
-  return `${n.toFixed(decimals)} ${String(currency || 'USD').toUpperCase()}`;
+  return `${formatNumber(n, decimals)} ${String(currency || 'USD').toUpperCase()}`;
 }

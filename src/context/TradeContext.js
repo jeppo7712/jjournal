@@ -1,6 +1,7 @@
 import React, { createContext, useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { DateTime } from 'luxon';
 import { debounce } from 'lodash';
+import { formatNumber } from '../utils/numberFormat';
 
 // The trade list's hideable columns, in display order. Shared between
 // TradeList.jsx (rendering) and Settings.jsx (the per-account visibility
@@ -59,9 +60,9 @@ export function formatHoldTime(startDate, endDate) {
   const days = hours / 24;
   if (days < 60) return `${Math.round(days)} DAY${Math.round(days) === 1 ? '' : 'S'}`;
   const months = days / 30.42;
-  if (months < 12) return `${months.toFixed(1)} MTS`;
+  if (months < 12) return `${formatNumber(months, 1)} MTS`;
   const years = months / 12;
-  return `${years.toFixed(1)} YRS`;
+  return `${formatNumber(years, 1)} YRS`;
 }
 
 // Shared by every PnL/return calculation in this file (getRealisedPnL,

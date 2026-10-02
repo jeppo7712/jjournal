@@ -3,6 +3,7 @@ import { TradeContext, getRealisedPnL, getTickMultiplier } from '../../context/T
 import { useStatus } from '../../context/StatusContext';
 import styles from './Navigation.module.css';
 import { formatMoney } from '../../utils/formatMoney';
+import { setNumberFormat } from '../../utils/numberFormat';
 import { sumByCurrency, mergeTotals, toTotalsList } from '../../utils/currencyTotals';
 
 // The TradingView light: green while alerts keep delivering bars, amber once
@@ -90,6 +91,9 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView }) => {
         setIsDatabaseConnected(data.isConnected);
         setTradingViewStatus(data.tradingView || null);
         setIbkrDataStatus(data.ibkrData || null);
+        // The number format is a server setting, so a change made on
+        // another device arrives here too.
+        if (data.numberFormat) setNumberFormat(data.numberFormat);
       } catch (err) {
         console.error('Error fetching database status:', err);
         setIsDatabaseConnected(false);
