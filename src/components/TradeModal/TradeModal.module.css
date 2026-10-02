@@ -1166,3 +1166,199 @@ ibkrModal {
   background: rgba(59, 130, 246, 0.18);
   color: #DBEAFE;
 }
+
+/* ---------- Trade entry: sections, live summary, fills ---------- */
+.sectionTitle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin: 2px 0 12px;
+  font-size: 13px;
+  font-weight: 650;
+  color: #fff;
+}
+
+.fillsHeader {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px 14px;
+  flex-wrap: wrap;
+  margin-top: 6px;
+  padding-top: 16px;
+  border-top: 1px solid var(--ui-border-soft, rgba(255, 255, 255, 0.06));
+}
+
+.fillsHeader .sectionTitle {
+  margin: 0;
+}
+
+.fillsCount {
+  padding: 1px 7px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--ui-muted, #8B93A3);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.fillSummary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.summaryChip {
+  display: inline-flex;
+  align-items: center;
+  padding: 3px 9px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.05);
+  border: 1px solid rgba(255, 255, 255, 0.05);
+  color: var(--ui-text-2, #C7CDD8);
+  font-size: 11.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.summaryLong, .summaryWin { background: rgba(34, 197, 94, 0.12); color: #4ADE80; border-color: transparent; }
+.summaryShort, .summaryLoss { background: rgba(239, 68, 68, 0.12); color: #F87171; border-color: transparent; }
+
+.actionsTable {
+  margin-top: 12px;
+}
+
+.actionTypeBtn {
+  border-radius: 9px;
+  height: 34px;
+  padding: 0;
+  font-size: 12.5px;
+  letter-spacing: 0.04em;
+  background: rgba(34, 197, 94, 0.16);
+  color: #4ADE80;
+  box-shadow: inset 0 0 0 1px rgba(34, 197, 94, 0.35);
+}
+
+.actionTypeBtn.sell {
+  background: rgba(239, 68, 68, 0.16);
+  color: #F87171;
+  box-shadow: inset 0 0 0 1px rgba(239, 68, 68, 0.35);
+}
+
+.actionRemove {
+  background: transparent;
+  color: var(--ui-faint, #6B7280);
+  border: 1px solid transparent;
+  border-radius: 9px;
+  font-size: 1.15em;
+}
+
+.actionRemove:hover:enabled {
+  background: rgba(239, 68, 68, 0.14);
+  color: #F87171;
+}
+
+.actionLabel {
+  margin-left: 2px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-faint, #6B7280);
+}
+
+.addFillBtn {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 14px;
+  border: 1px dashed rgba(96, 165, 250, 0.45);
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.06);
+  color: #93C5FD;
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.addFillBtn span {
+  font-size: 16px;
+  line-height: 1;
+}
+
+.addFillBtn:hover:not(:disabled) {
+  background: rgba(59, 130, 246, 0.14);
+  border-color: rgba(96, 165, 250, 0.75);
+}
+
+.addFillBtn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+/* Desktop: column labels on the first fill only, like a table header. */
+@media (min-width: 601px) {
+  .actionRow + .actionRow .actionLabel {
+    display: none;
+  }
+
+  .actionRow + .actionRow .actionRemove {
+    margin-top: 0;
+  }
+
+  .addActionRow {
+    justify-content: flex-start;
+    padding-left: 48px;
+  }
+}
+
+/* Reference chart beside the form */
+.chartSubtitle {
+  margin-left: 6px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--ui-faint, #6B7280);
+}
+
+.chartSegmented {
+  display: inline-flex;
+  align-self: flex-start;
+  gap: 2px;
+  padding: 3px;
+  margin-bottom: 10px;
+  border-radius: 10px;
+  background: var(--ui-input, #141822);
+  border: 1px solid var(--ui-border, #2C3244);
+}
+
+.chartSegmented button {
+  min-width: 38px;
+  height: 28px;
+  padding: 0 9px;
+  border: none;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--ui-muted, #8B93A3);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.chartSegmented button:hover {
+  color: #fff;
+}
+
+.chartSegmented .chartSegmentOn,
+.chartSegmented .chartSegmentOn:hover {
+  background: rgba(59, 130, 246, 0.2);
+  color: #DBEAFE;
+}
+
+.headerTzLabel {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-faint, #6B7280);
+}

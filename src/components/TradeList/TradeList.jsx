@@ -106,8 +106,8 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
     toggleColumnVisibility,
   } = useContext(TradeContext);
 
-  // The column picker (the icon at the right end of the header). Changes
-  // are saved per account, the same setting as Settings → General.
+  // The column picker (the icon at the right end of the header), the one
+  // place columns are chosen. Saved per account (account_filters).
   const [showColumnMenu, setShowColumnMenu] = useState(false);
   const columnMenuRef = useRef(null);
   useEffect(() => {

@@ -91,6 +91,21 @@ function getBarDurationInSeconds(timeframe) {
 // precise fill keeps its real precision; toFixed(8) first guards against
 // scientific notation for very small values (e.g. 1e-8) that plain
 // Number.toString() would otherwise produce.
+// Status chip colours, and money with an explicit sign (+$12.50 / −$3.10).
+const STATUS_CHIP = { WIN: 'tvChipWin', LOSS: 'tvChipLoss', OPEN: 'tvChipOpen', WASH: 'tvChipWash' };
+
+function signedMoney(value, currency) {
+  const n = Number(value) || 0;
+  if (Math.abs(n) < 1e-9) return formatMoney(0, currency);
+  return `${n > 0 ? '+' : '−'}${formatMoney(Math.abs(n), currency)}`;
+}
+
+function pnlTone(value) {
+  const n = Number(value);
+  if (!n || isNaN(n)) return styles.tvNeutral;
+  return n > 0 ? styles.tvPos : styles.tvNeg;
+}
+
 function formatQuantity(quantity) {
   const num = Number(quantity);
   if (!Number.isFinite(num)) return String(quantity);
@@ -262,6 +277,7 @@ export default function TradeView({ trade, onClose, onEdit }) {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 700px)').matches);
   // Movable window on desktop (see useDraggableWindow).
   const drag = useDraggableWindow('tradeView', { enabled: !isMobile });
+  const [showFillsTable, setShowFillsTable] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 700px)');
     const update = () => setIsMobile(mq.matches);
@@ -1118,7 +1134,7 @@ useEffect(() => {
       const chartOptions = {
         width: chartContainerRef.current.clientWidth,
         height: chartContainerRef.current.clientHeight,
-        layout: { background: { color: '#161A24' }, textColor: '#e0e2e6' },
+        layout: { background: { color: '#13161F' }, textColor: '#8B93A3' },
         grid: { vertLines: { color: '#141822' }, horzLines: { color: '#141822' }, horzLinesVisible: false, vertLinesVisible: false },
         timeScale: {
           timeVisible: true,
@@ -1613,6 +1629,34 @@ useEffect(() => {
   const totalPnL = realisedPnL + (unrealisedPnL || 0);
   const totalFees = trade.actions.reduce((sum, action) => sum + (Number(action.fee) || 0), 0);
 
+  // For the header and tiles.
+  const returnPct = trade.status === 'OPEN' ? trade.currentReturnPercentage : trade.returnPercentage;
+  const journalTags = String(trade.journal?.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+  const spanZone = resolveDisplayZone(displayTimezone, exchangeTimezone);
+  const fmtWhen = (dt) => {
+    const d = dt && (DateTime.isDateTime(dt) ? dt : DateTime.fromISO(String(dt)));
+    return d && d.isValid ? d.setZone(spanZone).toFormat('dd LLL yyyy, HH:mm') : null;
+  };
+  const tradeSpan = {
+    open: fmtWhen(trade.firstActionDate),
+    close: trade.status !== 'OPEN' ? fmtWhen(trade.lastActionDate) : null,
+  };
+  const money = (v, precision) => (v === null || v === undefined || isNaN(Number(v)) ? '—' : formatMoney(Number(v), trade.currency, precision));
+  const hasStop = trade.stop_loss != null && !isNaN(trade.stop_loss) && Number(trade.stop_loss) > 0;
+  const hasTarget = trade.target != null && !isNaN(trade.target) && Number(trade.target) > 0;
+  // Planned reward:risk from the entry, the target and the stop.
+  const plannedRR = hasStop && hasTarget && trade.entry
+    ? Math.abs(Number(trade.target) - trade.entry) / Math.abs(trade.entry - Number(trade.stop_loss) || NaN)
+    : null;
+  const statTiles = [
+    { label: 'Entry', value: money(trade.entry, pricePrecision), sub: 'average' },
+    { label: 'Exit', value: trade.status === 'OPEN' ? '—' : money(trade.exit, pricePrecision), sub: trade.status === 'OPEN' ? (trade.currentPrice ? `now ${money(trade.currentPrice, pricePrecision)}` : 'still open') : 'average' },
+    { label: trade.status === 'OPEN' ? 'Position' : 'Size', value: formatQuantity(trade.status === 'OPEN' ? trade.position : trade.quantity), sub: trade.type === 'FUT' ? 'contracts' : 'shares' },
+    { label: 'Stop', value: hasStop ? money(trade.stop_loss, pricePrecision) : '—', sub: risk !== null ? `risk ${money(risk)}` : undefined },
+    { label: 'Target', value: hasTarget ? money(trade.target, pricePrecision) : '—', sub: plannedRR && isFinite(plannedRR) ? `plan ${formatNumber(plannedRR, 1)} : 1` : undefined },
+    { label: 'Fees', value: money(totalFees) },
+  ];
+
   return (
     <div className={styles.overlay}>
       <div
@@ -1640,7 +1684,7 @@ useEffect(() => {
         <div className={styles.headerRow} {...drag.dragHandleProps}>
           <span className={styles.title}>Trade View</span>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-            <span className={styles.headerTzLabel} style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>
+            <span className={styles.headerTzLabel}>
               Timezone
             </span>
             <TimezonePicker value={displayTimezone} onChange={setDisplayTimezone} />
@@ -1648,139 +1692,178 @@ useEffect(() => {
           <button className={styles.closeBtn} onClick={onClose}>×</button>
         </div>
         <div className={styles.tabContent} ref={contentWrapperRef}>
-          <div className={styles.plRow}>
-            <div className={styles.symbolAndPnl}>
-              <div className={styles.symbolBadge}>
-                <span>{trade.symbol || 'N/A'}</span>
-                <span className={styles.symbolType}>{trade.type || 'UNKNOWN'}</span>
+          {/* Header: what the trade is, and what it made */}
+          <div className={styles.tvHero}>
+            <div className={styles.tvIdentity}>
+              <div className={styles.tvSymbolRow}>
+                <span className={styles.tvSymbol}>{trade.symbol || 'N/A'}</span>
+                <span className={styles.tvChip}>{trade.type === 'FUT' ? 'Future' : trade.type === 'STK' ? 'Stock' : (trade.type || '—')}{trade.contract_month ? ` · ${DateTime.fromFormat(String(trade.contract_month), 'yyyyMM').isValid ? DateTime.fromFormat(String(trade.contract_month), 'yyyyMM').toFormat('LLL yy') : trade.contract_month}` : ''}</span>
               </div>
-              <div className={styles.pnlContainer}>
-                {trade.status === 'OPEN' ? (
-                  <>
-                    <span
-                      className={styles.plValue}
-                      style={{ color: realisedPnL > 0 ? '#22C55E' : realisedPnL < 0 ? '#EF4444' : '#A5ADBA' }}
-                    >
-                      [R] {currencyMark(trade.currency)}{formatNumber(Math.abs(realisedPnL), 2)}
-                    </span>
-                    <span
-                      className={styles.plValue}
-                      style={{ color: unrealisedPnL > 0 ? '#22C55E' : unrealisedPnL < 0 ? '#EF4444' : '#A5ADBA' }}
-                    >
-                      [U] {unrealisedPnL !== null ? formatMoney(Math.abs(unrealisedPnL), trade.currency) : 'Loading...'}
-                    </span>
-                  </>
-                ) : (
-                  <span
-                    className={styles.plValue}
-                    style={{ color: totalPnL > 0 ? '#22C55E' : totalPnL < 0 ? '#EF4444' : '#A5ADBA' }}
-                  >
-                    {currencyMark(trade.currency)}{formatNumber(Math.abs(totalPnL), 2)}
+              <div className={styles.tvChips}>
+                {trade.side && (
+                  <span className={`${styles.tvChip} ${trade.side === 'SHORT' ? styles.tvChipShort : styles.tvChipLong}`}>
+                    {trade.side === 'SHORT' ? '↘ Short' : '↗ Long'}
                   </span>
                 )}
+                <span className={`${styles.tvChip} ${STATUS_CHIP[trade.status] ? styles[STATUS_CHIP[trade.status]] : ''}`}>
+                  {trade.status === 'OPEN' ? 'Open' : trade.status === 'WIN' ? 'Win' : trade.status === 'LOSS' ? 'Loss' : trade.status === 'WASH' ? 'Wash' : trade.status}
+                </span>
+                {trade.status !== 'OPEN' && trade.holdTime && (
+                  <span className={styles.tvChip} title="Hold time">⏱ {trade.holdTime.toLowerCase()}</span>
+                )}
+              </div>
+              <div className={styles.tvDates}>
+                {tradeSpan.open && <span>Opened {tradeSpan.open}</span>}
+                {tradeSpan.close && <span className={styles.tvDateArrow}>→</span>}
+                {tradeSpan.close && <span>Closed {tradeSpan.close}</span>}
               </div>
             </div>
-            <div className={styles.metaBadges}>
-              {trade.side && (
-                <span
-                  className={styles.metaBadgeGreen}
-                  style={{
-                    background: trade.side === 'SHORT' ? '#EF4444' : '#22C55E',
-                  }}
-                >
-                  {trade.side}
-                </span>
-              )}
+            <div className={styles.tvPnl}>
+              <span className={styles.tvPnlLabel}>{trade.status === 'OPEN' ? 'Total P&L (open)' : 'Net P&L'}</span>
+              <span className={`${styles.tvPnlValue} ${pnlTone(trade.status === 'OPEN' && unrealisedPnL === null ? realisedPnL : totalPnL)}`}>
+                {signedMoney(trade.status === 'OPEN' && unrealisedPnL === null ? realisedPnL : totalPnL, trade.currency)}
+              </span>
+              <span className={styles.tvPnlSub}>
+                {returnPct !== null && returnPct !== undefined && !isNaN(returnPct) && (
+                  <span className={pnlTone(returnPct)}>{returnPct >= 0 ? '+' : '−'}{formatNumber(Math.abs(returnPct), 2)}%</span>
+                )}
+                {trade.rMultiple != null && !isNaN(trade.rMultiple) && (
+                  <span className={pnlTone(trade.rMultiple)}>{trade.rMultiple >= 0 ? '+' : '−'}{formatNumber(Math.abs(Number(trade.rMultiple)), 2)}R</span>
+                )}
+                <span className={styles.tvFeeNote}>after {formatMoney(totalFees, trade.currency)} fees</span>
+              </span>
               {trade.status === 'OPEN' && (
-                <span className={styles.metaBadgeBlue}>OPEN</span>
-              )}
-              {trade.status !== 'OPEN' && trade.holdTime && (
-                <span className={styles.metaBadgeBlue}>{trade.holdTime.toUpperCase()}</span>
+                <div className={styles.tvSplit}>
+                  <span className={styles.tvSplitItem} title="Locked in by partial closes so far">
+                    <span className={styles.tvSplitDot} style={{ background: '#60A5FA' }} />
+                    Realised <strong className={pnlTone(realisedPnL)}>{signedMoney(realisedPnL, trade.currency)}</strong>
+                  </span>
+                  <span className={styles.tvSplitItem} title="Open position at the last price">
+                    <span className={styles.tvSplitDot} style={{ background: '#F59E0B' }} />
+                    Unrealised <strong className={unrealisedPnL === null ? '' : pnlTone(unrealisedPnL)}>
+                      {unrealisedPnL === null ? (trade.priceUnavailable ? 'no live price' : '…') : signedMoney(unrealisedPnL, trade.currency)}
+                    </strong>
+                  </span>
+                </div>
               )}
             </div>
           </div>
-          <div className={styles.timelineScroll}>
-            {actionGroups.map((group, groupIdx) => (
-              <div
-                key={groupIdx}
-                className={styles.timelineBox}
-                style={{ width: timelineWidth }}
-              >
-                <div
-                  className={styles.timelineBar}
-                  style={{
-                    left: 0,
-                    width: `${timelineWidth}px`,
-                  }}
-                />
-                {group.map((action, idx) => {
-                  const actionDateTime = DateTime.fromISO(action.dateTime, { zone: 'utc' });
-                  const displayDateTime = actionDateTime.setZone(resolveDisplayZone(displayTimezone, exchangeTimezone));
-                  return (
-                    <div
-                      key={idx}
-                      className={styles.timelineDotWrap}
-                      style={{
-                        left: getDotLeft(idx, group.length),
-                      }}
-                    >
-                      <div className={styles.timelineDate}>
-                        {formatTimelineDate(displayDateTime, pricePrecision)}
-                      </div>
-                      <div className={styles.timelineDotRow}>
-                        <div
-                          className={
-                            action.type === 'BUY'
-                              ? styles.timelineDotBuy
-                              : styles.timelineDotSell
-                          }
-                        >
-                          {action.type === 'BUY' ? 'B' : 'S'}
-                        </div>
-                      </div>
-                      <div className={styles.timelineQtyPrice}>
-                        <span className={styles.timelineQty}>{formatQuantity(action.quantity)}</span>
-                        <span className={styles.timelineAtPrice}>
-                          <span className={styles.timelineAtSymbol}>@</span>
-                          <span className={styles.timelinePrice}>{formatMoney(Number(action.price), trade.currency, pricePrecision)}</span>
-                        </span>
-                      </div>
-                    </div>
-                  );
-                })}
+
+          {/* The numbers that describe the trade */}
+          <div className={styles.tvStats}>
+            {statTiles.map(tile => (
+              <div key={tile.label} className={styles.tvStat} title={tile.title}>
+                <span className={styles.tvStatLabel}>{tile.label}</span>
+                <span className={`${styles.tvStatValue} ${tile.tone || ''}`}>{tile.value}</span>
+                {tile.sub && <span className={styles.tvStatSub}>{tile.sub}</span>}
               </div>
             ))}
           </div>
-          <fieldset className={styles.notesBox}>
-            {(confidence > 0 || executionRating > 0) && (
-              <legend className={styles.notesLegend}>
-                <div className={styles.ratingsInLegend}>
-                  {confidence > 0 && (
-                    <div className={styles.ratingInLegendLeft}>
-                      <span className={styles.ratingText}>Confidence</span>
-                      <div className={styles.starsInline}>
-                        {[...Array(5)].map((_, i) => (
-                          <span key={i} className={styles.star}>
-                            {i < confidence ? '★' : ''}
+
+          {/* Fills: the timeline, and a table on request */}
+          <section className={styles.tvCard}>
+            <div className={styles.tvCardHeader}>
+              <h4>Executions <span className={styles.tvCount}>{trade.actions.length}</span></h4>
+              <button type="button" className={styles.tvLinkButton} onClick={() => setShowFillsTable(v => !v)}>
+                {showFillsTable ? 'Hide table' : 'Show table'}
+              </button>
+            </div>
+            <div className={styles.timelineScroll}>
+              {actionGroups.map((group, groupIdx) => (
+                <div
+                  key={groupIdx}
+                  className={styles.timelineBox}
+                  style={{ width: timelineWidth }}
+                >
+                  <div
+                    className={styles.timelineBar}
+                    style={{
+                      left: 0,
+                      width: `${timelineWidth}px`,
+                    }}
+                  />
+                  {group.map((action, idx) => {
+                    const actionDateTime = DateTime.fromISO(action.dateTime, { zone: 'utc' });
+                    const displayDateTime = actionDateTime.setZone(resolveDisplayZone(displayTimezone, exchangeTimezone));
+                    return (
+                      <div
+                        key={idx}
+                        className={styles.timelineDotWrap}
+                        style={{
+                          left: getDotLeft(idx, group.length),
+                        }}
+                      >
+                        <div className={styles.timelineDate}>
+                          {formatTimelineDate(displayDateTime, pricePrecision)}
+                        </div>
+                        <div className={styles.timelineDotRow}>
+                          <div
+                            className={
+                              action.type === 'BUY'
+                                ? styles.timelineDotBuy
+                                : styles.timelineDotSell
+                            }
+                          >
+                            {action.type === 'BUY' ? 'B' : 'S'}
+                          </div>
+                        </div>
+                        <div className={styles.timelineQtyPrice}>
+                          <span className={styles.timelineQty}>{formatQuantity(action.quantity)}</span>
+                          <span className={styles.timelineAtPrice}>
+                            <span className={styles.timelineAtSymbol}>@</span>
+                            <span className={styles.timelinePrice}>{formatMoney(Number(action.price), trade.currency, pricePrecision)}</span>
                           </span>
-                        ))}
+                        </div>
                       </div>
-                    </div>
-                  )}
-                  {executionRating > 0 && (
-                    <div className={styles.ratingInLegendRight}>
-                      <span className={styles.ratingText}>     Execution</span>
-                      <div className={styles.starsInline}>
-                        {[...Array(5)].map((_, i) => (
-                          <span key={i} className={styles.star}>
-                            {i < executionRating ? '★' : ''}
-                          </span>
-                        ))}
-                      </div>
-                    </div>
-                  )}
+                    );
+                  })}
                 </div>
-              </legend>
+              ))}
+            </div>
+            {showFillsTable && (
+              <div className={styles.tvTableWrap}>
+                <table className={styles.tvTable}>
+                  <thead>
+                    <tr><th>Time</th><th>Side</th><th className={styles.num}>Qty</th><th className={styles.num}>Price</th><th className={styles.num}>Fee</th></tr>
+                  </thead>
+                  <tbody>
+                    {trade.actions.map((action, i) => {
+                      const dt = DateTime.fromISO(action.dateTime, { zone: 'utc' }).setZone(resolveDisplayZone(displayTimezone, exchangeTimezone));
+                      return (
+                        <tr key={action.id || i}>
+                          <td>{dt.isValid ? dt.toFormat('dd LLL yy · HH:mm') : '—'}</td>
+                          <td><span className={`${styles.tvSide} ${action.type === 'BUY' ? styles.tvSideBuy : styles.tvSideSell}`}>{action.type === 'BUY' ? 'Buy' : 'Sell'}</span></td>
+                          <td className={styles.num}>{formatQuantity(action.quantity)}</td>
+                          <td className={styles.num}>{formatMoney(Number(action.price), trade.currency, pricePrecision)}</td>
+                          <td className={styles.num}>{formatMoney(Number(action.fee) || 0, trade.currency)}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            )}
+          </section>
+
+          {/* Journal */}
+          <section className={styles.tvCard}>
+            <div className={styles.tvCardHeader}>
+              <h4>Journal</h4>
+              <div className={styles.tvRatings}>
+                <span className={styles.tvRating} title="Confidence">
+                  <span className={styles.tvRatingLabel}>Confidence</span>
+                  {[1, 2, 3, 4, 5].map(i => <span key={i} className={i <= confidence ? styles.tvStarOn : styles.tvStarOff}>★</span>)}
+                </span>
+                <span className={styles.tvRating} title="Execution">
+                  <span className={styles.tvRatingLabel}>Execution</span>
+                  {[1, 2, 3, 4, 5].map(i => <span key={i} className={i <= executionRating ? styles.tvStarOn : styles.tvStarOff}>★</span>)}
+                </span>
+              </div>
+            </div>
+            {journalTags.length > 0 && (
+              <div className={styles.tvTags}>
+                {journalTags.map(tag => <span key={tag} className={styles.tvTag}>#{tag}</span>)}
+              </div>
             )}
             <div className={styles.notesWrapper}>
               {/* What was ticked on the account's checklist (read-only) */}
@@ -1838,36 +1921,11 @@ useEffect(() => {
                   </div>
                 </div>
               )}
-            </div>
-          </fieldset>
-          <div className={styles.metaContainer}>
-            <div className={styles.metaColumn}>
-              {totalFees > 0 && (
-                <div className={styles.metaBadge} style={{ background: 'rgba(60,154,239,0.3)' }}>
-                  <span className={styles.metaLabel}>FEES</span>
-                  <span className={styles.metaValue}>{formatMoney(totalFees, trade.currency)}</span>
-                </div>
-              )}
-              {trade.stop_loss != null && !isNaN(trade.stop_loss) && Number(trade.stop_loss) > 0 && (
-                <div className={styles.metaBadge} style={{ background: 'rgb(29, 78, 216, 0.5)' }}>
-                  <span className={styles.metaLabel}>STOP</span>
-                  <span className={styles.metaValue}>{formatMoney(Number(trade.stop_loss), trade.currency, pricePrecision)}</span>
-                </div>
-              )}
-              {trade.rMultiple != null && !isNaN(trade.rMultiple) && (
-                <div className={styles.metaBadge} style={{ background: 'rgb(124, 58, 237, 0.5)' }}>
-                  <span className={styles.metaLabel}>R-MULT</span>
-                  <span className={styles.metaValue}>{formatNumber(Number(trade.rMultiple), 2)}</span>
-                </div>
-              )}
-              {risk !== null && (
-                <div className={styles.metaBadge} style={{ background: 'rgb(234, 179, 8, 0.5)' }}>
-                  <span className={styles.metaLabel}>RISK</span>
-                  <span className={styles.metaValue}>{formatMoney(risk, trade.currency)}</span>
-                </div>
+              {!trade.journal?.notes_html && processedAttachments.length === 0 && !trade.journal?.ai_analysis && (
+                <p className={styles.tvEmpty}>No notes yet — use Edit to add your thoughts on this trade.</p>
               )}
             </div>
-          </div>
+          </section>
           {error && (
             <div className={styles.error} style={{ color: '#EF4444', marginTop: '16px' }}>
               {error}
@@ -2026,87 +2084,79 @@ useEffect(() => {
               margin: 0
             }}
           >
-            <div className={`${styles.headerRow} ${styles.chartHeaderRow}`} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 26px 16px 26px' }}>
-              <span className={styles.title}>{trade.symbol}</span>
-              <div className={styles.chartControlsGroup} style={{ display: 'flex', alignItems: 'center', gap: '16px' }}>
-                <button
-                  onClick={() => setShowAvgStopLines(prev => !prev)}
-                  style={{
-                    background: showAvgStopLines ? '#3B82F6' : 'rgb(112, 113, 115)',
-                    color: '#f0f2f6',
-                    border: 'none',
-                    borderRadius: '12px',
-                    padding: '6px 12px',
-                    fontSize: '0.9em',
-                    cursor: 'pointer',
-                    opacity: showAvgStopLines ? 1 : 0.7,
-                    transition: 'all 0.2s',
-                  }}
-                  title={showAvgStopLines ? "Hide Avg/SL Lines" : "Show Avg/SL Lines"}
-                >
-                  Levels
-                </button>
-                {trade.type === 'FUT' && hasRolloverToAdjust && ( // Only relevant once a rollover boundary is actually present in the fetched data
-                  <button
-                    onClick={() => {
-                      // The current view is preserved automatically by the
-                      // render effect (captured fresh right before setData),
-                      // no need to snapshot it here.
-                      setShowBackAdjustedLines(prev => !prev);
-                    }}
-                    style={{
-                      background: showBackAdjustedLines ? '#3B82F6' : 'rgb(112, 113, 115)',
-                      color: '#f0f2f6',
-                      border: 'none',
-                      borderRadius: '12px',
-                      padding: '6px 12px',
-                      fontSize: '0.9em',
-                      cursor: 'pointer',
-                      opacity: showBackAdjustedLines ? 1 : 0.7,
-                      transition: 'all 0.2s',
-                    }}
-                    title={showBackAdjustedLines ? "Show Raw Data" : "Show Back-Adjusted Data"}
-                  >
-                    Continuous
-                  </button>
+            <div className={`${styles.headerRow} ${styles.chartHeaderRow} ${styles.chartBar}`}>
+              <div className={styles.chartIdentity}>
+                <span className={styles.chartSymbol}>{trade.symbol}</span>
+                {trade.side && (
+                  <span className={`${styles.tvChip} ${trade.side === 'SHORT' ? styles.tvChipShort : styles.tvChipLong}`}>
+                    {trade.side === 'SHORT' ? '↘ Short' : '↗ Long'}
+                  </span>
                 )}
+                <span className={`${styles.chartPnl} ${pnlTone(trade.status === 'OPEN' && unrealisedPnL === null ? realisedPnL : totalPnL)}`}>
+                  {signedMoney(trade.status === 'OPEN' && unrealisedPnL === null ? realisedPnL : totalPnL, trade.currency)}
+                </span>
                 {tradedContract && !showBackAdjustedLines && (
                   <span
-                    style={{ color: '#A5ADBA', fontSize: '0.85em' }}
+                    className={styles.tvChip}
                     title={contractSeriesUnavailable
                       ? 'No stored data for the traded contract around this trade, so the continuous series is shown instead.'
                       : 'The chart shows the contract this trade was filled in.'}
                   >
                     {contractSeriesUnavailable
-                      ? `${DateTime.fromFormat(tradedContract, 'yyyyMM').toFormat('LLL-yy')} n/a · continuous`
-                      : `Contract ${DateTime.fromFormat(tradedContract, 'yyyyMM').toFormat('LLL-yy')}`}
+                      ? `${DateTime.fromFormat(tradedContract, 'yyyyMM').toFormat('LLL yy')} n/a · continuous`
+                      : `Contract ${DateTime.fromFormat(tradedContract, 'yyyyMM').toFormat('LLL yy')}`}
                   </span>
                 )}
-                <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
-                  <span style={{ color: '#A5ADBA', fontSize: '0.85em', fontWeight: 500 }}>
-                    Timezone
-                  </span>
+              </div>
+              <div className={`${styles.chartControlsGroup} ${styles.chartControls}`}>
+                <div className={styles.chartSegmented} role="group" aria-label="Timeframe">
+                  {enabledTimeframes.map(tf => (
+                    <button
+                      key={tf}
+                      type="button"
+                      onClick={() => selectTimeframe(tf)}
+                      className={timeframe === tf ? styles.chartSegmentOn : ''}
+                      aria-pressed={timeframe === tf}
+                    >
+                      {tf}
+                    </button>
+                  ))}
+                </div>
+                <button
+                  type="button"
+                  className={`${styles.chartToggle} ${showAvgStopLines ? styles.chartToggleOn : ''}`}
+                  onClick={() => setShowAvgStopLines(prev => !prev)}
+                  aria-pressed={showAvgStopLines}
+                  title={showAvgStopLines ? 'Hide the average entry, stop and target lines' : 'Show the average entry, stop and target lines'}
+                >
+                  Levels
+                </button>
+                {trade.type === 'FUT' && hasRolloverToAdjust && ( // Only relevant once a rollover boundary is actually present in the fetched data
+                  <button
+                    type="button"
+                    className={`${styles.chartToggle} ${showBackAdjustedLines ? styles.chartToggleOn : ''}`}
+                    onClick={() => {
+                      // The current view is preserved automatically by the
+                      // render effect (captured fresh right before setData).
+                      setShowBackAdjustedLines(prev => !prev);
+                    }}
+                    aria-pressed={showBackAdjustedLines}
+                    title={showBackAdjustedLines ? 'Show the raw contract data' : 'Show back-adjusted (continuous) data'}
+                  >
+                    Continuous
+                  </button>
+                )}
+                <div className={styles.chartTz} title="Timezone of the chart's time axis">
                   <TimezonePicker value={displayTimezone} onChange={setDisplayTimezone} />
                 </div>
               </div>
-              <button className={styles.closeBtn} onClick={() => setShowChart(false)}>×</button>
+              <button className={styles.closeBtn} onClick={() => setShowChart(false)} aria-label="Close the chart">×</button>
             </div>
             <div
               ref={chartContainerRef}
               className={styles.chartContainer}
               style={{ position: 'relative', flex: 1 }}
             >
-              <div className={styles.timeframeSwitcher}>
-                {enabledTimeframes.map(tf => (
-                  <button
-                    key={tf}
-                    onClick={() => selectTimeframe(tf)}
-                    className={`${styles.timeframeButton} ${timeframe === tf ? styles.active : ''}`}
-                  >
-                    {tf}
-                  </button>
-                ))}
-              </div>
               {chartLoading && awaitingData && (
                 <div className={styles.chartMessageOverlay}>
                   <Oval height="40" width="40" color="#3B82F6" ariaLabel="loading-indicator" secondaryColor="#ccc" strokeWidth={4} strokeWidthSecondary={4} />
