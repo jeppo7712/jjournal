@@ -45,13 +45,18 @@ import {
 import styles from './Stats.module.css';
 import { currencyMark } from '../../utils/formatMoney';
 import { formatNumber, formatNumberText } from '../../utils/numberFormat';
+import ChartCard from './ChartCard';
+import {
+  COLORS, CATEGORICAL, HOLD_TICKS, rgba, polarityStroke, polarityFill, areaFill, endDot, lineStyle,
+  crosshairPlugin, scaleX, scaleY, baseOptions, signed, percentTick, moneyTick, dateTick, dateTitle, formatHold,
+} from './chartTheme';
 import { descendantAccountIds } from '../../utils/accountTree';
 import { Line, Bar, Doughnut, Scatter } from 'react-chartjs-2';
-import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
+import { Chart as ChartJS, CategoryScale, LinearScale, LogarithmicScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { DateTime } from 'luxon';
 import { debounce } from 'lodash';
 
-ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
+ChartJS.register(CategoryScale, LinearScale, LogarithmicScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler);
 
 class StatsErrorBoundary extends React.Component {
   state = { hasError: false, error: null };
@@ -452,420 +457,258 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
     { id: 'tradeNotes', label: 'Trade Notes' },
   ];
 
-  const portfolioChartData = {
-    labels: computedStats.portfolioValueSeries.labels,
-    datasets: [
-      {
-        label: 'Total P&L (incl. open positions)',
-        data: computedStats.portfolioValueSeries.series,
-        borderColor: '#3B82F6',
-        backgroundColor: 'rgba(59, 130, 246, 0.1)',
-        tension: 0.3,
-        fill: true,
-        pointRadius: 0,
-        pointHoverRadius: 0,
-      },
-      {
-        label: 'Realised P&L',
-        data: computedStats.portfolioValueSeries.realizedSeries,
-        borderColor: '#9CA3AF',
-        borderDash: [4, 4],
-        tension: 0.3,
-        fill: false,
-        pointRadius: 0,
-        pointHoverRadius: 0,
-      },
-    ],
-  };
+  // --- Charts (look and feel: ./chartTheme.js) ---
+  const mark = currencyMark(activeCurrency);
+  const lastOf = arr => (arr && arr.length ? arr[arr.length - 1] : null);
+  const toneOf = (value, baseline = 0) => (value === null || value === undefined || value === baseline ? undefined : value > baseline ? 'pos' : 'neg');
+  const signColor = baseline => value => (value >= baseline ? COLORS.green : COLORS.red);
 
+  const returnLabels = computedStats.returnPercentageSeries.map(d => d.date);
   const returnPercentageChartData = {
-    labels: computedStats.returnPercentageSeries.map(d => d.date),
+    labels: returnLabels,
     datasets: [
       {
-        label: 'Return Percentage',
+        label: 'Return',
         data: computedStats.returnPercentageSeries.map(d => d.returnPercentage),
-        borderColor: '#10B981',
-        backgroundColor: 'rgba(16, 185, 129, 0.1)',
-        tension: 0.3,
-        fill: true,
-        pointRadius: 0,
-        pointHoverRadius: 0,
+        ...lineStyle,
+        borderColor: polarityStroke(0),
+        backgroundColor: polarityFill(0),
+        fill: { target: { value: 0 } },
+        ...endDot(signColor(0)),
       },
     ],
   };
+  const returnPercentageChartOptions = baseOptions({
+    scales: {
+      x: scaleX({ ticks: { callback: dateTick(returnLabels), maxTicksLimit: 7 } }),
+      y: scaleY({ ticks: { callback: percentTick } }),
+    },
+    tooltip: {
+      callbacks: {
+        title: dateTitle,
+        label: context => `${signed(context.parsed.y)}%`,
+      },
+    },
+  });
+  const latestReturn = lastOf(computedStats.returnPercentageSeries)?.returnPercentage;
 
+  const portfolioLabels = computedStats.portfolioValueSeries.labels;
+  const portfolioChartData = {
+    labels: portfolioLabels,
+    datasets: [
+      {
+        label: 'Total',
+        data: computedStats.portfolioValueSeries.series,
+        ...lineStyle,
+        borderColor: COLORS.accent,
+        backgroundColor: areaFill(COLORS.accent),
+        fill: 'origin',
+        ...endDot(() => COLORS.accent),
+        order: 1,
+      },
+      {
+        label: 'Realised',
+        data: computedStats.portfolioValueSeries.realizedSeries,
+        ...lineStyle,
+        borderColor: COLORS.slate,
+        fill: false,
+        ...endDot(() => COLORS.slate),
+        order: 2,
+      },
+    ],
+  };
+  const chartOptions = baseOptions({
+    multi: true,
+    scales: {
+      x: scaleX({ ticks: { callback: dateTick(portfolioLabels), maxTicksLimit: 7 } }),
+      y: scaleY({ ticks: { callback: moneyTick(mark) } }),
+    },
+    tooltip: {
+      callbacks: {
+        title: dateTitle,
+        label: context => `${context.dataset.label}  ${context.parsed.y < 0 ? '-' : ''}${mark}${absAmount(context.parsed.y)}`,
+        labelColor: context => ({ borderColor: context.dataset.borderColor, backgroundColor: context.dataset.borderColor, borderWidth: 0, borderRadius: 4 }),
+      },
+    },
+  });
+  const latestTotalPnl = lastOf(computedStats.portfolioValueSeries.series);
+
+  // Histogram on a real percentage axis: each bar sits over its 5% bucket,
+  // red below zero and green above.
+  const distributionPoints = computedStats.returnDistribution.data.map((count, i) => ({ x: -47.5 + i * 5, y: count }));
+  const distributionTotal = computedStats.returnDistribution.data.reduce((sum, n) => sum + n, 0);
   const returnDistributionChartData = {
-    labels: computedStats.returnDistribution.labels,
     datasets: [
       {
-        label: 'Trade Returns',
-        data: computedStats.returnDistribution.data,
-        backgroundColor: '#10B981',
-        borderColor: '#10B981',
-        borderWidth: 1,
+        label: 'Trades',
+        data: distributionPoints,
+        backgroundColor: ctx => (ctx.raw && ctx.raw.x < 0 ? COLORS.red : COLORS.green),
+        hoverBackgroundColor: ctx => rgba(ctx.raw && ctx.raw.x < 0 ? COLORS.red : COLORS.green, 0.8),
+        borderRadius: 4,
+        borderSkipped: 'start',
+        barPercentage: 0.82,
+        categoryPercentage: 1,
+        maxBarThickness: 24,
       },
     ],
   };
+  const barChartOptions = baseOptions({
+    interaction: { mode: 'nearest', axis: 'x', intersect: false },
+    scales: {
+      x: scaleX({ type: 'linear', min: -50, max: 50, offset: false, ticks: { stepSize: 25, callback: v => `${v > 0 ? '+' : ''}${v}%` } }),
+      y: scaleY({ beginAtZero: true, ticks: { precision: 0 } }),
+    },
+    tooltip: {
+      callbacks: {
+        title: items => {
+          const start = items[0].raw.x - 2.5;
+          return `${start > 0 ? '+' : ''}${start}% to ${start + 5 > 0 ? '+' : ''}${start + 5}%`;
+        },
+        label: context => `${context.parsed.y} ${context.parsed.y === 1 ? 'trade' : 'trades'}`,
+      },
+    },
+  });
 
+  const winRateLabels = computedStats.winRateSeries.labels;
   const winRateChartData = {
-    labels: computedStats.winRateSeries.labels,
+    labels: winRateLabels,
     datasets: [
       {
-        label: 'Win Rate (%)',
+        label: 'Win rate',
         data: computedStats.winRateSeries.data,
-        borderColor: '#F59E0B',
-        backgroundColor: 'rgba(245, 158, 11, 0.1)',
-        tension: 0.3,
-        fill: true,
-        pointRadius: 0,
-        pointHoverRadius: 0,
+        ...lineStyle,
+        borderColor: polarityStroke(50),
+        backgroundColor: polarityFill(50),
+        fill: { target: { value: 50 } },
+        ...endDot(signColor(50)),
       },
     ],
   };
+  const winRateChartOptions = baseOptions({
+    scales: {
+      x: scaleX({ ticks: { callback: dateTick(winRateLabels), maxTicksLimit: 7 } }),
+      y: scaleY({ baseline: 50, min: 0, max: 100, ticks: { stepSize: 25, callback: percentTick } }),
+    },
+    tooltip: {
+      callbacks: {
+        title: dateTitle,
+        label: context => `${formatNumber(context.parsed.y, 0)}% of the last 20`,
+      },
+    },
+  });
+  const latestWinRate = lastOf(computedStats.winRateSeries.data);
 
+  // Allocation: largest first; past eight positions the rest is "Other".
+  const allocation = computedStats.openPositionsPie.labels
+    .map((label, i) => ({ label, value: computedStats.openPositionsPie.data[i] }))
+    .sort((a, b) => b.value - a.value);
+  const allocationSlices = allocation.length > CATEGORICAL.length
+    ? [...allocation.slice(0, CATEGORICAL.length - 1), { label: 'Other', value: allocation.slice(CATEGORICAL.length - 1).reduce((s, r) => s + r.value, 0), other: true }]
+    : allocation;
+  const allocationTotal = allocationSlices.reduce((s, r) => s + r.value, 0);
+  const sliceColor = (slice, i) => (slice.other ? COLORS.other : CATEGORICAL[i]);
   const openPositionsPieData = {
-    labels: computedStats.openPositionsPie.labels,
+    labels: allocationSlices.map(s => s.label),
     datasets: [
       {
-        data: computedStats.openPositionsPie.data,
-        backgroundColor: ['#3B82F6', '#10B981', '#F59E0B', '#EF4444', '#8B5CF6', '#EC4899', '#14B8A6', '#F97316', '#84CC16', '#6366F1', '#A855F7', '#06B6D4'],
-        borderColor: '#1e1e2e',
+        data: allocationSlices.map(s => s.value),
+        backgroundColor: allocationSlices.map(sliceColor),
+        borderColor: COLORS.surface,
+        hoverBorderColor: COLORS.surface,
         borderWidth: 2,
+        borderRadius: 4,
+        hoverOffset: 6,
       },
     ],
   };
+  const pieChartOptions = baseOptions({
+    cutout: '74%',
+    interaction: { mode: 'nearest', intersect: true },
+    layout: { padding: 8 },
+    tooltip: {
+      callbacks: {
+        label: context => `${context.label}  ${mark}${absAmount(context.parsed)} · ${formatNumber(allocationTotal ? (context.parsed / allocationTotal) * 100 : 0, 1)}%`,
+      },
+    },
+  });
 
+  // Monthly figures are discrete, so they're columns, not a line.
+  const feesLabels = computedStats.feesPnlSeries.labels;
   const feesPnlChartData = {
-    labels: computedStats.feesPnlSeries.labels,
+    labels: feesLabels,
     datasets: [
       {
         label: 'Fees as % of P&L',
         data: computedStats.feesPnlSeries.data,
-        borderColor: '#EF4444',
-        backgroundColor: 'rgba(239, 68, 68, 0.1)',
-        tension: 0.3,
-        fill: true,
-        pointRadius: 0,
-        pointHoverRadius: 0,
+        backgroundColor: COLORS.amber,
+        hoverBackgroundColor: rgba(COLORS.amber, 0.8),
+        borderRadius: 4,
+        borderSkipped: 'start',
+        barPercentage: 0.7,
+        categoryPercentage: 0.9,
+        maxBarThickness: 24,
       },
     ],
   };
+  const feesPnlChartOptions = baseOptions({
+    scales: {
+      x: scaleX({ ticks: { callback: dateTick(feesLabels), maxTicksLimit: 12 } }),
+      y: scaleY({ beginAtZero: true, ticks: { callback: percentTick } }),
+    },
+    tooltip: {
+      callbacks: {
+        title: dateTitle,
+        label: context => `${formatNumber(context.parsed.y, 2)}% of P&L`,
+      },
+    },
+  });
+  const latestFeesPct = lastOf(computedStats.feesPnlSeries.data);
 
+  // Hold times run from minutes to months, so the axis is logarithmic.
+  const MIN_HOLD = 1 / 60;
+  const scatterPoints = computedStats.returnVsHoldTime.data.map(d => ({ x: Math.max(d.x, MIN_HOLD), y: d.y }));
+  // A little room either side, so the outermost dots aren't cut in half.
+  const holdTimes = scatterPoints.map(d => d.x);
+  const holdMin = holdTimes.length ? Math.min(...holdTimes) / 1.5 : MIN_HOLD;
+  const holdMax = holdTimes.length ? Math.max(...holdTimes) * 1.5 : 24;
   const returnVsHoldTimeChartData = {
     datasets: [
       {
         label: 'Trades',
-        data: computedStats.returnVsHoldTime.data,
-        backgroundColor: '#8B5CF6',
-        borderColor: '#8B5CF6',
-        pointRadius: 4,
-        pointHoverRadius: 6,
+        data: scatterPoints,
+        backgroundColor: ctx => rgba(ctx.raw && ctx.raw.y < 0 ? COLORS.red : COLORS.green, 0.85),
+        hoverBackgroundColor: ctx => (ctx.raw && ctx.raw.y < 0 ? COLORS.red : COLORS.green),
+        borderColor: COLORS.surface,
+        hoverBorderColor: COLORS.surface,
+        borderWidth: 2,
+        pointRadius: 5,
+        pointHoverRadius: 7,
+        pointHitRadius: 8,
       },
     ],
   };
-
-  const chartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: {
-      mode: 'index',
-      intersect: false,
-    },
-    layout: {
-      padding: {
-        top: 20,
-        bottom: 15,
-        right: 30,
-      },
-    },
+  const scatterChartOptions = baseOptions({
+    interaction: { mode: 'nearest', intersect: false },
     scales: {
-      x: {
-        display: true,
-        ticks: {
-          maxTicksLimit: 10,
-          color: '#9CA3AF',
-          font: { size: 11 },
+      x: scaleX({
+        type: 'logarithmic',
+        min: holdMin,
+        max: holdMax,
+        grid: { display: true, color: COLORS.grid, drawTicks: false },
+        afterBuildTicks: axis => {
+          axis.ticks = HOLD_TICKS.filter(([v]) => v >= axis.min * 0.999 && v <= axis.max * 1.001).map(([value]) => ({ value }));
         },
-        grid: { display: false },
-      },
-      y: {
-        display: true,
-        ticks: {
-          color: '#9CA3AF',
-          font: { size: 11 },
-          callback: value => `${currencyMark(activeCurrency)}${formatNumber(value, 2)}`,
-        },
-        grid: { display: true, color: 'rgba(156, 163, 175, 0.1)' },
+        ticks: { callback: value => (HOLD_TICKS.find(([v]) => Math.abs(v - value) < 1e-9) || [null, ''])[1] },
+      }),
+      y: scaleY({ ticks: { callback: percentTick } }),
+    },
+    tooltip: {
+      callbacks: {
+        title: () => '',
+        label: context => `${signed(context.parsed.y)}% · held ${formatHold(context.parsed.x)}`,
       },
     },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        enabled: true,
-        mode: 'index',
-        intersect: false,
-        callbacks: {
-          label: context => `${currencyMark(activeCurrency)}${formatNumber(context.parsed.y, 2)}`,
-        },
-      },
-      verticalLine: { enabled: false },
-    },
-  };
-
-  const returnPercentageChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: {
-      mode: 'index',
-      intersect: false,
-    },
-    layout: {
-      padding: {
-        top: 20,
-        bottom: 15,
-        right: 30,
-      },
-    },
-    scales: {
-      x: {
-        display: true,
-        ticks: {
-          maxTicksLimit: 10,
-          color: '#9CA3AF',
-          font: { size: 11 },
-        },
-        grid: { display: false },
-      },
-      y: {
-        display: true,
-        ticks: {
-          color: '#9CA3AF',
-          font: { size: 11 },
-          callback: value => `${formatNumber(value, 2)}%`,
-        },
-        grid: { display: true, color: 'rgba(156, 163, 175, 0.1)' },
-      },
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        enabled: true,
-        mode: 'index',
-        intersect: false,
-        callbacks: {
-          label: context => `${formatNumber(context.parsed.y, 2)}%`,
-        },
-      },
-      verticalLine: { enabled: false },
-    },
-  };
-
-  const winRateChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: {
-      mode: 'index',
-      intersect: false,
-    },
-    layout: {
-      padding: {
-        top: 20,
-        bottom: 15,
-        right: 30,
-      },
-    },
-    scales: {
-      x: {
-        display: true,
-        ticks: {
-          maxTicksLimit: 10,
-          color: '#9CA3AF',
-          font: { size: 11 },
-        },
-        grid: { display: false },
-      },
-      y: {
-        display: true,
-        ticks: {
-          color: '#9CA3AF',
-          font: { size: 11 },
-          callback: value => `${formatNumber(value, 2)}%`,
-        },
-        grid: { display: true, color: 'rgba(156, 163, 175, 0.1)' },
-      },
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        enabled: true,
-        mode: 'index',
-        intersect: false,
-        callbacks: {
-          label: context => `${formatNumber(context.parsed.y, 2)}%`,
-        },
-      },
-      verticalLine: {
-        enabled: false
-      }
-    },
-  };
-
-  const barChartOptions = {
-    ...chartOptions,
-    scales: {
-      x: {
-        display: true,
-        ticks: {
-          color: '#9CA3AF',
-          font: { size: 11 },
-          autoSkip: true,
-          maxRotation: 45,
-          minRotation: 45,
-        },
-        grid: { display: false },
-      },
-      y: {
-        display: true,
-        ticks: {
-          color: '#9CA3AF',
-          font: { size: 11 },
-          callback: value => value,
-        },
-        grid: { display: true, color: 'rgba(156, 163, 175, 0.1)' },
-      },
-    },
-    plugins: {
-      ...chartOptions.plugins,
-      tooltip: {
-        callbacks: {
-          label: context => `Count: ${context.parsed.y}`,
-        },
-      },
-      verticalLine: { 
-        enabled: false
-      }
-    },
-  };
-
-  const pieChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    plugins: {
-      legend: {
-        display: true,
-        position: 'right',
-        labels: {
-          color: '#9CA3AF',
-          font: { size: 11 },
-        },
-      },
-      tooltip: {
-        enabled: true,
-        callbacks: {
-          label: context => `${currencyMark(activeCurrency)}${formatNumber(context.parsed, 2)}`,
-        },
-      },
-    },
-  };
-
-  const feesPnlChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    interaction: {
-      mode: 'index',
-      intersect: false,
-    },
-    layout: {
-      padding: {
-        top: 20,
-        bottom: 15,
-        right: 30,
-      },
-    },
-    scales: {
-      x: {
-        display: true,
-        ticks: {
-          maxTicksLimit: 10,
-          color: '#9CA3AF',
-          font: { size: 11 },
-        },
-        grid: { display: false },
-      },
-      y: {
-        display: true,
-        ticks: {
-          color: '#9CA3AF',
-          font: { size: 11 },
-          callback: value => `${formatNumber(value, 2)}%`,
-        },
-        grid: { display: true, color: 'rgba(156, 163, 175, 0.1)' },
-      },
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        enabled: true,
-        mode: 'index',
-        intersect: false,
-        callbacks: {
-          label: context => `${formatNumber(context.parsed.y, 2)}%`,
-        },
-      },
-      verticalLine: {
-        enabled: false
-      }
-    },
-  };
-
-  const scatterChartOptions = {
-    responsive: true,
-    maintainAspectRatio: false,
-    scales: {
-      x: {
-        type: 'linear',
-        display: true,
-        title: {
-          display: true,
-          text: 'Hold Time (Hours)',
-          color: '#9CA3AF',
-          font: { size: 11 },
-        },
-        ticks: {
-          color: '#9CA3AF',
-          font: { size: 11 },
-        },
-        grid: { display: false },
-      },
-      y: {
-        display: true,
-        title: {
-          display: true,
-          text: 'Return (%)',
-          color: '#9CA3AF',
-          font: { size: 11 },
-        },
-        ticks: {
-          color: '#9CA3AF',
-          font: { size: 11 },
-          callback: value => `${value}%`,
-        },
-        grid: { display: true, color: 'rgba(156, 163, 175, 0.1)' },
-      },
-    },
-    plugins: {
-      legend: { display: false },
-      tooltip: {
-        enabled: true,
-        callbacks: {
-          label: context => `Return: ${formatNumber(context.parsed.y, 2)}%, Hold Time: ${formatNumber(context.parsed.x, 2)} hrs`,
-        },
-      },
-      verticalLine: {
-        enabled: false
-      }
-    },
-  };
+  });
 
   return (
     <StatsErrorBoundary>
@@ -1130,36 +973,41 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                   <p>No general stats available.</p>
                 )}
               </div>
-              <div className={styles.chartContainer}>
-                <h4>Return Percentage Over Time</h4>
-                <p className={styles.chartExplanation}>
-                  This line chart shows the daily return percentage of the portfolio over time (max 3*365 days), calculated as (portfolio value - total deposits) / total deposits * 100%. It accounts for both cash and the market value of open positions, reflecting the overall investment performance.
-                </p>
+              <ChartCard
+                title="Return over time"
+                value={latestReturn !== undefined && latestReturn !== null && !isFetching ? `${signed(latestReturn)}%` : null}
+                tone={toneOf(latestReturn)}
+                caption="Latest"
+                explanation={`This line chart shows the daily return percentage of the portfolio over time (max 3*365 days), calculated as (portfolio value - total deposits) / total deposits * 100%. It accounts for both cash and the market value of open positions, reflecting the overall investment performance.`}
+              >
                 {isFetching ? (
-                  <p>Loading historical data...</p>
+                  <p className={styles.chartEmpty}>Loading historical data…</p>
                 ) : computedStats.returnPercentageSeries.length > 0 && computedStats.returnPercentageSeries.every(d => !isNaN(d.returnPercentage)) ? (
                   <div className={styles.chartCanvasWrapper}>
-                    <Line data={returnPercentageChartData} options={returnPercentageChartOptions} />
+                    <Line data={returnPercentageChartData} options={returnPercentageChartOptions} plugins={[crosshairPlugin]} />
                   </div>
                 ) : (
-                  <p>No valid data available for the return percentage chart.</p>
+                  <p className={styles.chartEmpty}>No valid data available for the return percentage chart.</p>
                 )}
-              </div>
-              <div className={styles.chartContainer}>
-                <h4>Cumulative P&L Over Time</h4>
-                <p className={styles.chartExplanation}>
-                  Cumulative P&L per day (max 3*365 days). The solid line is realised P&L (closed trades and partial sells, on the day they happened) plus the unrealised P&L of positions open at that day’s close, valued at the symbol’s daily close. The dashed line is realised P&L alone. Fees are included in both.
-                </p>
+              </ChartCard>
+              <ChartCard
+                title="Cumulative P&L"
+                legend={[{ label: 'Total (incl. open)', color: COLORS.accent, kind: 'line' }, { label: 'Realised', color: COLORS.slate, kind: 'line' }]}
+                value={latestTotalPnl !== null && !isFetching ? `${latestTotalPnl < 0 ? '-' : latestTotalPnl > 0 ? '+' : ''}${mark}${absAmount(latestTotalPnl)}` : null}
+                tone={toneOf(latestTotalPnl)}
+                caption="Total incl. open"
+                explanation={`Cumulative P&L per day (max 3*365 days). The blue line is realised P&L (closed trades and partial sells, on the day they happened) plus the unrealised P&L of positions open at that day’s close, valued at the symbol’s daily close. The grey line is realised P&L alone. Fees are included in both.`}
+              >
                 {isFetching ? (
-                  <p>Loading historical data...</p>
+                  <p className={styles.chartEmpty}>Loading historical data…</p>
                 ) : computedStats.portfolioValueSeries.labels.length > 0 && computedStats.portfolioValueSeries.series.every(v => !isNaN(v)) ? (
                   <div className={styles.chartCanvasWrapper}>
-                    <Line data={portfolioChartData} options={chartOptions} />
+                    <Line data={portfolioChartData} options={chartOptions} plugins={[crosshairPlugin]} />
                   </div>
                 ) : (
-                  <p>No valid data available for the portfolio value chart.</p>
+                  <p className={styles.chartEmpty}>No valid data available for the portfolio value chart.</p>
                 )}
-              </div>
+              </ChartCard>
             </div>
           )}
           {currentTab === 'holdings' && (() => {
@@ -1242,19 +1090,38 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                   )}
                 </div>
 
-                <div className={styles.chartContainer}>
-                  <h4>Allocation by Market Value</h4>
-                  <p className={styles.chartExplanation}>
-                    Share of each open stock/ETF position in the total market value (quantity × current price).
-                  </p>
+                <ChartCard
+                  title="Allocation"
+                  value={allocationTotal > 0 ? `${mark}${absAmount(allocationTotal)}` : null}
+                  caption="Market value"
+                  explanation={`Share of each open stock/ETF position in the total market value (quantity × current price).`}
+                >
                   {computedStats.openPositionsPie.labels.length > 0 && computedStats.openPositionsPie.data.every(v => !isNaN(v)) ? (
-                    <div className={styles.chartCanvasWrapper}>
-                      <Doughnut data={openPositionsPieData} options={pieChartOptions} />
+                    <div className={styles.allocation}>
+                      <div className={styles.allocationDonut}>
+                        <Doughnut data={openPositionsPieData} options={pieChartOptions} />
+                        <div className={styles.allocationCenter}>
+                          <span className={styles.allocationCount}>{allocation.length}</span>
+                          <span className={styles.allocationCountLabel}>{allocation.length === 1 ? 'position' : 'positions'}</span>
+                        </div>
+                      </div>
+                      <ul className={styles.allocationLegend}>
+                        {allocationSlices.map((slice, i) => (
+                          <li key={slice.label}>
+                            <i style={{ background: sliceColor(slice, i) }} />
+                            <span className={styles.allocationSymbol}>{slice.label}</span>
+                            <span className={styles.allocationBar}>
+                              <span style={{ width: `${allocationTotal ? (slice.value / allocationTotal) * 100 : 0}%`, background: sliceColor(slice, i) }} />
+                            </span>
+                            <span className={styles.allocationPct}>{formatNumber(allocationTotal ? (slice.value / allocationTotal) * 100 : 0, 1)}%</span>
+                          </li>
+                        ))}
+                      </ul>
                     </div>
                   ) : (
-                    <p>No priced stock/ETF positions to show.</p>
+                    <p className={styles.chartEmpty}>No priced stock/ETF positions to show.</p>
                   )}
-                </div>
+                </ChartCard>
               </div>
             );
           })()}
@@ -1401,19 +1268,20 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                   <p>No symbol fee data available.</p>
                 )}
               </div>
-              <div className={styles.chartContainer}>
-                <h4>Fees as Percentage of P&L</h4>
-                <p className={styles.chartExplanation}>
-                  This line chart shows fees as a percentage of absolute P&L per month. It’s calculated by summing fees (buyFee + sellFee) and absolute P&L (return) for closed trades per month, then computing (fees / P&L) * 100.
-                </p>
+              <ChartCard
+                title="Fees as % of P&L"
+                value={latestFeesPct !== null ? `${formatNumber(latestFeesPct, 1)}%` : null}
+                caption="Latest month"
+                explanation={`Fees as a percentage of absolute P&L, one column per month. It’s calculated by summing fees (buyFee + sellFee) and absolute P&L (return) for closed trades per month, then computing (fees / P&L) * 100.`}
+              >
                 {computedStats.feesPnlSeries.labels.length > 0 && computedStats.feesPnlSeries.data.every(v => !isNaN(v)) ? (
                   <div className={styles.chartCanvasWrapper}>
-                    <Line data={feesPnlChartData} options={feesPnlChartOptions} />
+                    <Bar data={feesPnlChartData} options={feesPnlChartOptions} />
                   </div>
                 ) : (
-                  <p>No valid data available for the fees P&L chart.</p>
+                  <p className={styles.chartEmpty}>No valid data available for the fees P&L chart.</p>
                 )}
-              </div>
+              </ChartCard>
             </div>
           )}
           {currentTab === 'bestAssets' && (
@@ -1448,47 +1316,51 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
           {currentTab === 'visualizations' && (
             <div>
 
-              <div className={styles.chartContainer}>
-                <h4>Distribution of Trade Returns</h4>
-                <p className={styles.chartExplanation}>
-                  This histogram displays the frequency of trade returns in 5% buckets from -50% to +50%. Returns are sourced from closed trades’ returnPercentage, clamped to [-50, 50] to handle outliers, showing the distribution of trade performance.
-                </p>
+              <ChartCard
+                title="Distribution of trade returns"
+                legend={[{ label: 'Loss', color: COLORS.red, kind: 'dot' }, { label: 'Gain', color: COLORS.green, kind: 'dot' }]}
+                value={distributionTotal || null}
+                caption="Closed trades"
+                explanation={`How many trades fall in each 5% bucket of return, from -50% to +50%. Returns are sourced from closed trades’ returnPercentage, clamped to [-50, 50] to handle outliers, showing the distribution of trade performance.`}
+              >
                 {computedStats.returnDistribution.labels.length > 0 && computedStats.returnDistribution.data.every(v => !isNaN(v)) ? (
                   <div className={styles.chartCanvasWrapper}>
                     <Bar data={returnDistributionChartData} options={barChartOptions} />
                   </div>
                 ) : (
-                  <p>No valid data available for the return distribution chart.</p>
+                  <p className={styles.chartEmpty}>No valid data available for the return distribution chart.</p>
                 )}
-              </div>
+              </ChartCard>
 
-              <div className={styles.chartContainer}>
-                <h4>Win Rate Over Time</h4>
-                <p className={styles.chartExplanation}>
-                  This line chart tracks the win rate (%) over a rolling window of 20 trades, plotted against the closing date of each trade. It’s calculated by counting wins (status = 'WIN') in each window, divided by 20, to show performance trends.
-                </p>
+              <ChartCard
+                title="Win rate over time"
+                value={latestWinRate !== null ? `${formatNumber(latestWinRate, 0)}%` : null}
+                tone={toneOf(latestWinRate, 50)}
+                caption="Last 20 trades"
+                explanation={`This line chart tracks the win rate (%) over a rolling window of 20 trades, plotted against the closing date of each trade. It’s calculated by counting wins (status = 'WIN') in each window, divided by 20, to show performance trends.`}
+              >
                 {computedStats.winRateSeries.labels.length > 0 && computedStats.winRateSeries.data.every(v => !isNaN(v)) ? (
                   <div className={styles.chartCanvasWrapper}>
-                    <Line data={winRateChartData} options={winRateChartOptions} />
+                    <Line data={winRateChartData} options={winRateChartOptions} plugins={[crosshairPlugin]} />
                   </div>
                 ) : (
-                  <p>No valid data available for the win rate chart.</p>
+                  <p className={styles.chartEmpty}>Needs at least 20 closed wins or losses.</p>
                 )}
-              </div>
+              </ChartCard>
 
-              <div className={styles.chartContainer}>
-                <h4>Trade Return vs. Hold Time</h4>
-                <p className={styles.chartExplanation}>
-                  This scatter plot correlates trade returns (%) with holding periods (hours). Each point represents a closed trade, with x-axis as hold time (lastActionDate - firstActionDate in hours) and y-axis as returnPercentage, identifying duration trends.
-                </p>
+              <ChartCard
+                title="Return vs. hold time"
+                legend={[{ label: 'Win', color: COLORS.green, kind: 'dot' }, { label: 'Loss', color: COLORS.red, kind: 'dot' }]}
+                explanation={`Each dot is a closed trade: its return (%) against how long it was held (last fill minus first fill). Hold time is on a logarithmic scale, so a 15-minute scalp and a 6-month position both fit.`}
+              >
                 {computedStats.returnVsHoldTime.data.length > 0 && computedStats.returnVsHoldTime.data.every(d => !isNaN(d.x) && !isNaN(d.y)) ? (
                   <div className={styles.chartCanvasWrapper}>
                     <Scatter data={returnVsHoldTimeChartData} options={scatterChartOptions} />
                   </div>
                 ) : (
-                  <p>No valid data available for the return vs. hold time chart.</p>
+                  <p className={styles.chartEmpty}>No valid data available for the return vs. hold time chart.</p>
                 )}
-              </div>
+              </ChartCard>
             </div>
           )}
           {currentTab === 'tradeNotes' && (
