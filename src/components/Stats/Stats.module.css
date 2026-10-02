@@ -1,382 +1,543 @@
+/* Stats: the Settings page's layout — a grouped section menu on the left
+   (a scrolling bar on tablets, a dropdown on phones), a header per section,
+   and cards throughout. */
+
 .statsContainer {
-  padding: 20px;
-  background: #1e1e2e;
-  border-radius: 10px;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
-  color: #fff;
-  position: relative;
-  box-sizing: border-box; 
   display: flex;
   flex-direction: column;
   flex: 1;
   min-height: 0;
+  width: 100%;
+  padding: 4px 4px 24px;
+  box-sizing: border-box;
   overflow-y: auto;
+  color: var(--ui-text, #E5E7EB);
 }
 
-/* === PROMINENT FILTER WARNING === */
-.filterWarning {
-  background: linear-gradient(135deg, #DC2626 0%, #991B1B 100%);
-  border: 3px solid #7F1D1D;
-  border-radius: 12px;
-  padding: 16px 20px;
-  margin: 0 0 20px 0;
-  color: #FEE2E2;
-  font-weight: 600;
-  font-size: 15px;
-  text-align: center;
-  box-shadow: 0 4px 20px rgba(220, 38, 38, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 12px;
-  animation: pulse-warning 2s infinite;
+.statsLayout {
+  display: grid;
+  grid-template-columns: 220px minmax(0, 1fr);
+  gap: 28px;
+  align-items: start;
+  width: 100%;
+  max-width: 1400px;
 }
 
-.filterWarning::before {
-  content: '⚠️';
-  font-size: 20px;
-}
-
-@keyframes pulse-warning {
-  0%, 100% {
-    box-shadow: 0 4px 20px rgba(220, 38, 38, 0.4), inset 0 0 0 1px rgba(255, 255, 255, 0.1);
-  }
-  50% {
-    box-shadow: 0 4px 30px rgba(220, 38, 38, 0.6), inset 0 0 0 1px rgba(255, 255, 255, 0.2);
-  }
-}
-
-/* Currency / time zone selectors and the tabs, kept at the top together
-   (sticky) so the selectors don't scroll away while the tabs stay. */
-.stickyHeader {
+/* ---------- Section menu ---------- */
+.sideNav {
   position: sticky;
   top: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px;
+  background: var(--ui-card-2, #1A1E2B);
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 16px;
+  z-index: 5;
+}
+
+.navGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navGroupLabel {
+  padding: 6px 12px 4px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: #5F6778;
+}
+
+.navButton {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: #A5ADBA;
+  font-size: 13.5px;
+  font-weight: 500;
+  text-align: left;
+  white-space: nowrap;
+  transition: background 0.15s, color 0.15s;
+}
+
+.navIcon {
+  flex: none;
+  width: 15px;
+  height: 15px;
+  color: var(--ui-faint, #6B7280);
+  transition: color 0.15s;
+}
+
+@media (hover: hover) {
+  .navButton:hover {
+    background: rgba(255, 255, 255, 0.04);
+    color: #fff;
+  }
+}
+
+.navActive,
+.navActive:hover {
+  background: rgba(59, 130, 246, 0.14) !important;
+  color: #fff;
+}
+
+.navActive .navIcon {
+  color: #60A5FA;
+}
+
+/* ---------- Header ---------- */
+.contentColumn {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.stickyHeader {
+  position: sticky;
+  top: -4px;
   z-index: 10;
-  background-color: #1e1e2e;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 4px 0 12px;
+  background: linear-gradient(180deg, var(--primary-dark, #13161F) 85%, rgba(19, 22, 31, 0));
+}
+
+.sectionHeader {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-end;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.sectionHeading h2 {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: #fff;
+}
+
+.sectionHeading p {
+  margin: 4px 0 0;
+  font-size: 0.9rem;
+  color: var(--ui-muted, #8B93A3);
 }
 
 .scopeControls {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 2px;
-  margin-bottom: 8px;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
 }
 
-/* === NEW & IMPROVED TAB NAVIGATION === */
-.tabNavigation {
-  display: flex;
-  background-color: #1e1e2e;
-  padding-top: 16px;
-  padding-bottom: 0; /* Adjusted padding */
-  border-bottom: 1px solid #32384a; /* Adds a clean separator */
-  flex-wrap: nowrap; /* Prevents wrapping on all screen sizes */
+.scopeField {
+  display: inline-flex;
+  align-items: center;
   gap: 8px;
 }
 
-.tabNavigation button {
-  background: transparent; /* A cleaner, more integrated look */
-  border: none;
-  border-bottom: 3px solid transparent; /* Serves as the active tab indicator */
-  border-radius: 4px 4px 0 0;
-  padding: 10px 16px;
-  color: #A5ADBA;
-  cursor: pointer;
-  transition: background-color 0.18s, color 0.18s, border-color 0.18s;
-  font-weight: 500;
-  white-space: nowrap; /* Ensures tab labels don't wrap */
-  flex: 0 0 auto;
-  min-width: auto;
+.scopeField > span {
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-faint, #6B7280);
 }
 
-.tabNavigation button:hover {
-  background-color: #262B39;
-  color: #ffffff;
-}
-
-.tabNavigation button.activeTab {
-  background-color: #262B39;
-  border-bottom-color: #3B82F6; /* Highlights the active tab */
-  color: #ffffff;
+.scopeSelect {
+  height: 34px;
+  padding: 0 28px 0 12px;
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 10px;
+  background: var(--ui-input, #141822) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%238B93A3'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/%3E%3C/svg%3E") no-repeat right 8px center / 15px;
+  -webkit-appearance: none;
+  appearance: none;
+  color: #fff;
+  font-size: 13px;
   font-weight: 600;
 }
-/* ======================================= */
 
-.tabContent {
-  padding: 20px 0;
-  overflow-y: auto;
+.scopeChip {
+  height: 34px;
+  padding: 0 14px;
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 999px;
+  background: var(--ui-input, #141822);
+  color: var(--ui-muted, #8B93A3);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
+.scopeChipOn {
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.55);
+  color: #DBEAFE;
+}
+
+.scopeChipOn::before {
+  content: '✓';
+  margin-right: 6px;
+  color: #60A5FA;
+}
+
+.filterWarning {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 10px 14px;
+  border-radius: 12px;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  background: rgba(245, 158, 11, 0.08);
+  color: #FDE68A;
+  font-size: 13px;
+}
+
+.filterWarning svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+  color: #F59E0B;
+}
+
+.filterWarning strong {
+  color: #FCD34D;
+  margin-right: 4px;
+}
+
+/* ---------- Content ---------- */
+.tabContent {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.tabContent > div {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  min-width: 0;
+}
+
+.tabContent h3 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+/* Stat tiles */
 .statsGrid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
-  gap: 10px;
+  grid-template-columns: repeat(auto-fill, minmax(190px, 1fr));
+  gap: 12px;
 }
 
 .statBox {
-  background: #2A3B4D;
-  border: 1px solid #32384a;
-  border-radius: 7px;
-  padding: 12px;
-  text-align: center;
-  transition: background 0.18s;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 0;
+  padding: 14px 16px;
+  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 14px;
+  box-shadow: var(--ui-shadow);
+  transition: border-color 0.15s, transform 0.12s;
 }
 
-.statBox:hover {
-  background: #344458;
+@media (hover: hover) {
+  .statBox:hover {
+    border-color: #3A4258;
+  }
 }
 
 .statLabel {
-  font-size: 12px;
-  color: #A5ADBA;
-  margin-bottom: 5px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-muted, #8B93A3);
 }
 
 .statValue {
-  font-size: 18px;
-  font-weight: bold;
+  font-size: 1.35rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: #fff;
+  font-variant-numeric: tabular-nums;
+  word-break: break-word;
 }
 
-.symbolSelector {
-  margin: 10px 0;
-  padding: 8px;
-  background: #232837;
-  border: 1px solid #32384a;
-  color: #fff;
-  border-radius: 5px;
+/* Money figures coloured by sign (see toneClass in Stats.jsx). */
+.valuePos {
+  color: #4ADE80;
+}
+
+.valueNeg {
+  color: #F87171;
+}
+
+/* Cards: charts and tables */
+.chartContainer,
+.tableSection,
+.calendarWrapper {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
   width: 100%;
-  max-width: 200px;
+  padding: 18px 20px 20px;
+  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: var(--ui-radius, 16px);
+  box-shadow: var(--ui-shadow);
+  box-sizing: border-box;
+  min-width: 0;
 }
 
 .tableSection {
-  margin-top: 20px;
+  overflow-x: auto;
 }
 
+.chartContainer h4,
 .tableSection h3 {
-  font-size: 16px;
-  margin-bottom: 10px;
-  color: #A5ADBA;
-}
-
-.statsTable {
-  width: 100%;
-  border-collapse: collapse;
-  margin-top: 10px;
-}
-
-.statsTable th,
-.statsTable td {
-  padding: 8px;
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
   text-align: left;
-  border-bottom: 1px solid #32384a;
-}
-
-.statsTable th {
-  background: #232837;
-  color: #A5ADBA;
-}
-
-.statsTable td {
   color: #fff;
+}
+
+.chartExplanation {
+  margin: 0;
+  max-width: 90ch;
+  font-size: 0.85rem;
+  line-height: 1.55;
+  color: var(--ui-muted, #8B93A3);
+}
+
+.chartCanvasWrapper {
+  position: relative;
+  width: 100%;
+  height: 340px;
+  margin-top: 6px;
 }
 
 .visualizations {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 16px;
 }
 
-.chartContainer {
-  display: flex;
-  flex-direction: column;
-  min-height: 600px;
+.symbolSelector {
+  max-width: 220px;
+  padding: 8px 10px;
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 10px;
+  background: var(--ui-input, #141822);
+  color: #fff;
+}
+
+/* Tables (Settings' table look) */
+.statsTable {
   width: 100%;
-  background: #232837;
-  border: 2px solid #32384a;
-  border-radius: 7px;
-  padding: 16px;
-  box-sizing: border-box;
-  margin-top: 24px;
-  margin-bottom: 24px;
+  border-collapse: collapse;
+  font-size: 13px;
 }
 
-.chartExplanation {
-  color: #bbbbbb;
+.statsTable th {
+  padding: 10px 14px;
+  text-align: left;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  color: var(--ui-muted, #8B93A3);
+  background: rgba(255, 255, 255, 0.015);
+  border-bottom: 1px solid var(--ui-border, #2C3244);
+  white-space: nowrap;
 }
 
-.chartCanvasWrapper {
-  flex-grow: 1;
-  width: 100%;
-  position: relative;
-  min-height: 0;
-  border: 1px solid #32384a;
-  border-radius: 7px;
-  margin-top: 24px;
+.statsTable td {
+  padding: 10px 14px;
+  color: var(--ui-text-2, #C7CDD8);
+  border-bottom: 1px solid var(--ui-border-soft, rgba(255, 255, 255, 0.05));
+  font-variant-numeric: tabular-nums;
 }
 
-.chartContainer h4 {
-  font-size: 18px;
-  text-align: center;
-  margin-bottom: 10px;
-  color: #ffffff;
+.statsTable tbody tr:last-child td {
+  border-bottom: none;
+}
+
+@media (hover: hover) {
+  .statsTable tbody tr:hover td {
+    background: rgba(255, 255, 255, 0.025);
+  }
 }
 
 .errorContainer {
   padding: 20px;
-  background: #EF4444;
-  border-radius: 7px;
-  color: #fff;
+  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: rgba(239, 68, 68, 0.1);
+  border-radius: 14px;
+  color: #FCA5A5;
   text-align: center;
 }
 
-/* === TRADE NOTES TAB STYLES === */
+/* ---------- Trade notes ---------- */
 .tradeNotesContainer {
   display: flex;
   flex-direction: column;
-  gap: 20px;
+  gap: 14px;
 }
 
 .notesSortControls {
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 10px;
-  background: #232837;
-  border-radius: 8px;
+  gap: 8px;
   flex-wrap: wrap;
+  padding: 8px;
+  background: var(--ui-card-2, #1A1E2B);
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 14px;
 }
 
 .notesSortControls span {
-  font-weight: 500;
-  color: #A5ADBA;
+  padding: 0 6px;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-faint, #6B7280);
 }
 
 .notesSortControls button {
-  background: #2A3B4D;
-  border: 1px solid #32384a;
-  color: #fff;
-  padding: 6px 12px;
-  border-radius: 6px;
-  cursor: pointer;
-  transition: background 0.2s, border-color 0.2s;
+  height: 32px;
+  padding: 0 12px;
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 999px;
+  background: var(--ui-input, #141822);
+  color: var(--ui-muted, #8B93A3);
+  font-size: 12.5px;
+  font-weight: 600;
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
 .notesSortControls button:hover {
-  background: #344458;
+  color: #fff;
 }
 
 .notesSortControls button.activeSort {
-  background: #3B82F6;
-  border-color: #3B82F6;
+  background: rgba(59, 130, 246, 0.15);
+  border-color: rgba(59, 130, 246, 0.55);
+  color: #DBEAFE;
 }
 
 .notesSortControls .exportButton {
   margin-left: auto;
-  background: #10B981;
-  border-color: #10B981;
+  border-radius: 10px;
+  background: rgba(34, 197, 94, 0.12);
+  border-color: rgba(34, 197, 94, 0.4);
+  color: #86EFAC;
 }
 
 .notesSortControls .exportButton:hover {
-  background: #059669;
+  background: rgba(34, 197, 94, 0.2);
+  color: #BBF7D0;
 }
 
 .tradeNotesList {
-  display: flex;
-  flex-direction: column;
-  gap: 15px;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(380px, 1fr));
+  gap: 14px;
 }
 
 .tradeNoteCard {
-  background: #2a2d34;
-  border-radius: 12px;
-  border: 1px solid #444851;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+  display: flex;
+  flex-direction: column;
+  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: var(--ui-radius, 16px);
+  box-shadow: var(--ui-shadow);
   overflow: hidden;
   cursor: pointer;
-  transition: border-color 0.2s;
+  transition: border-color 0.15s, transform 0.12s;
 }
 
-.tradeNoteCard:hover {
-  border-color: #3B82F6;
+@media (hover: hover) {
+  .tradeNoteCard:hover {
+    border-color: rgba(59, 130, 246, 0.5);
+    transform: translateY(-1px);
+  }
 }
 
 .tradeNoteHeader {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  padding: 10px 15px;
-  background: #353943;
-  border-bottom: 1px solid #444851;
+  gap: 10px;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--ui-border-soft, rgba(255, 255, 255, 0.05));
 }
 
-.headerLeft, .headerRight {
+.headerLeft,
+.headerRight {
   display: flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .symbolBadge {
-  background: rgba(60, 154, 239, 0.3);
-  color: #6da5ff;
-  font-size: 1.1em;
-  font-weight: 600;
-  border-radius: 6px;
-  padding: 4px 10px;
-}
-
-.sideBadge {
-  font-size: 0.9em;
-  font-weight: 500;
-  border-radius: 6px;
-  padding: 4px 8px;
+  font-size: 15px;
+  font-weight: 700;
   color: #fff;
 }
 
-.sideBadge.long {
-  background: #22C55E;
+.sideBadge,
+.pnlBadge,
+.dateBadge {
+  padding: 2px 9px;
+  border-radius: 999px;
+  font-size: 11.5px;
+  font-weight: 700;
 }
 
-.sideBadge.short {
-  background: #EF4444;
-}
-
-.pnlBadge {
-  font-size: 1.1em;
-  font-weight: 600;
-  padding: 4px 10px;
-  border-radius: 6px;
-}
-
-.pnlBadge.win {
-  background: rgba(34, 197, 94, 0.2);
-  color: #22C55E;
-}
-
-.pnlBadge.loss {
-  background: rgba(0, 0, 0, 0.2);
-  color: #EF4444;
-}
+.sideBadge.long { background: rgba(34, 197, 94, 0.13); color: #4ADE80; }
+.sideBadge.short { background: rgba(239, 68, 68, 0.13); color: #F87171; }
+.pnlBadge.win { background: rgba(34, 197, 94, 0.13); color: #4ADE80; }
+.pnlBadge.loss { background: rgba(239, 68, 68, 0.13); color: #F87171; }
 
 .dateBadge {
-  background: #1e293b;
-  color: #9ca3af;
-  font-size: 0.9em;
-  padding: 4px 8px;
-  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ui-muted, #8B93A3);
+  font-weight: 600;
 }
 
 .tradeNoteBody {
-  padding: 15px;
+  padding: 14px 16px 16px;
 }
 
 .ratingsInNotes {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 12px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #444851;
+  gap: 12px;
+  margin-bottom: 10px;
+  padding-bottom: 10px;
+  border-bottom: 1px solid var(--ui-border-soft, rgba(255, 255, 255, 0.05));
 }
 
 .ratingInNotesLeft,
@@ -387,87 +548,72 @@
 }
 
 .ratingText {
-  color: #e0e2e6;
-  font-size: 0.9em;
-  font-weight: 500;
+  font-size: 10.5px;
+  font-weight: 600;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: var(--ui-faint, #6B7280);
 }
 
 .starsInline {
   display: flex;
-  gap: 2px;
+  gap: 1px;
 }
 
 .starsInline .star {
-  font-size: 1.2em;
+  font-size: 14px;
   color: #FCD34D;
-  margin: 0;
-  letter-spacing: 1px;
 }
 
 .notesContentWrapper {
-  max-height: 250px;
+  max-height: 220px;
   overflow-y: auto;
-  padding-right: 10px;
-  scrollbar-width: thin;
-  scrollbar-color: #3B82F6 #353943;
-}
-
-.notesContentWrapper::-webkit-scrollbar {
-  width: 8px;
-}
-.notesContentWrapper::-webkit-scrollbar-track {
-  background: #353943;
-}
-.notesContentWrapper::-webkit-scrollbar-thumb {
-  background-color: #3B82F6;
-  border-radius: 4px;
+  padding-right: 6px;
 }
 
 .notesContent {
-  color: #e0e2e6;
-  font-size: 1em;
-  line-height: 1.5;
+  color: var(--ui-text-2, #C7CDD8);
+  font-size: 13px;
+  line-height: 1.6;
   word-break: break-word;
 }
+
 .notesContent p {
-  margin: 0 0 10px 0;
+  margin: 0 0 8px;
 }
 
 .notesContent ul,
 .notesContent ol {
-  margin: 0 0 10px 0;
+  margin: 0 0 8px;
   padding-left: 20px;
 }
 
 .notesContent li {
-  margin-bottom: 5px;
+  margin-bottom: 4px;
 }
 
 .noNotesText {
-  color: #718096;
-  font-style: italic;
-  padding: 10px 0;
+  margin: 0;
+  color: var(--ui-faint, #6B7280);
 }
 
 .attachmentsPreview {
   display: flex;
-  gap: 10px;
-  margin-top: 15px;
   flex-wrap: wrap;
-  justify-content: flex-start;
+  gap: 8px;
+  margin-top: 12px;
 }
 
 .attachmentThumb {
-  width: 48px;
-  height: 48px;
-  border-radius: 8px;
+  width: 52px;
+  height: 52px;
+  border-radius: 10px;
   overflow: hidden;
-  background: #232837;
-  border: 1.5px solid #4a5568;
+  border: 1px solid var(--ui-border, #2C3244);
+  background: var(--ui-input, #141822);
   display: flex;
   align-items: center;
   justify-content: center;
-  position: relative;
 }
 
 .attachmentThumb img {
@@ -476,280 +622,169 @@
   object-fit: cover;
 }
 
-
-/* === Mobile Responsiveness === */
-@media (max-width: 768px) {
-
-  /* --- Horizontal Scrolling on Mobile --- */
-  .tabNavigation {
-    overflow-x: auto;
-    /* Hide the scrollbar for a cleaner UI, but keep it scrollable */
-    -ms-overflow-style: none;  /* IE and Edge */
-    scrollbar-width: none;  /* Firefox */
-  }
-  .tabNavigation::-webkit-scrollbar {
-    display: none; /* Chrome, Safari, and Opera */
-  }
-  /* ------------------------------------ */
-
-  .statsGrid {
-    grid-template-columns: 1fr;
-  }
-
-  /* The following rules are no longer needed and have been removed */
-  /*
-  .tabNavigation { 
-    flex-direction: column;
-  }
-
-  .tabNavigation button {
-    min-width: 100%;
-  }
-  */
-
-  .symbolSelector {
-    max-width: 100%;
-  }
-
-  .chartContainer {
-    min-height: 500px; 
-  }
-
-  .tradeNoteHeader {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 10px;
-  }
-  .ratingsInNotes {
-    flex-direction: column;
-    align-items: flex-start;
-    gap: 8px;
-  }
-}
-
-/* Specific adjustments for when bottom navigation is active */
-@media (max-width: 600px) {
-  .statsContainer {
-    /* Fix sticky header issue by letting the parent (.main-content) handle scrolling */
-    overflow-y: visible;
-    min-height: auto;
-    
-    /* The large padding for the nav bar is now handled by .main-content, 
-       so we can revert to the component's default padding. */
-    padding-bottom: 20px;
-  }
-}
-
-/* === ENHANCED STATS GRID & BOX STYLING === */
-.statBox {
-  transition: all 0.3s ease;
-  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.2);
-}
-
-@media (hover: hover) {
-  .statBox:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
-    border-color: #3B82F6;
-  }
-}
-
-.statValue {
-  word-break: break-word;
-}
-
-/* === CALENDAR IN STATS === */
-.calendarWrapper {
-  margin: 10px 0;
-}
-
-/* === ENHANCED TABLE STYLING === */
-.statsTable tbody tr {
-  transition: background-color 0.2s ease;
-}
-
-.statsTable tbody tr:hover {
-  background-color: #2D3345;
-}
-
-.statsTable tbody tr:nth-child(even) {
-  background-color: rgba(59, 130, 246, 0.05);
-}
-
-/* === INTERACTIVE ANIMATIONS === */
-.chartContainer {
-  transition: box-shadow 0.3s ease;
-}
-
-.chartContainer:hover {
-  box-shadow: 0 4px 20px rgba(59, 130, 246, 0.2);
-}
-
-/* === MOBILE OPTIMIZATION FOR NEW COMPONENTS === */
-@media (max-width: 768px) {
-  .statsGrid {
-    grid-template-columns: repeat(auto-fit, minmax(120px, 1fr));
-    gap: 8px;
-  }
-
-  .statBox {
-    padding: 10px;
-  }
-
-  .statLabel {
-    font-size: 11px;
-  }
-
-  .statValue {
-    font-size: 16px;
-  }
-
-  .tableSection h3 {
-    font-size: 14px;
-  }
-
-  .statsTable th,
-  .statsTable td {
-    padding: 6px;
-    font-size: 12px;
-  }
-}
-
-@media (max-width: 500px) {
-  /* Two per row: one per row made the General tab a very long scroll of
-     half-empty cards. */
-  .statsGrid {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .statsTable {
-    font-size: 11px;
-  }
-
-  .statsTable th,
-  .statsTable td {
-    padding: 4px;
-  }
-}
-/* Phones: a compact filter notice, and tabs that wrap so every tab is
-   visible (in one scrolling row, the ones past the edge were easy to miss). */
-@media (max-width: 600px) {
-  .filterWarning {
-    font-size: 12px;
-    font-weight: 500;
-    padding: 8px 12px;
-    margin-bottom: 10px;
-    border-width: 1px;
-    border-radius: 8px;
-    text-align: left;
-    justify-content: flex-start;
-    gap: 8px;
-    animation: none;
-    box-shadow: none;
-  }
-
-  .filterWarning::before {
-    font-size: 14px;
-  }
-
-  .tabNavigation {
-    flex-wrap: wrap;
-    gap: 6px;
-    padding-top: 8px;
-    padding-bottom: 8px;
-  }
-
-  .tabNavigation button {
-    padding: 5px 10px;
-    border: 1px solid #32384a;
-    border-radius: 14px;
-    font-size: 12px;
-  }
-
-  .statsContainer {
-    padding: 8px 6px;
-    box-shadow: none;
-  }
-
-  /* Three lines of explanation above every tab; the Timezone label and
-     picker say enough on a phone. */
-  .timezoneHint {
-    display: none;
-  }
-
-  .tabNavigation button.activeTab {
-    background-color: #3B82F6;
-    border-color: #3B82F6;
-    color: #fff;
-  }
-}
-
-/* Only on phones (below) */
+/* Phones only: the section dropdown. */
 .tabSelect {
   display: none;
 }
 
-/* Phones: section, currency and time zone on one compact line; the tab
-   buttons give way to the section dropdown. */
+.subAccountToggle {
+  display: none;
+}
+
+/* ---------- Tablet: the menu becomes a scrolling bar ---------- */
+@media (max-width: 1100px) {
+  .statsLayout {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 14px;
+  }
+
+  .sideNav {
+    position: static;
+    flex-direction: row;
+    gap: 2px;
+    overflow-x: auto;
+    scrollbar-width: none;
+  }
+
+  .sideNav::-webkit-scrollbar {
+    display: none;
+  }
+
+  .navGroup {
+    flex-direction: row;
+    flex: none;
+    align-items: center;
+  }
+
+  .navGroup + .navGroup {
+    padding-left: 6px;
+    margin-left: 4px;
+    border-left: 1px solid var(--ui-border, #2C3244);
+  }
+
+  .navGroupLabel {
+    display: none;
+  }
+
+  .navButton {
+    width: auto;
+  }
+
+  .tradeNotesList {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+/* ---------- Phone ---------- */
 @media (max-width: 600px) {
+  .statsContainer {
+    padding: 0 0 16px;
+    overflow-y: visible;
+    min-height: auto;
+  }
+
+  .sideNav {
+    display: none;
+  }
+
   .stickyHeader {
-    /* Cover .main-content's top padding too, or content showed through a
-       thin strip above the header while scrolling. */
+    /* covers .main-content's top padding too */
     top: -6px;
-    padding-top: 6px;
-    padding-bottom: 6px;
-    border-bottom: 1px solid #32384a;
-    margin-bottom: 8px;
+    padding: 6px 0 8px;
+    gap: 8px;
+    background: var(--primary-dark, #13161F);
+    border-bottom: 1px solid var(--ui-border, #2C3244);
+  }
+
+  .sectionHeading {
+    display: none;
+  }
+
+  .sectionHeader {
+    align-items: center;
   }
 
   .scopeControls {
-    flex-direction: row;
+    width: 100%;
     flex-wrap: wrap;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 6px 12px;
-    margin-bottom: 0;
+    gap: 6px 8px;
+  }
+
+  .scopeField > span {
+    display: none;
   }
 
   .tabSelect {
     display: block;
     flex: 1 1 0;
-    min-width: 0;
-    margin-right: auto;
+    min-width: 140px;
+    height: 38px;
     -webkit-appearance: none;
     appearance: none;
-    background: #3B82F6 url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23fff"><path d="M5.3 7.3a1 1 0 011.4 0L10 10.6l3.3-3.3a1 1 0 111.4 1.4l-4 4a1 1 0 01-1.4 0l-4-4a1 1 0 010-1.4z"/></svg>') no-repeat right 10px center / 16px;
-    color: #fff;
-    border: none;
-    border-radius: 18px;
-    padding: 7px 32px 7px 14px;
-    font-size: 14px;
+    background: rgba(59, 130, 246, 0.16) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2393C5FD'><path d='M5.3 7.3a1 1 0 011.4 0L10 10.6l3.3-3.3a1 1 0 111.4 1.4l-4 4a1 1 0 01-1.4 0l-4-4a1 1 0 010-1.4z'/></svg>") no-repeat right 10px center / 16px;
+    color: #DBEAFE;
+    border: 1px solid rgba(59, 130, 246, 0.45);
+    border-radius: 11px;
+    padding: 0 32px 0 12px;
+    font-size: 16px;
     font-weight: 600;
   }
 
-  /* The pickers' own values say what they are; without the captions the
-     section, currency and time zone fit one line. */
-  .scopeControls > div > span {
-    display: none;
+  .filterWarning {
+    padding: 8px 10px;
+    font-size: 12px;
   }
 
-  .tabNavigation {
-    display: none;
+  .statsGrid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 8px;
   }
 
-  .scopeControls > div {
-    margin-bottom: 0 !important;
+  .statBox {
+    padding: 11px 12px;
+    gap: 5px;
   }
-}
 
-/* Parent accounts: whether the stats include the sub-accounts' trades. */
-.subAccountToggle {
-  display: flex;
-  align-items: center;
-  gap: 6px;
-  color: #A5ADBA;
-  font-size: 0.85em;
-  font-weight: 500;
-  cursor: pointer;
-  margin-bottom: 4px;
+  .statValue {
+    font-size: 1.05rem;
+  }
+
+  .chartContainer,
+  .tableSection,
+  .calendarWrapper {
+    padding: 14px;
+    border-radius: 14px;
+  }
+
+  .chartCanvasWrapper {
+    height: 260px;
+  }
+
+  /* Long explanations: three lines on a phone. */
+  .chartExplanation {
+    display: -webkit-box;
+    -webkit-line-clamp: 3;
+    -webkit-box-orient: vertical;
+    overflow: hidden;
+  }
+
+  .statsTable th,
+  .statsTable td {
+    padding: 7px 8px;
+    font-size: 12px;
+  }
+
+  .tradeNoteHeader {
+    flex-wrap: wrap;
+  }
+
+  .ratingsInNotes {
+    flex-direction: column;
+    align-items: flex-start;
+    gap: 6px;
+  }
+
+  .notesSortControls .exportButton {
+    margin-left: 0;
+  }
 }
