@@ -426,135 +426,81 @@
   text-align: center;
 }
 
-/* New styles for tree visualization */
-.treeContainer {
-  background: #232837;
-  border: 1px solid #32384a;
-  border-radius: 7px;
-  padding: 16px;
-  color: #e0e2e6;
-}
-
-.tree {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.treeNode {
-  margin-bottom: 8px;
-}
-
-.treeNodeLabel {
-  font-size: 1.1em;
-  font-weight: 500;
-  color: #fff;
-  margin-bottom: 4px;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.treeNodeChildren {
-  margin-left: 20px;
-  border-left: 1px solid #A5ADBA;
-  padding-left: 16px;
-}
-
-.sourceBlock {
-  background: #353943;
-  padding: 12px;
-  border-radius: 5px;
-  margin-bottom: 8px;
-}
-
-.sourceHeader {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  font-size: 1em;
-  font-weight: 500;
-  color: #fff;
-  margin-bottom: 8px;
-}
-
-.dataEntry {
-  display: flex;
-  justify-content: space-between;
-  font-size: 0.9em;
-  color: #e0e2e6;
-}
-
-.rolloverSection {
-  margin-top: 12px;
-}
-
-.rolloverTitle {
-  font-size: 0.95em;
-  color: #A5ADBA;
-  margin-bottom: 8px;
-}
-
-.rolloverList {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-
-.rolloverItem {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  font-size: 0.9em;
-  color: #e0e2e6;
-  margin-bottom: 4px;
-}
-
-.rolloverContracts {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.rolloverFrom, .rolloverTo {
-  color: #00ebff;
-}
-
-.rolloverDate {
-  color: #A5ADBA;
-}
-
-.contractsContainer {
+/* Historical Data tab */
+.historicalTab {
   display: flex;
   flex-direction: column;
-  gap: 8px;
-  margin-top: 12px;
+  gap: 14px;
 }
 
-.contractData {
-  background: #2a2f3a;
-  padding: 8px;
-  border-radius: 5px;
+.histHeader {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: 16px;
+  flex-wrap: wrap;
 }
 
-.rolloverTypeTag {
-  padding: 2px 6px;
-  border-radius: 4px;
-  font-size: 0.8em;
-  margin-left: 4px;
-  color: white;
+.histTitle {
+  margin: 0;
+  font-size: 1.15rem;
+  color: #fff;
 }
 
-.volume {
-  background-color: #10B981; /* Green for Volume */
+.histSubtitle {
+  margin: 4px 0 0;
+  font-size: 0.85rem;
+  color: #8B93A3;
 }
 
-.manual {
-  background-color: #3B82F6; /* Blue for Manual */
+.histSymbolSelect {
+  width: 240px;
+  max-width: 100%;
 }
 
-.fallback {
-  background-color: #F59E0B; /* Orange for Fallback */
+.histPlaceholder {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 28px 16px;
+  text-align: center;
+  color: #A5ADBA;
+  background: #1E2230;
+  border: 1px dashed #3a4154;
+  border-radius: 12px;
+}
+
+.histCard {
+  padding: 14px 16px;
+  background: #1E2230;
+  border: 1px solid #32384a;
+  border-radius: 14px;
+}
+
+.histCardTitle {
+  margin: 0 0 10px;
+  font-size: 0.95rem;
+  font-weight: 600;
+  color: #fff;
+}
+
+.histCardHint {
+  margin: -6px 0 10px;
+  font-size: 0.8rem;
+  color: #8B93A3;
+}
+
+.histActions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+}
+
+@media (max-width: 768px) {
+  .histSymbolSelect {
+    width: 100%;
+  }
 }
 
 @media (max-width: 768px) {
@@ -663,26 +609,10 @@
     font-size: 0.65em;
   }
 
-  .treeNodeLabel {
-    font-size: 1em;
-  }
 
-  .treeNodeChildren {
-    margin-left: 12px;
-    padding-left: 12px;
-  }
 
-  .sourceBlock {
-    padding: 8px;
-  }
 
-  .sourceHeader {
-    font-size: 0.9em;
-  }
 
-  .dataEntry {
-    font-size: 0.85em;
-  }
 }
 
 @media (max-width: 600px) {
@@ -745,14 +675,7 @@
     text-align: center;
   }
 
-  .treeNodeLabel {
-    font-size: 0.95em;
-  }
 
-  .treeNodeChildren {
-    margin-left: 8px;
-    padding-left: 8px;
-  }
 }
 /* Only on phones (see the 600px rules) */
 @media (min-width: 601px) {
