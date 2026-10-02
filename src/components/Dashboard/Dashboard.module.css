@@ -133,11 +133,10 @@
   text-align: left;
 }
 
-/* Several currencies: the figures start right under the label (in both P&L
-   tiles alike, so a currency shown in both sits on the same line) and the
-   tile row grows to give each line the full size. */
-.tileStacked {
-  justify-content: flex-start;
+/* An empty line in a stacked tile: keeps each currency on the same line in
+   every tile (see renderStatValue). */
+.statLinePlaceholder {
+  visibility: hidden;
 }
 
 /* More than one currency: one line per figure. */
@@ -827,9 +826,6 @@
     align-items: flex-end;
   }
 
-  .tileStacked {
-    justify-content: space-between;
-  }
 
   .buttonRow {
     flex-wrap: nowrap;

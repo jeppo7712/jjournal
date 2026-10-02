@@ -791,20 +791,28 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
   // left and capped in width to keep clear of it.
   const renderStatValue = (stat, align = 'left', groupLines = 0) => {
     const list = toTotalsList(stat.totals || {});
-    const lines = Math.max(groupLines, list.length);
+    // With several currencies, every money tile (AVG W/L, R/U P&L) lists the
+    // same currencies in the same order, leaving a line empty where it has
+    // no figure, so a currency is on the same line in every tile.
+    const rows = stat.totals && list.length > 0 && tileCurrencies.length > 1 ? tileCurrencies : null;
+    const lines = rows ? rows.length : Math.max(groupLines, list.length);
     if (lines <= 1) {
       return <FitValue className={styles.statValue} style={{ color: stat.color }}>{stat.value}</FitValue>;
     }
     // Several currencies: one line each, at the same full size as a single
-    // figure where the width allows (the tile row grows to fit the lines,
-    // see .tileStacked), smaller only when the widest one wouldn't fit.
+    // figure where the width allows (the tile row grows to fit the lines),
+    // smaller only when the widest one wouldn't fit.
     return (
       <FitValue
         maxPx={20}
         className={`${styles.statValue} ${styles.statValueStacked} ${align === 'right' ? styles.statValueStackedRight : styles.statValueStackedLeft}`}
         style={{ color: stat.color }}
       >
-        {list.length === 0 ? <span>{stat.value}</span> : list.map(({ currency, amount }) => {
+        {list.length === 0 ? <span>{stat.value}</span> : (rows || list.map(item => item.currency)).map(currency => {
+          if (!(currency in (stat.totals || {}))) {
+            return <span key={currency} className={styles.statLinePlaceholder} aria-hidden="true">{'\u00a0'}</span>;
+          }
+          const amount = Number(stat.totals[currency]) || 0;
           const text = formatMoney(stat.abs ? Math.abs(amount) : amount, currency, stat.decimals ?? 2);
           // A P&L figure is coloured by its own sign, never by the sign of
           // whichever currency happens to be listed first — that printed a
@@ -963,6 +971,11 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
   // R P&L and U P&L sit side by side, so they share a line count too.
   const pnlStatLines = Math.max(lineCountOf(realisedPnlStat), lineCountOf(unrealisedPnlStat));
 
+  // Every currency any money tile shows, USD first (see renderStatValue).
+  const tileCurrencies = [...new Set([
+    stats.avgWinByCurrency, stats.avgLossByCurrency, totalRealisedPnlByCurrency, unrealisedPnlByCurrency,
+  ].flatMap(totals => Object.keys(totals || {})))].sort(byUsdFirst);
+
   const handleTimeFilterClick = (value) => {
     if (timeFilter === value) {
       setTimeFilter(null);
@@ -1103,8 +1116,8 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
             {renderTile(statGrid[1][1], { extraClass: styles.tileWash })}
             {renderTile(statGrid[2][0], { extraClass: styles.tileAvgWin })}
             {renderTile(statGrid[2][1], { extraClass: styles.tileAvgLoss })}
-            {renderTile({ ...realisedPnlStat, title: isGraphHidden ? 'Show the realised P&L chart' : 'Chart realised P&L' }, { align: 'left', lines: pnlStatLines, ring: false, extraClass: `${styles.tilePnl} ${pnlStatLines > 1 ? styles.tileStacked : ''} ${styles.tileRealised} ${pnlChartType === 'realised' && showChartPanel ? styles.charted : ''}` })}
-            {renderTile({ ...unrealisedPnlStat, title: isGraphHidden ? 'Show the unrealised P&L chart' : 'Chart unrealised P&L' }, { align: 'left', lines: pnlStatLines, ring: false, extraClass: `${styles.tilePnl} ${pnlStatLines > 1 ? styles.tileStacked : ''} ${styles.tileUnrealised} ${pnlChartType === 'unrealised' && showChartPanel ? styles.charted : ''}` })}
+            {renderTile({ ...realisedPnlStat, title: isGraphHidden ? 'Show the realised P&L chart' : 'Chart realised P&L' }, { align: 'left', lines: pnlStatLines, ring: false, extraClass: `${styles.tilePnl} ${styles.tileRealised} ${pnlChartType === 'realised' && showChartPanel ? styles.charted : ''}` })}
+            {renderTile({ ...unrealisedPnlStat, title: isGraphHidden ? 'Show the unrealised P&L chart' : 'Chart unrealised P&L' }, { align: 'left', lines: pnlStatLines, ring: false, extraClass: `${styles.tilePnl} ${styles.tileUnrealised} ${pnlChartType === 'unrealised' && showChartPanel ? styles.charted : ''}` })}
           </div>
         </div>
 
