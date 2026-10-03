@@ -1,4 +1,5 @@
 import React, { useContext, useMemo, useState, useEffect, useLayoutEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { Line } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import TradeList from '../TradeList/TradeList';
@@ -6,6 +7,7 @@ import { TradeContext, parseActionDate, formatDate } from '../../context/TradeCo
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import styles from './Dashboard.module.css';
+import useScrollLock from '../../utils/useScrollLock';
 import { sumByCurrency, formatTotals, toTotalsList, totalsSign } from '../../utils/currencyTotals';
 import { formatMoney, currencyMark } from '../../utils/formatMoney';
 import { formatNumber } from '../../utils/numberFormat';
@@ -102,6 +104,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
   const [showOpenTrades, setShowOpenTrades] = useState(false);
   const [showGraphPopup, setShowGraphPopup] = useState(false);
   const [isGraphHidden, setIsGraphHidden] = useState(false);
+  useScrollLock(showGraphPopup);
   // Whether the P&L chart panel is open (desktop/tablet). Remembered per
   // browser, so a collapsed chart stays out of the way of the trade list.
   const [chartOpen, setChartOpenState] = useState(() => {
@@ -1286,21 +1289,31 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
           onViewDayNote={onViewDayNote}
         />
       </div>
-      {showGraphPopup && (
-        <div className={styles.graphPopup}>
-          <div className={styles.graphPopupContent}>
-            <button
-              className={styles.graphPopupClose}
-              onClick={() => setShowGraphPopup(false)}
-              title="Close graph"
-            >
-              x
-            </button>
+      {showGraphPopup && createPortal(
+        // Phones: the chart as a sheet from the bottom, over everything
+        // (rendered into <body> so the bottom bar can't cover it).
+        <div className={styles.graphPopup} onMouseDown={e => { if (e.target === e.currentTarget) setShowGraphPopup(false); }}>
+          <div className={styles.graphPopupContent} role="dialog" aria-modal="true" aria-label={pnlChartType === 'realised' ? 'Realised P&L chart' : 'Unrealised P&L chart'}>
+            <div className={styles.graphPopupGrip} aria-hidden="true" />
+            <div className={styles.graphPopupHeader}>
+              <div className={styles.chartTitle}>
+                {pnlChartType === 'realised' ? 'Realised P&L' : 'Unrealised P&L'}
+                <span className={styles.chartSubtitle}>{pnlChartType === 'realised' ? 'cumulative, by close date' : 'open positions over time'}</span>
+              </div>
+              <button type="button" className={styles.graphPopupClose} onClick={() => setShowGraphPopup(false)} title="Close" aria-label="Close">
+                <svg viewBox="0 0 20 20" width="16" height="16" aria-hidden="true"><path d="M5 5l10 10M15 5L5 15" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" /></svg>
+              </button>
+            </div>
+            <div className={`${styles.segmented} ${styles.graphPopupSegmented}`} role="tablist" aria-label="P&L chart">
+              <button type="button" role="tab" aria-selected={pnlChartType === 'realised'} className={pnlChartType === 'realised' ? styles.segmentOn : ''} onClick={() => setPnlChartType('realised')}>Realised</button>
+              <button type="button" role="tab" aria-selected={pnlChartType === 'unrealised'} className={pnlChartType === 'unrealised' ? styles.segmentOn : ''} onClick={() => setPnlChartType('unrealised')}>Unrealised</button>
+            </div>
             <div className={styles.graphPopupArea}>
               <Line data={chartData} options={chartOptions} />
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

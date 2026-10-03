@@ -385,3 +385,16 @@ input::-webkit-date-and-time-value {
     height: calc(var(--app-height) - var(--app-top) - var(--nav-height, 60px));
   }
 }
+
+/* useScrollLock (src/utils/useScrollLock.js): while a window is open the
+   page behind it stays put, so a swipe inside the window can't scroll the
+   page instead. */
+html.jj-window-open,
+html.jj-window-open body {
+  overflow: hidden;
+}
+
+html.jj-window-open .main-content {
+  overflow: hidden !important;
+  overscroll-behavior: none;
+}

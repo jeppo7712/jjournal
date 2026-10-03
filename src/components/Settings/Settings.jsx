@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useContext, useMemo } from 'react';
 import styles from './Settings.module.css';
+import AppWindow, { WindowButton } from '../common/AppWindow';
 import { TradeContext } from '../../context/TradeContext';
 import ChecklistSettings from './ChecklistSettings';
 import IconButton, { ACTION_COLORS } from '../common/IconButton';
@@ -1722,123 +1723,120 @@ export default function Settings() {
           </div>
         )}
         {showAccountModal && (
-          <div className={styles.overlay}>
-            <div className={styles.modal}>
-              <div className={styles.header}>
-                <span className={styles.title}>{editingAccountId ? 'Edit Account' : 'Add Account'}</span>
-                <button className={styles.closeBtn} onClick={() => setShowAccountModal(false)}>×</button>
+          <AppWindow
+            className={styles.settingsWindow}
+            title={editingAccountId ? 'Edit account' : 'Add account'}
+            onClose={() => setShowAccountModal(false)}
+            storageKey="settings.account"
+            onSave={saveAccountForm}
+          >
+            <div className={styles.formGrid}>
+              <div className={styles.formField}>
+                <label htmlFor="accountName">Name</label>
+                <input
+                  id="accountName"
+                  value={accountForm.name}
+                  onChange={e => setAccountForm(prev => ({ ...prev, name: e.target.value }))}
+                  className={styles.inputBubble}
+                  autoComplete="off"
+                />
               </div>
-              <div className={styles.formGrid}>
-                <div className={styles.formField}>
-                  <label htmlFor="accountName">Name</label>
-                  <input
-                    id="accountName"
-                    value={accountForm.name}
-                    onChange={e => setAccountForm(prev => ({ ...prev, name: e.target.value }))}
-                    className={styles.inputBubble}
-                    autoComplete="off"
-                  />
-                </div>
-                <div className={styles.formField}>
-                  <label htmlFor="accountParent">Parent account</label>
-                  <select
-                    id="accountParent"
-                    value={accountForm.parent_account_id}
-                    onChange={e => setAccountForm(prev => ({ ...prev, parent_account_id: e.target.value }))}
-                    className={styles.inputBubble}
-                  >
-                    <option value="">None (top-level)</option>
-                    {accounts.filter(a => !unavailableParentIds.has(a.id)).map(a => (
-                      <option key={a.id} value={a.id}>{a.name}</option>
-                    ))}
-                  </select>
-                </div>
-                {(() => {
-                  // A parent/child group is the same real account at the same
-                  // real custodian — is_virtual/custodian/custodian_is_us
-                  // can't differ from the parent's, so once a parent is
-                  // chosen these three become read-only, showing the
-                  // parent's own live values (what will actually be saved —
-                  // the backend ignores whatever this form holds for them in
-                  // that case). See routes/accounts.js.
-                  const parentAccount = accountForm.parent_account_id
-                    ? accounts.find(a => String(a.id) === String(accountForm.parent_account_id))
-                    : null;
-                  const inherited = !!parentAccount;
-                  const displayIsVirtual = inherited ? !!parentAccount.is_virtual : accountForm.is_virtual;
-                  const displayCustodian = inherited ? (parentAccount.custodian || '') : accountForm.custodian;
-                  const displayCustodianIsUs = inherited
-                    ? (parentAccount.custodian_is_us === null || parentAccount.custodian_is_us === undefined ? '' : String(parentAccount.custodian_is_us))
-                    : accountForm.custodian_is_us;
-                  return (
-                    <>
-                      <div className={styles.formField}>
-                        <label htmlFor="accountVirtual" title="Every trade and cash transaction in this account is treated as paper/simulated — not a per-transaction choice. If this account graduates to real trading, use a separate real account instead of flipping this later.">
-                          <input
-                            id="accountVirtual"
-                            type="checkbox"
-                            checked={displayIsVirtual}
-                            disabled={inherited}
-                            onChange={e => setAccountForm(prev => ({ ...prev, is_virtual: e.target.checked }))}
-                            style={{ marginRight: '8px' }}
-                          />
-                          Paper / virtual account (all trades and cash here are simulated)
-                          {inherited && <span style={{ opacity: 0.6 }}> — inherited from {parentAccount.name}</span>}
-                        </label>
-                      </div>
-                      <div className={styles.formField}>
-                        <label htmlFor="accountCustodian" title="Where this account's cash is actually held — a different fact from is_virtual or which securities are traded. Free text.">
-                          Custodian{inherited && <span style={{ opacity: 0.6 }}> — inherited from {parentAccount.name}</span>}
-                        </label>
+              <div className={styles.formField}>
+                <label htmlFor="accountParent">Parent account</label>
+                <select
+                  id="accountParent"
+                  value={accountForm.parent_account_id}
+                  onChange={e => setAccountForm(prev => ({ ...prev, parent_account_id: e.target.value }))}
+                  className={styles.inputBubble}
+                >
+                  <option value="">None (top-level)</option>
+                  {accounts.filter(a => !unavailableParentIds.has(a.id)).map(a => (
+                    <option key={a.id} value={a.id}>{a.name}</option>
+                  ))}
+                </select>
+              </div>
+              {(() => {
+                // A parent/child group is the same real account at the same
+                // real custodian — is_virtual/custodian/custodian_is_us
+                // can't differ from the parent's, so once a parent is
+                // chosen these three become read-only, showing the
+                // parent's own live values (what will actually be saved —
+                // the backend ignores whatever this form holds for them in
+                // that case). See routes/accounts.js.
+                const parentAccount = accountForm.parent_account_id
+                  ? accounts.find(a => String(a.id) === String(accountForm.parent_account_id))
+                  : null;
+                const inherited = !!parentAccount;
+                const displayIsVirtual = inherited ? !!parentAccount.is_virtual : accountForm.is_virtual;
+                const displayCustodian = inherited ? (parentAccount.custodian || '') : accountForm.custodian;
+                const displayCustodianIsUs = inherited
+                  ? (parentAccount.custodian_is_us === null || parentAccount.custodian_is_us === undefined ? '' : String(parentAccount.custodian_is_us))
+                  : accountForm.custodian_is_us;
+                return (
+                  <>
+                    <div className={styles.formField}>
+                      <label htmlFor="accountVirtual" title="Every trade and cash transaction in this account is treated as paper/simulated — not a per-transaction choice. If this account graduates to real trading, use a separate real account instead of flipping this later.">
                         <input
-                          id="accountCustodian"
-                          value={displayCustodian}
+                          id="accountVirtual"
+                          type="checkbox"
+                          checked={displayIsVirtual}
                           disabled={inherited}
-                          placeholder="e.g. IBKR LLC, IBKR Ireland, Kraken"
-                          onChange={e => setAccountForm(prev => ({ ...prev, custodian: e.target.value }))}
-                          className={styles.inputBubble}
-                          autoComplete="off"
+                          onChange={e => setAccountForm(prev => ({ ...prev, is_virtual: e.target.checked }))}
+                          style={{ marginRight: '8px' }}
                         />
-                      </div>
-                      <div className={styles.formField}>
-                        <label htmlFor="accountCustodianIsUs" title="Whether the custodian above is a US entity — left as 'Not set' means unclassified, not confirmed non-US.">
-                          Custodian is a US entity?{inherited && <span style={{ opacity: 0.6 }}> — inherited from {parentAccount.name}</span>}
-                        </label>
-                        <select
-                          id="accountCustodianIsUs"
-                          value={displayCustodianIsUs}
-                          disabled={inherited}
-                          onChange={e => setAccountForm(prev => ({ ...prev, custodian_is_us: e.target.value }))}
-                          className={styles.inputBubble}
-                        >
-                          <option value="">Not set</option>
-                          <option value="true">US entity</option>
-                          <option value="false">Non-US entity</option>
-                        </select>
-                      </div>
-                      <div className={styles.formField}>
-                        <label htmlFor="accountBrokerId" title="The broker's own account number this journal account mirrors (for IBKR, the one shown in Client Portal). Imported cash activity such as dividends is booked on the journal account mapped to it.">
-                          Broker account ID{inherited && <span style={{ opacity: 0.6 }}> — uses {parentAccount.name}'s</span>}
-                        </label>
-                        <input
-                          id="accountBrokerId"
-                          value={inherited ? (parentAccount.broker_account_id || '') : accountForm.broker_account_id}
-                          disabled={inherited}
-                          placeholder="optional, e.g. U1234567"
-                          onChange={e => setAccountForm(prev => ({ ...prev, broker_account_id: e.target.value.toUpperCase() }))}
-                          className={styles.inputBubble}
-                          autoComplete="off"
-                        />
-                      </div>
-                    </>
-                  );
-                })()}
-              </div>
-              <div className={styles.footerRow}>
-                <IconButton icon="check" caption="Save" label="Save the account" onClick={saveAccountForm} />
-              </div>
+                        Paper / virtual account (all trades and cash here are simulated)
+                        {inherited && <span style={{ opacity: 0.6 }}> — inherited from {parentAccount.name}</span>}
+                      </label>
+                    </div>
+                    <div className={styles.formField}>
+                      <label htmlFor="accountCustodian" title="Where this account's cash is actually held — a different fact from is_virtual or which securities are traded. Free text.">
+                        Custodian{inherited && <span style={{ opacity: 0.6 }}> — inherited from {parentAccount.name}</span>}
+                      </label>
+                      <input
+                        id="accountCustodian"
+                        value={displayCustodian}
+                        disabled={inherited}
+                        placeholder="e.g. IBKR LLC, IBKR Ireland, Kraken"
+                        onChange={e => setAccountForm(prev => ({ ...prev, custodian: e.target.value }))}
+                        className={styles.inputBubble}
+                        autoComplete="off"
+                      />
+                    </div>
+                    <div className={styles.formField}>
+                      <label htmlFor="accountCustodianIsUs" title="Whether the custodian above is a US entity — left as 'Not set' means unclassified, not confirmed non-US.">
+                        Custodian is a US entity?{inherited && <span style={{ opacity: 0.6 }}> — inherited from {parentAccount.name}</span>}
+                      </label>
+                      <select
+                        id="accountCustodianIsUs"
+                        value={displayCustodianIsUs}
+                        disabled={inherited}
+                        onChange={e => setAccountForm(prev => ({ ...prev, custodian_is_us: e.target.value }))}
+                        className={styles.inputBubble}
+                      >
+                        <option value="">Not set</option>
+                        <option value="true">US entity</option>
+                        <option value="false">Non-US entity</option>
+                      </select>
+                    </div>
+                    <div className={styles.formField}>
+                      <label htmlFor="accountBrokerId" title="The broker's own account number this journal account mirrors (for IBKR, the one shown in Client Portal). Imported cash activity such as dividends is booked on the journal account mapped to it.">
+                        Broker account ID{inherited && <span style={{ opacity: 0.6 }}> — uses {parentAccount.name}'s</span>}
+                      </label>
+                      <input
+                        id="accountBrokerId"
+                        value={inherited ? (parentAccount.broker_account_id || '') : accountForm.broker_account_id}
+                        disabled={inherited}
+                        placeholder="optional, e.g. U1234567"
+                        onChange={e => setAccountForm(prev => ({ ...prev, broker_account_id: e.target.value.toUpperCase() }))}
+                        className={styles.inputBubble}
+                        autoComplete="off"
+                      />
+                    </div>
+                  </>
+                );
+              })()}
             </div>
-          </div>
+          </AppWindow>
         )}
         {activeTab === 'symbols' && dbStatus?.isConnected && (
           <div className={styles.futuresTab}>
@@ -2419,383 +2417,380 @@ export default function Settings() {
       </div>
       </div>
       {showFuturesModal && (
-        <div className={styles.overlay}>
-          <div className={styles.modal}>
-            <div className={styles.header}>
-              <span className={styles.title}>{editingSetting ? 'Edit Symbol Setting' : 'Add Symbol Setting'}</span>
-              <button className={styles.closeBtn} onClick={() => setShowFuturesModal(false)}>×</button>
-            </div>
-            {!editingSetting && (
-              <p style={{ margin: '0 0 12px', fontSize: '0.85rem', opacity: 0.8 }}>
-                Type a known futures root symbol (e.g. MNQ, ES, GC, CL) and tab out of the field to auto-fill its contract specs.
-              </p>
-            )}
-            {futuresAutoFillNote && (
-              <p style={{ margin: '0 0 12px', fontSize: '0.85rem', color: '#3B82F6' }}>{futuresAutoFillNote}</p>
-            )}
-            <div className={styles.formGrid}>
-              <div className={styles.formField}>
-                <label htmlFor="symbol">Symbol</label>
-                <input
-                  id="symbol"
-                  name="symbol"
-                  value={form.symbol}
-                  onChange={handleFuturesFormChange}
-                  onBlur={handleSymbolBlur}
-                  className={styles.inputBubble}
-                  disabled={editingSetting && editingSetting.symbol === 'DEFAULT'}
-                  autoComplete="off"
-                />
-              </div>
-              <div className={styles.formField}>
-                <label htmlFor="type">Type</label>
-                <select
-                  id="type"
-                  name="type"
-                  value={form.type}
-                  onChange={handleFuturesFormChange}
-                  className={styles.inputBubble}
-                >
-                  <option value="STK">Stock</option>
-                  <option value="FUT">Futures</option>
-                </select>
-              </div>
-              {form.type === 'FUT' && (
-                <>
-                  <div className={styles.formField}>
-                    <label htmlFor="tickSize">Tick Size</label>
-                    <input
-                      id="tickSize"
-                      name="tickSize"
-                      value={form.tickSize}
-                      onChange={handleFuturesFormChange}
-                      className={styles.inputBubble}
-                      inputMode="decimal"
-                      autoComplete="off"
-                      type="number"
-                      step="0.01"
-                    />
-                  </div>
-                  <div className={styles.formField}>
-                    <label htmlFor="tickValue">Tick Value</label>
-                    <input
-                      id="tickValue"
-                      name="tickValue"
-                      value={form.tickValue}
-                      onChange={handleFuturesFormChange}
-                      className={styles.inputBubble}
-                      inputMode="decimal"
-                      autoComplete="off"
-                      type="number"
-                      step="0.01"
-                    />
-                  </div>
-                  <div className={styles.formField}>
-                    <label htmlFor="rolloverMonths">Rollover Months (e.g., 3,6,9,12)</label>
-                    <input
-                      id="rolloverMonths"
-                      name="rolloverMonths"
-                      value={form.rolloverMonths}
-                      onChange={handleFuturesFormChange}
-                      className={styles.inputBubble}
-                      autoComplete="off"
-                      placeholder="Enter months (1-12) separated by commas"
-                    />
-                  </div>
-                  <div className={styles.formField}>
-                    <label htmlFor="initialMargin">Initial Margin ($)</label>
-                    <input
-                      id="initialMargin"
-                      name="initialMargin"
-                      value={form.initialMargin}
-                      onChange={handleFuturesFormChange}
-                      className={styles.inputBubble}
-                      inputMode="decimal"
-                      autoComplete="off"
-                      type="number"
-                      step="0.01"
-                      placeholder="e.g., 5000"
-                      required
-                    />
-                  </div>
-                </>
-              )}
-              <div className={styles.formField}>
-                <label htmlFor="fee">Fee</label>
-                <input
-                  id="fee"
-                  name="fee"
-                  value={form.fee}
-                  onChange={handleFuturesFormChange}
-                  className={styles.inputBubble}
-                  inputMode="decimal"
-                  autoComplete="off"
-                  type="number"
-                  step="0.01"
-                />
-              </div>
-              <div className={styles.formField}>
-                <label htmlFor="exchange">Exchange</label>
-                <select
-                  id="exchange"
-                  name="exchange"
-                  value={form.exchange}
-                  onChange={handleFuturesFormChange}
-                  className={styles.inputBubble}
-                >
-                  {exchangeOptions.map(option => (
-                    <option key={option.id || 'null'} value={option.name}>
-                      {option.name}
-                    </option>
-                  ))}
-                </select>
-              </div>
-              <div className={styles.formField}>
-                <label htmlFor="currency">Currency</label>
-                <input
-                  id="currency"
-                  name="currency"
-                  value={form.currency}
-                  onChange={handleFuturesFormChange}
-                  className={styles.inputBubble}
-                  autoComplete="off"
-                  maxLength={3}
-                  placeholder="USD"
-                  title="ISO currency code this symbol is priced/traded in (e.g. USD, EUR, AED) — used for cash settlement and IBKR contract lookups, not just display."
-                />
-              </div>
-              {form.type === 'STK' && (
-                <>
-                  <div className={styles.formField}>
-                    <label htmlFor="ibkrSymbol" title="Only if IBKR names this differently than worked out automatically. A Yahoo-style symbol like XEON.DE is already looked up at IBKR as XEON on Xetra.">IBKR symbol (optional)</label>
-                    <input
-                      id="ibkrSymbol"
-                      name="ibkrSymbol"
-                      value={form.ibkrSymbol}
-                      onChange={handleFuturesFormChange}
-                      className={styles.inputBubble}
-                      autoComplete="off"
-                      placeholder="automatic"
-                    />
-                  </div>
-                  <div className={styles.formField}>
-                    <label htmlFor="ibkrExchange" title="IBKR's code for the listing exchange (e.g. IBIS, AEB, LSEETF), only if the automatic one is wrong.">IBKR exchange (optional)</label>
-                    <input
-                      id="ibkrExchange"
-                      name="ibkrExchange"
-                      value={form.ibkrExchange}
-                      onChange={handleFuturesFormChange}
-                      className={styles.inputBubble}
-                      autoComplete="off"
-                      placeholder="automatic"
-                    />
-                  </div>
-                </>
-              )}
-            </div>
-            <div className={styles.divider} />
-            <div>
-              <h3 style={{ margin: '0 0 4px' }}>Timeframes to Fetch</h3>
-              <p style={{ margin: '0 0 12px', fontSize: '0.85rem', opacity: 0.8 }}>
-                Choose which timeframes to fetch and keep updated for this symbol. Each enabled timeframe is always
-                fetched as far back as the data provider allows — no need to specify how much history to keep.
-              </p>
-              <table className={styles.miniTable}>
-                <thead>
-                  <tr>
-                    <th style={{ padding: '4px 8px' }}>Fetch</th>
-                    <th style={{ padding: '4px 8px' }}>Timeframe</th>
-                    <th style={{ padding: '4px 8px' }}>Known limits</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {TIMEFRAME_ORDER.map(tf => {
-                    const entry = form.timeframeSettings?.[tf] || DEFAULT_TIMEFRAME_SETTINGS[tf];
-                    const limitsInfo = describeTimeframeLimits(timeframeLimits?.[tf]);
-                    return (
-                      <tr key={tf}>
-                        <td style={{ padding: '4px 8px' }}>
-                          <input
-                            type="checkbox"
-                            checked={!!entry.enabled}
-                            onChange={() => handleTimeframeToggle(tf)}
-                          />
-                        </td>
-                        <td style={{ padding: '4px 8px' }}>{tf}</td>
-                        <td style={{ padding: '4px 8px', fontSize: '0.8rem', opacity: 0.8 }}>
-                          {entry.enabled ? (limitsInfo || 'No limit discovered yet') : '—'}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-            <div className={styles.footerRow}>
-              <IconButton icon="check" caption="Save" label="Save the symbol" onClick={saveFuturesSetting} />
-            </div>
-          </div>
-        </div>
-      )}
-      {showExchangeModal && (
-        <div className={styles.overlay}>
-          <div className={styles.modal}>
-            <div className={styles.header}>
-              <span className={styles.title}>{editingExchange ? 'Edit Exchange' : 'Add Exchange'}</span>
-              <button className={styles.closeBtn} onClick={() => setShowExchangeModal(false)}>×</button>
-            </div>
-            {!editingExchange && (
-              <p style={{ margin: '0 0 12px', fontSize: '0.85rem', opacity: 0.8 }}>
-                Type a known exchange name (e.g. CME, NYMEX, COMEX, NYSE, NASDAQ) and tab out of the field to auto-fill its timezone and hours.
-              </p>
-            )}
-            {exchangeAutoFillNote && (
-              <p style={{ margin: '0 0 12px', fontSize: '0.85rem', color: '#3B82F6' }}>{exchangeAutoFillNote}</p>
-            )}
-            <div className={styles.formGrid}>
-              <div className={styles.formField}>
-                <label htmlFor="name">Exchange Name</label>
-                <input
-                  id="name"
-                  name="name"
-                  value={exchangeForm.name}
-                  onChange={handleExchangeFormChange}
-                  onBlur={handleExchangeNameBlur}
-                  className={styles.inputBubble}
-                  autoComplete="off"
-                  placeholder="e.g., NYMEX, NASDAQ"
-                />
-              </div>
-              <div className={styles.formField}>
-                <label htmlFor="timezone">Timezone</label>
-                <select
-                  id="timezone"
-                  name="timezone"
-                  value={exchangeForm.timezone}
-                  onChange={handleExchangeFormChange}
-                  className={styles.inputBubble}
-                >
-                  {timezones.map(tz => (
-                    <option key={tz} value={tz}>{tz}</option>
-                  ))}
-                </select>
-              </div>
+        <AppWindow
+          className={styles.settingsWindow}
+          title={editingSetting ? `Edit ${editingSetting.symbol === 'DEFAULT' ? 'default settings' : editingSetting.symbol || 'symbol'}` : 'Add symbol'}
+          subtitle="Contract specs, fees and the timeframes to fetch"
+          onClose={() => setShowFuturesModal(false)}
+          storageKey="settings.symbol"
+          width={720}
+          onSave={saveFuturesSetting}
+        >
+          {!editingSetting && (
+            <p className={styles.windowHint}>
+              Type a known futures root symbol (e.g. MNQ, ES, GC, CL) and tab out of the field to auto-fill its contract specs.
+            </p>
+          )}
+          {futuresAutoFillNote && (
+            <p className={`${styles.windowHint} ${styles.windowHintAccent}`}>{futuresAutoFillNote}</p>
+          )}
+          <div className={styles.formGrid}>
+            <div className={styles.formField}>
+              <label htmlFor="symbol">Symbol</label>
+              <input
+                id="symbol"
+                name="symbol"
+                value={form.symbol}
+                onChange={handleFuturesFormChange}
+                onBlur={handleSymbolBlur}
+                className={styles.inputBubble}
+                disabled={editingSetting && editingSetting.symbol === 'DEFAULT'}
+                autoComplete="off"
+              />
             </div>
             <div className={styles.formField}>
-              <label>Opening Hours (Click to toggle or drag to select multiple)</label>
-              <div
-                className={styles.openingHoursMatrix}
-                onMouseLeave={handleDragEnd}
-                style={{ userSelect: 'none' }}
+              <label htmlFor="type">Type</label>
+              <select
+                id="type"
+                name="type"
+                value={form.type}
+                onChange={handleFuturesFormChange}
+                className={styles.inputBubble}
               >
-                <div style={{ display: 'flex', marginBottom: 4 }}>
-                  <div style={{ width: 44 }}></div>
-                  {Array(48).fill().map((_, slotIdx) =>
-                    slotIdx % 4 === 0 ? (
-                      <div
-                        key={slotIdx}
-                        className={styles.matrixHeader}
-                        style={{ width: 20, textAlign: 'center' }}
-                      >
-                        {slotToTime(slotIdx)}
-                      </div>
-                    ) : (
-                      <div key={slotIdx} style={{ width: 20 }} />
-                    )
-                  )}
-                </div>
-                {exchangeForm.opening_hours.map((slots, dayIdx) => (
-                  <div key={dayIdx} style={{ display: 'flex' }}>
-                    <div
-                      className={styles.matrixHeader}
-                      style={{ width: 44, textAlign: 'right', marginRight: 2 }}
-                    >
-                      {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dayIdx]}
-                    </div>
-                    {slots.map((slotValue, slotIdx) => (
-                      <div
-                        key={slotIdx}
-                        className={[
-                          styles.matrixCell,
-                          slotValue ? styles.active : '',
-                          isCellSelected(dayIdx, slotIdx) ? styles.selected : ''
-                        ].join(' ')}
-                        title={`${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dayIdx]} ${slotToTime(slotIdx)}`}
-                        onMouseDown={e => {
-                          e.preventDefault();
-                          setDragStart({ day: dayIdx, slot: slotIdx });
-                          setDragEnd({ day: dayIdx, slot: slotIdx });
-                          setIsDragging(true);
-                        }}
-                        onMouseEnter={() => {
-                          if (isDragging) setDragEnd({ day: dayIdx, slot: slotIdx });
-                        }}
-                        onMouseUp={e => {
-                          if (
-                            dragStart &&
-                            dragStart.day === dayIdx &&
-                            dragStart.slot === slotIdx &&
-                            (!dragEnd ||
-                              (dragEnd.day === dayIdx && dragEnd.slot === slotIdx))
-                          ) {
-                            toggleOpeningHour(dayIdx, slotIdx);
-                            setIsDragging(false);
-                            setDragStart(null);
-                            setDragEnd(null);
-                          } else {
-                            handleDragEnd();
-                          }
-                        }}
-                        aria-label={`Toggle ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dayIdx]} ${slotToTime(slotIdx)}`}
-                      />
-                    ))}
-                  </div>
-                ))}
-              </div>
+                <option value="STK">Stock</option>
+                <option value="FUT">Futures</option>
+              </select>
             </div>
-            <div className={styles.footerRow}>
-              <IconButton icon="check" caption="Save" label="Save the exchange" onClick={saveExchange} />
+            {form.type === 'FUT' && (
+              <>
+                <div className={styles.formField}>
+                  <label htmlFor="tickSize">Tick Size</label>
+                  <input
+                    id="tickSize"
+                    name="tickSize"
+                    value={form.tickSize}
+                    onChange={handleFuturesFormChange}
+                    className={styles.inputBubble}
+                    inputMode="decimal"
+                    autoComplete="off"
+                    type="number"
+                    step="0.01"
+                  />
+                </div>
+                <div className={styles.formField}>
+                  <label htmlFor="tickValue">Tick Value</label>
+                  <input
+                    id="tickValue"
+                    name="tickValue"
+                    value={form.tickValue}
+                    onChange={handleFuturesFormChange}
+                    className={styles.inputBubble}
+                    inputMode="decimal"
+                    autoComplete="off"
+                    type="number"
+                    step="0.01"
+                  />
+                </div>
+                <div className={styles.formField}>
+                  <label htmlFor="rolloverMonths">Rollover Months (e.g., 3,6,9,12)</label>
+                  <input
+                    id="rolloverMonths"
+                    name="rolloverMonths"
+                    value={form.rolloverMonths}
+                    onChange={handleFuturesFormChange}
+                    className={styles.inputBubble}
+                    autoComplete="off"
+                    placeholder="Enter months (1-12) separated by commas"
+                  />
+                </div>
+                <div className={styles.formField}>
+                  <label htmlFor="initialMargin">Initial Margin ($)</label>
+                  <input
+                    id="initialMargin"
+                    name="initialMargin"
+                    value={form.initialMargin}
+                    onChange={handleFuturesFormChange}
+                    className={styles.inputBubble}
+                    inputMode="decimal"
+                    autoComplete="off"
+                    type="number"
+                    step="0.01"
+                    placeholder="e.g., 5000"
+                    required
+                  />
+                </div>
+              </>
+            )}
+            <div className={styles.formField}>
+              <label htmlFor="fee">Fee</label>
+              <input
+                id="fee"
+                name="fee"
+                value={form.fee}
+                onChange={handleFuturesFormChange}
+                className={styles.inputBubble}
+                inputMode="decimal"
+                autoComplete="off"
+                type="number"
+                step="0.01"
+              />
+            </div>
+            <div className={styles.formField}>
+              <label htmlFor="exchange">Exchange</label>
+              <select
+                id="exchange"
+                name="exchange"
+                value={form.exchange}
+                onChange={handleFuturesFormChange}
+                className={styles.inputBubble}
+              >
+                {exchangeOptions.map(option => (
+                  <option key={option.id || 'null'} value={option.name}>
+                    {option.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+            <div className={styles.formField}>
+              <label htmlFor="currency">Currency</label>
+              <input
+                id="currency"
+                name="currency"
+                value={form.currency}
+                onChange={handleFuturesFormChange}
+                className={styles.inputBubble}
+                autoComplete="off"
+                maxLength={3}
+                placeholder="USD"
+                title="ISO currency code this symbol is priced/traded in (e.g. USD, EUR, AED) — used for cash settlement and IBKR contract lookups, not just display."
+              />
+            </div>
+            {form.type === 'STK' && (
+              <>
+                <div className={styles.formField}>
+                  <label htmlFor="ibkrSymbol" title="Only if IBKR names this differently than worked out automatically. A Yahoo-style symbol like XEON.DE is already looked up at IBKR as XEON on Xetra.">IBKR symbol (optional)</label>
+                  <input
+                    id="ibkrSymbol"
+                    name="ibkrSymbol"
+                    value={form.ibkrSymbol}
+                    onChange={handleFuturesFormChange}
+                    className={styles.inputBubble}
+                    autoComplete="off"
+                    placeholder="automatic"
+                  />
+                </div>
+                <div className={styles.formField}>
+                  <label htmlFor="ibkrExchange" title="IBKR's code for the listing exchange (e.g. IBIS, AEB, LSEETF), only if the automatic one is wrong.">IBKR exchange (optional)</label>
+                  <input
+                    id="ibkrExchange"
+                    name="ibkrExchange"
+                    value={form.ibkrExchange}
+                    onChange={handleFuturesFormChange}
+                    className={styles.inputBubble}
+                    autoComplete="off"
+                    placeholder="automatic"
+                  />
+                </div>
+              </>
+            )}
+          </div>
+          <div className={styles.divider} />
+          <div>
+            <h3 className={styles.windowSection}>Timeframes to fetch</h3>
+            <p className={styles.windowHint}>
+              Choose which timeframes to fetch and keep updated for this symbol. Each enabled timeframe is always
+              fetched as far back as the data provider allows — no need to specify how much history to keep.
+            </p>
+            <table className={styles.miniTable}>
+              <thead>
+                <tr>
+                  <th style={{ padding: '4px 8px' }}>Fetch</th>
+                  <th style={{ padding: '4px 8px' }}>Timeframe</th>
+                  <th style={{ padding: '4px 8px' }}>Known limits</th>
+                </tr>
+              </thead>
+              <tbody>
+                {TIMEFRAME_ORDER.map(tf => {
+                  const entry = form.timeframeSettings?.[tf] || DEFAULT_TIMEFRAME_SETTINGS[tf];
+                  const limitsInfo = describeTimeframeLimits(timeframeLimits?.[tf]);
+                  return (
+                    <tr key={tf}>
+                      <td style={{ padding: '4px 8px' }}>
+                        <input
+                          type="checkbox"
+                          checked={!!entry.enabled}
+                          onChange={() => handleTimeframeToggle(tf)}
+                        />
+                      </td>
+                      <td style={{ padding: '4px 8px' }}>{tf}</td>
+                      <td style={{ padding: '4px 8px', fontSize: '0.8rem', opacity: 0.8 }}>
+                        {entry.enabled ? (limitsInfo || 'No limit discovered yet') : '—'}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        </AppWindow>
+      )}
+      {showExchangeModal && (
+        <AppWindow
+          className={styles.settingsWindow}
+          title={editingExchange ? `Edit ${editingExchange.name || 'exchange'}` : 'Add exchange'}
+          subtitle="Timezone and opening hours"
+          onClose={() => setShowExchangeModal(false)}
+          storageKey="settings.exchange"
+          width={760}
+          onSave={saveExchange}
+        >
+          {!editingExchange && (
+            <p className={styles.windowHint}>
+              Type a known exchange name (e.g. CME, NYMEX, COMEX, NYSE, NASDAQ) and tab out of the field to auto-fill its timezone and hours.
+            </p>
+          )}
+          {exchangeAutoFillNote && (
+            <p className={`${styles.windowHint} ${styles.windowHintAccent}`}>{exchangeAutoFillNote}</p>
+          )}
+          <div className={styles.formGrid}>
+            <div className={styles.formField}>
+              <label htmlFor="name">Exchange Name</label>
+              <input
+                id="name"
+                name="name"
+                value={exchangeForm.name}
+                onChange={handleExchangeFormChange}
+                onBlur={handleExchangeNameBlur}
+                className={styles.inputBubble}
+                autoComplete="off"
+                placeholder="e.g., NYMEX, NASDAQ"
+              />
+            </div>
+            <div className={styles.formField}>
+              <label htmlFor="timezone">Timezone</label>
+              <select
+                id="timezone"
+                name="timezone"
+                value={exchangeForm.timezone}
+                onChange={handleExchangeFormChange}
+                className={styles.inputBubble}
+              >
+                {timezones.map(tz => (
+                  <option key={tz} value={tz}>{tz}</option>
+                ))}
+              </select>
             </div>
           </div>
-        </div>
-      )}
-      {showRolloverModal && editingRollover && (
-        <div className={styles.overlay}>
-          <div className={styles.modal}>
-            <div className={styles.header}>
-              <span className={styles.title}>Edit Rollover Date</span>
-              <button className={styles.closeBtn} onClick={handleCloseRolloverModal}>×</button>
-            </div>
-            <div className={styles.formGrid}>
-              <div className={styles.formField}>
-                <label>From Contract</label>
-                <input value={editingRollover.from} className={styles.inputBubble} disabled />
-              </div>
-              <div className={styles.formField}>
-                <label>To Contract</label>
-                <input value={editingRollover.to} className={styles.inputBubble} disabled />
-              </div>
-              <div className={styles.formField}>
-                <label htmlFor="rolloverDate">Manual Rollover Date</label>
-                <input
-                  id="rolloverDate"
-                  type="date"
-                  value={rolloverDate}
-                  onChange={(e) => setRolloverDate(e.target.value)}
-                  className={styles.inputBubble}
-                />
-              </div>
-            </div>
-            <div className={styles.footerRow} style={{ justifyContent: 'flex-end', gap: 12 }}>
-              <div>
-                {editingRollover.rollover_type === 'MANUAL' && (
-                  <IconButton icon="trash" caption="Delete" label="Delete this rollover override" onClick={handleDeleteRolloverOverride} busy={isDeleting} />
+          <div className={styles.formField}>
+            <label>Opening Hours (Click to toggle or drag to select multiple)</label>
+            <div
+              className={styles.openingHoursMatrix}
+              onMouseLeave={handleDragEnd}
+              style={{ userSelect: 'none' }}
+            >
+              <div style={{ display: 'flex', marginBottom: 4 }}>
+                <div style={{ width: 44 }}></div>
+                {Array(48).fill().map((_, slotIdx) =>
+                  slotIdx % 4 === 0 ? (
+                    <div
+                      key={slotIdx}
+                      className={styles.matrixHeader}
+                      style={{ width: 20, textAlign: 'center' }}
+                    >
+                      {slotToTime(slotIdx)}
+                    </div>
+                  ) : (
+                    <div key={slotIdx} style={{ width: 20 }} />
+                  )
                 )}
               </div>
-              <IconButton icon="check" caption={isSaving ? 'Rebuilding…' : 'Save'} label="Save the rollover and rebuild the continuous series" onClick={handleSaveRollover} busy={isSaving} />
+              {exchangeForm.opening_hours.map((slots, dayIdx) => (
+                <div key={dayIdx} style={{ display: 'flex' }}>
+                  <div
+                    className={styles.matrixHeader}
+                    style={{ width: 44, textAlign: 'right', marginRight: 2 }}
+                  >
+                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dayIdx]}
+                  </div>
+                  {slots.map((slotValue, slotIdx) => (
+                    <div
+                      key={slotIdx}
+                      className={[
+                        styles.matrixCell,
+                        slotValue ? styles.active : '',
+                        isCellSelected(dayIdx, slotIdx) ? styles.selected : ''
+                      ].join(' ')}
+                      title={`${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dayIdx]} ${slotToTime(slotIdx)}`}
+                      onMouseDown={e => {
+                        e.preventDefault();
+                        setDragStart({ day: dayIdx, slot: slotIdx });
+                        setDragEnd({ day: dayIdx, slot: slotIdx });
+                        setIsDragging(true);
+                      }}
+                      onMouseEnter={() => {
+                        if (isDragging) setDragEnd({ day: dayIdx, slot: slotIdx });
+                      }}
+                      onMouseUp={e => {
+                        if (
+                          dragStart &&
+                          dragStart.day === dayIdx &&
+                          dragStart.slot === slotIdx &&
+                          (!dragEnd ||
+                            (dragEnd.day === dayIdx && dragEnd.slot === slotIdx))
+                        ) {
+                          toggleOpeningHour(dayIdx, slotIdx);
+                          setIsDragging(false);
+                          setDragStart(null);
+                          setDragEnd(null);
+                        } else {
+                          handleDragEnd();
+                        }
+                      }}
+                      aria-label={`Toggle ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dayIdx]} ${slotToTime(slotIdx)}`}
+                    />
+                  ))}
+                </div>
+              ))}
             </div>
           </div>
-        </div>
+        </AppWindow>
+      )}
+      {showRolloverModal && editingRollover && (
+        <AppWindow
+          className={styles.settingsWindow}
+          title="Edit rollover date"
+          subtitle={`${editingRollover.from} → ${editingRollover.to}`}
+          onClose={handleCloseRolloverModal}
+          storageKey="settings.rollover"
+          width={560}
+          onSave={handleSaveRollover}
+          saveLabel={isSaving ? 'Rebuilding…' : 'Save'}
+          busy={isSaving}
+          leftActions={editingRollover.rollover_type === 'MANUAL' && (
+            <WindowButton variant="danger" onClick={handleDeleteRolloverOverride} busy={isDeleting}>Delete override</WindowButton>
+          )}
+        >
+          <div className={styles.formGrid}>
+            <div className={styles.formField}>
+              <label>From Contract</label>
+              <input value={editingRollover.from} className={styles.inputBubble} disabled />
+            </div>
+            <div className={styles.formField}>
+              <label>To Contract</label>
+              <input value={editingRollover.to} className={styles.inputBubble} disabled />
+            </div>
+            <div className={styles.formField}>
+              <label htmlFor="rolloverDate">Manual Rollover Date</label>
+              <input
+                id="rolloverDate"
+                type="date"
+                value={rolloverDate}
+                onChange={(e) => setRolloverDate(e.target.value)}
+                className={styles.inputBubble}
+              />
+            </div>
+          </div>
+        </AppWindow>
       )}
     </div>
   );

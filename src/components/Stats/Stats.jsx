@@ -1,6 +1,5 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { TradeContext } from '../../context/TradeContext';
-import TradeView from '../TradeView/TradeView'; // Import TradeView
 import { sanitizeNotesHtml } from '../../utils/sanitizeHtml';
 import Calendar from '../Calendar/Calendar';
 import { TIMEZONE_OPTIONS, loadStoredDisplayTimezone, storeDisplayTimezone, TimezonePicker } from '../../utils/timezonePreference';
@@ -154,7 +153,6 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
   const [historicalDataMap, setHistoricalDataMap] = useState({});
   const [isFetching, setIsFetching] = useState(false);
   const [notesSort, setNotesSort] = useState({ key: 'firstActionDate', direction: 'desc' });
-  const [viewingTrade, setViewingTrade] = useState(null);
   const [calendarMonth, setCalendarMonth] = useState(new Date());
   // Shared global preference with TradeView/TradeModal, but "exchange" isn't
   // a valid choice here (see STATS_TIMEZONE_OPTIONS above) — fall back to
@@ -398,10 +396,6 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
       }
       return { key, direction: 'desc' };
     });
-  };
-
-  const handleEditTrade = (tradeToEdit) => {
-    setViewingTrade(null);
   };
 
   const exportNotesToCSV = (notes) => {
@@ -1383,7 +1377,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
               </div>
               <div className={styles.tradeNotesList}>
                 {sortedTradeNotes.length > 0 ? sortedTradeNotes.map(trade => (
-                  <div key={trade.id} className={styles.tradeNoteCard} onClick={() => setViewingTrade(trade)}>
+                  <div key={trade.id} className={styles.tradeNoteCard} onClick={() => onViewTrade(trade)}>
                     <div className={styles.tradeNoteHeader}>
                       <div className={styles.headerLeft}>
                         <span className={styles.symbolBadge}>{trade.symbol}</span>
@@ -1451,13 +1445,6 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         </div>
           </div>
         </div>
-        {viewingTrade && (
-            <TradeView
-                trade={viewingTrade}
-                onClose={() => setViewingTrade(null)}
-                onEdit={handleEditTrade}
-            />
-        )}
       </div>
     </StatsErrorBoundary>
   );
