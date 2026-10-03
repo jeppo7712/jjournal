@@ -9,6 +9,9 @@ import styles from './Dialogs.module.css';
 // - confirmDialog(message, options?): resolves true or false.
 // - promptDialog(message, defaultValue?, options?): resolves the text, or
 //   null when cancelled.
+// - choiceDialog(message, { title, choices }): more than one way forward
+//   (e.g. Save / Don't save); resolves the chosen value, or null when
+//   cancelled. choices: [{ value, label, kind: 'primary' | 'danger' }].
 // They work from anywhere (no hook needed); <DialogHost /> in App renders
 // them. Dialogs queue: a second one opens when the first is answered.
 
@@ -76,6 +79,16 @@ export function promptDialog(message, defaultValue = '', { title, confirmLabel }
   });
 }
 
+export function choiceDialog(message, { title, choices = [], danger = false } = {}) {
+  return openDialog({
+    type: 'choice',
+    message: String(message),
+    title: title || 'Please choose',
+    choices,
+    danger,
+  });
+}
+
 const ICONS = {
   success: <path fillRule="evenodd" clipRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" />,
   error: <path fillRule="evenodd" clipRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" />,
@@ -92,10 +105,16 @@ function Dialog({ dialog }) {
   const confirmRef = useRef(null);
   const inputRef = useRef(null);
 
+  const cancelValue = dialog.type === 'confirm' ? false : null;
+  // Enter picks the main choice of a choice dialog.
+  const mainChoice = dialog.type === 'choice'
+    ? (dialog.choices.find(c => c.kind === 'primary') || dialog.choices[dialog.choices.length - 1])
+    : null;
+
   useEffect(() => {
     (dialog.type === 'prompt' ? inputRef.current : confirmRef.current)?.focus();
     const onKey = (e) => {
-      if (e.key === 'Escape') { e.preventDefault(); closeDialog(dialog.type === 'prompt' ? null : false); }
+      if (e.key === 'Escape') { e.preventDefault(); closeDialog(dialog.type === 'confirm' ? false : null); }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
@@ -103,9 +122,10 @@ function Dialog({ dialog }) {
 
   const submit = (e) => {
     e?.preventDefault();
-    closeDialog(dialog.type === 'prompt' ? value : true);
+    if (dialog.type === 'choice') closeDialog(mainChoice ? mainChoice.value : null);
+    else closeDialog(dialog.type === 'prompt' ? value : true);
   };
-  const cancel = () => closeDialog(dialog.type === 'prompt' ? null : false);
+  const cancel = () => closeDialog(cancelValue);
 
   return (
     <div className={styles.overlay} onMouseDown={e => { if (e.target === e.currentTarget) cancel(); }}>
@@ -126,13 +146,25 @@ function Dialog({ dialog }) {
         )}
         <div className={styles.actions}>
           <button type="button" className={styles.secondary} onClick={cancel}>Cancel</button>
-          <button
-            ref={confirmRef}
-            type="submit"
-            className={`${styles.primary} ${dialog.danger ? styles.dangerButton : ''}`}
-          >
-            {dialog.confirmLabel}
-          </button>
+          {dialog.type === 'choice' ? dialog.choices.map(choice => (
+            <button
+              key={choice.value}
+              ref={choice === mainChoice ? confirmRef : undefined}
+              type="button"
+              className={choice.kind === 'danger' ? styles.dangerOutline : choice.kind === 'primary' ? styles.primary : styles.secondary}
+              onClick={() => closeDialog(choice.value)}
+            >
+              {choice.label}
+            </button>
+          )) : (
+            <button
+              ref={confirmRef}
+              type="submit"
+              className={`${styles.primary} ${dialog.danger ? styles.dangerButton : ''}`}
+            >
+              {dialog.confirmLabel}
+            </button>
+          )}
         </div>
       </form>
     </div>

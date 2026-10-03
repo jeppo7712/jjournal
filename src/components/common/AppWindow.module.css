@@ -1,0 +1,271 @@
+/* AppWindow: the same look as the trade, trade view and note windows. */
+
+.overlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2000; /* above the navigation (1000), below app dialogs (3000) */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 24px;
+  box-sizing: border-box;
+  background: rgba(5, 7, 12, 0.62);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: overlayIn 0.18s ease-out;
+  /* Swipes on the dimmed backdrop don't scroll the page behind it. */
+  overscroll-behavior: contain;
+  touch-action: none;
+}
+
+@keyframes overlayIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.window {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  width: var(--window-width, 640px);
+  max-width: 100%;
+  max-height: min(88vh, calc(var(--app-height, 100dvh) - 48px));
+  box-sizing: border-box;
+  background: linear-gradient(180deg, #1F2434 0%, #1B1F2C 120px);
+  color: var(--ui-text, #E5E7EB);
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 18px;
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  animation: windowIn 0.2s ease-out;
+  touch-action: auto;
+}
+
+@keyframes windowIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.99); }
+  to { opacity: 1; }
+}
+
+.dragging {
+  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(96, 165, 250, 0.35);
+  animation: none;
+}
+
+.header {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 14px 14px 12px 22px;
+  border-bottom: 1px solid var(--ui-border, #2C3244);
+}
+
+/* A grip, to show the window can be moved. */
+.header::before {
+  content: '';
+  position: absolute;
+  top: 6px;
+  left: 50%;
+  width: 36px;
+  height: 4px;
+  margin-left: -18px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  pointer-events: none;
+}
+
+.titles {
+  min-width: 0;
+}
+
+.title {
+  margin: 0;
+  font-size: 1.12rem;
+  font-weight: 650;
+  letter-spacing: -0.01em;
+  color: #fff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.subtitle {
+  margin: 2px 0 0;
+  font-size: 12.5px;
+  color: var(--ui-muted, #8B93A3);
+}
+
+.close {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ui-muted, #8B93A3);
+  cursor: pointer;
+  transition: background 0.15s, color 0.15s;
+}
+
+@media (hover: hover) {
+  .close:hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: #fff;
+  }
+}
+
+.body {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 20px 22px 22px;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+}
+
+.footer {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  flex-shrink: 0;
+  padding: 12px 18px;
+  border-top: 1px solid var(--ui-border, #2C3244);
+  background: rgba(20, 24, 34, 0.6);
+  border-radius: 0 0 18px 18px;
+}
+
+.footerLeft {
+  display: flex;
+  gap: 8px;
+  margin-right: auto;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 38px;
+  padding: 0 16px;
+  border-radius: 10px;
+  border: 1px solid var(--ui-border, #2C3244);
+  background: rgba(255, 255, 255, 0.03);
+  color: var(--ui-text-2, #C7CDD8);
+  font: inherit;
+  font-size: 14px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: background 0.15s, border-color 0.15s, color 0.15s, filter 0.15s;
+}
+
+.btn:disabled {
+  cursor: default;
+  opacity: 0.7;
+}
+
+@media (hover: hover) {
+  .btn:not(:disabled):hover {
+    background: rgba(255, 255, 255, 0.07);
+    color: #fff;
+  }
+}
+
+.primary {
+  min-width: 96px;
+  border-color: transparent;
+  background: linear-gradient(180deg, #4F8DF7 0%, #3B82F6 100%);
+  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+@media (hover: hover) {
+  .primary:not(:disabled):hover {
+    background: linear-gradient(180deg, #5B97F8 0%, #4387F7 100%);
+  }
+}
+
+.danger {
+  border-color: rgba(248, 113, 113, 0.35);
+  background: rgba(248, 113, 113, 0.08);
+  color: #FCA5A5;
+}
+
+@media (hover: hover) {
+  .danger:not(:disabled):hover {
+    background: rgba(248, 113, 113, 0.16);
+    color: #FECACA;
+  }
+}
+
+.spinner {
+  width: 14px;
+  height: 14px;
+  border: 2px solid rgba(255, 255, 255, 0.35);
+  border-top-color: #fff;
+  border-radius: 50%;
+  animation: spin 0.8s linear infinite;
+}
+
+@keyframes spin {
+  to { transform: rotate(360deg); }
+}
+
+/* Phones: full screen. Title bar at the top (below the status bar), the
+   footer above the home indicator, the content in between scrolls. */
+@media (max-width: 600px) {
+  .overlay {
+    padding: 0;
+    align-items: stretch;
+  }
+
+  .window {
+    width: 100%;
+    max-width: none;
+    height: var(--app-height, 100dvh);
+    max-height: none;
+    border: none;
+    border-radius: 0;
+    box-shadow: none;
+    padding-top: var(--app-top, env(safe-area-inset-top, 0px));
+    animation: windowUp 0.22s ease-out;
+  }
+
+  @keyframes windowUp {
+    from { transform: translateY(24px); opacity: 0; }
+    to { transform: none; opacity: 1; }
+  }
+
+  .header {
+    padding: 10px 10px 10px 16px;
+  }
+
+  .header::before {
+    display: none;
+  }
+
+  .body {
+    padding: 16px;
+  }
+
+  .footer {
+    padding: 10px 16px calc(10px + var(--safe-bottom, env(safe-area-inset-bottom, 0px)));
+    border-radius: 0;
+  }
+
+  .footer .btn {
+    height: 44px;
+  }
+
+  /* Save gets the room: the main action, under the thumb. */
+  .footer .primary {
+    flex: 1;
+  }
+}

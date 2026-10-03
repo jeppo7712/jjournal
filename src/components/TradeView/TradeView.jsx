@@ -1,5 +1,6 @@
 import React, { useRef, useLayoutEffect, useState, useEffect, useContext, useCallback, useMemo } from 'react';
 import useDraggableWindow from '../../utils/useDraggableWindow';
+import useScrollLock from '../../utils/useScrollLock';
 import TradeChecklist from '../TradeModal/TradeChecklist';
 import IconButton from '../common/IconButton';
 import { TradeContext, calculateRisk, getEnabledTimeframesForSetting } from '../../context/TradeContext';
@@ -278,6 +279,7 @@ export default function TradeView({ trade, onClose, onEdit }) {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 700px)').matches);
   // Movable window on desktop (see useDraggableWindow).
   const drag = useDraggableWindow('tradeView', { enabled: !isMobile });
+  useScrollLock();
   const [showFillsTable, setShowFillsTable] = useState(false);
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 700px)');

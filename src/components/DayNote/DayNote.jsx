@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useContext } from 'react';
 import useDraggableWindow from '../../utils/useDraggableWindow';
+import useScrollLock from '../../utils/useScrollLock';
 import ReactQuill from 'react-quill';
 import { useDropzone } from 'react-dropzone';
 import 'react-quill/dist/quill.snow.css';
@@ -8,7 +9,7 @@ import { TradeContext } from '../../context/TradeContext';
 import { formatMoney } from '../../utils/formatMoney';
 import { sumByCurrency, toTotalsList } from '../../utils/currencyTotals';
 import IconButton from '../common/IconButton';
-import { notify } from '../common/Dialogs';
+import { notify, confirmDialog, choiceDialog } from '../common/Dialogs';
 
 const getCurrentDate = () => {
   const now = new Date();
@@ -99,8 +100,6 @@ export default function DayNote({ note, onClose }) {
     name: att.filename,
     file: null
   })) : []);
-  const [showUnsavedPopup, setShowUnsavedPopup] = useState(false);
-  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
   const [selectedAttachment, setSelectedAttachment] = useState(null);
   const [summaryTouched, setSummaryTouched] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
@@ -109,6 +108,7 @@ export default function DayNote({ note, onClose }) {
 
   // Movable window on desktop (phones show it full screen).
   const drag = useDraggableWindow('dayNote', { enabled: window.matchMedia('(min-width: 601px)').matches });
+  useScrollLock();
   const contentWrapperRef = useRef(null);
 
   const summaryError = !summary.trim();
@@ -133,7 +133,7 @@ export default function DayNote({ note, onClose }) {
     setAttachments(prev => prev.filter((_, i) => i !== idx));
   };
 
-  const handleRequestClose = () => {
+  const handleRequestClose = async () => {
     const initialMood = note && note.mood !== undefined ? note.mood : 1;
     const initialMarketCondition = note && note.market_condition !== undefined ? note.market_condition : 1;
     const initialMarketVolatility = note && note.market_volume !== undefined ? note.market_volume : 1;
@@ -154,10 +154,24 @@ export default function DayNote({ note, onClose }) {
       JSON.stringify(currentAttachments.sort()) !== JSON.stringify(initialAttachments.sort());
 
     if (hasChanges) {
-      setShowUnsavedPopup(true);
       setSummaryTouched(true);
+      const choice = await choiceDialog('You have unsaved changes. What do you want to do?', {
+        title: 'Unsaved changes',
+        choices: [
+          { value: 'discard', label: "Don't save", kind: 'danger' },
+          ...(canSave && !isSaving ? [{ value: 'save', label: 'Save', kind: 'primary' }] : []),
+        ],
+      });
+      if (choice === 'save') saveDayNote();
+      else if (choice === 'discard') onClose();
     } else {
       onClose();
+    }
+  };
+
+  const requestDelete = async () => {
+    if (await confirmDialog('This day note will be deleted. This cannot be undone.', { title: 'Delete this note?', confirmLabel: 'Delete', danger: true })) {
+      deleteDayNote();
     }
   };
 
@@ -336,26 +350,6 @@ export default function DayNote({ note, onClose }) {
     };
   }, []);
 
-  function BubbleButton({ children, onClick, color = '#3B82F6', disabled, ...rest }) {
-    return (
-      <button
-        className={styles.saveBtn}
-        style={{
-          background: color,
-          borderRadius: 18,
-          padding: '10px 24px',
-          marginRight: 10,
-          opacity: disabled ? 0.5 : 1,
-          cursor: disabled ? 'not-allowed' : 'pointer'
-        }}
-        onClick={onClick}
-        disabled={disabled}
-        {...rest}
-      >
-        {children}
-      </button>
-    );
-  }
 
   return (
     <div className={styles.overlay}>
@@ -505,7 +499,7 @@ export default function DayNote({ note, onClose }) {
         <div className={styles.footerRow} style={{ justifyContent: 'flex-end' }}>
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
             {note && note.id && (
-              <IconButton icon="trash" caption="Delete" label="Delete this note" onClick={() => setShowDeleteConfirm(true)} />
+              <IconButton icon="trash" caption="Delete" label="Delete this note" onClick={requestDelete} />
             )}
             <IconButton
               icon="check"
@@ -523,102 +517,6 @@ export default function DayNote({ note, onClose }) {
             />
           </div>
         </div>
-        {showUnsavedPopup && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0,0,0,0.5)',
-              zIndex: 2000,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            <div
-              style={{
-                background: '#161A24',
-                borderRadius: 18,
-                padding: '36px 36px 28px 36px',
-                minWidth: 320,
-                boxShadow: '0 4px 32px 0 rgba(0,0,0,0.18)',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center'
-              }}
-            >
-              <div style={{ color: '#fff', fontSize: '1.12rem', marginBottom: 24, textAlign: 'center' }}>
-                You have unsaved changes. What do you want to do?
-              </div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <BubbleButton color="#141822" onClick={() => setShowUnsavedPopup(false)}>
-                  Cancel
-                </BubbleButton>
-                <BubbleButton
-                  color="#3B82F6"
-                  onClick={() => {
-                    if (canSave && !isSaving) {
-                      setShowUnsavedPopup(false);
-                      saveDayNote();
-                    } else {
-                      setSummaryTouched(true);
-                    }
-                  }}
-                  disabled={!canSave || isSaving}
-                >
-                  Save
-                </BubbleButton>
-                <BubbleButton color="#EF4444" onClick={() => { setShowUnsavedPopup(false); onClose(); }}>
-                  Don't Save
-                </BubbleButton>
-              </div>
-            </div>
-          </div>
-        )}
-        {showDeleteConfirm && (
-          <div
-            style={{
-              position: 'fixed',
-              inset: 0,
-              background: 'rgba(0,0,0,0.5)',
-              zIndex: 2000,
-              display: 'flex',
-              alignItems: 'center',
-              justifyContent: 'center'
-            }}
-          >
-            <div
-              style={{
-                background: '#161A24',
-                borderRadius: 18,
-                padding: '36px 36px 28px 36px',
-                minWidth: 320,
-                boxShadow: '0 4px 32px 0 rgba(0,0,0,0.18)',
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center'
-              }}
-            >
-              <div style={{ color: '#fff', fontSize: '1.12rem', marginBottom: 24, textAlign: 'center' }}>
-                Are you sure you want to delete this day note?
-              </div>
-              <div style={{ display: 'flex', gap: 12 }}>
-                <BubbleButton color="#141822" onClick={() => setShowDeleteConfirm(false)}>
-                  Cancel
-                </BubbleButton>
-                <BubbleButton
-                  color="#EF4444"
-                  onClick={() => {
-                    setShowDeleteConfirm(false);
-                    deleteDayNote();
-                  }}
-                >
-                  Delete
-                </BubbleButton>
-              </div>
-            </div>
-          </div>
-        )}
         {selectedAttachment && (
           <div
             style={{
