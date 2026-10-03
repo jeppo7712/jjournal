@@ -1,6 +1,8 @@
 import React, { useContext, useState, useCallback, useRef, useEffect, useLayoutEffect, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import useDraggableWindow from '../../utils/useDraggableWindow';
+import useScrollLock from '../../utils/useScrollLock';
+import AppWindow from '../common/AppWindow';
 import ReactQuill from 'react-quill';
 import TradeChecklist from './TradeChecklist';
 import IconButton from '../common/IconButton';
@@ -12,7 +14,7 @@ import { DateTime } from 'luxon';
 import { loadStoredDisplayTimezone, storeDisplayTimezone, resolveDisplayZone, TimezonePicker } from '../../utils/timezonePreference';
 import TradeFormChart from './TradeFormChart';
 import { formatNumber } from '../../utils/numberFormat';
-import { notify } from '../common/Dialogs';
+import { notify, confirmDialog, choiceDialog } from '../common/Dialogs';
 
 // Prices, sizes and fees from IBKR as they came, in the number format
 // setting: their own decimals (trailing zeros dropped), '—' when missing.
@@ -103,41 +105,6 @@ function isFormDirty(form, actions, tags, notes, confidence, executionRating, at
   }
 }
 
-// `small` shrinks padding/font/radius for mobile, where these were full
-// desktop size regardless of viewport — fine for one row of buttons, but
-// this modal's footer can have up to 5 of them stacked, and full-size made
-// each one take a disproportionate share of a phone screen's height.
-function BubbleButton({ children, onClick, color = '#3B82F6', disabled, small, style, ...rest }) {
-  return (
-    <button
-      className={styles.saveBtn}
-      style={small ? {
-        background: color,
-        borderRadius: 12,
-        padding: '10px 8px',
-        minHeight: 44,
-        fontSize: '0.95rem',
-        whiteSpace: 'nowrap',
-        opacity: disabled ? 0.5 : 1,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        ...style,
-      } : {
-        background: color,
-        marginRight: 10,
-        borderRadius: 18,
-        padding: '10px 24px',
-        opacity: disabled ? 0.5 : 1,
-        cursor: disabled ? 'not-allowed' : 'pointer',
-        ...style,
-      }}
-      onClick={onClick}
-      disabled={disabled}
-      {...rest}
-    >
-      {children}
-    </button>
-  );
-}
 
 function StarRating({ value, onChange, max = 5 }) {
   return (
@@ -189,6 +156,7 @@ export default function TradeModal({ trade, onClose }) {
   const [isMobile, setIsMobile] = useState(() => window.matchMedia('(max-width: 600px)').matches);
   // Movable window on desktop (see useDraggableWindow).
   const drag = useDraggableWindow('tradeModal', { enabled: !isMobile });
+  useScrollLock();
   useEffect(() => {
     const mq = window.matchMedia('(max-width: 600px)');
     const update = () => setIsMobile(mq.matches);
@@ -286,8 +254,6 @@ export default function TradeModal({ trade, onClose }) {
         }))
       : []
   );
-  const [showUnsavedPopup, setShowUnsavedPopup] = useState(false);
-  const [showDeletePopup, setShowDeletePopup] = useState(false);
   const [selectedAttachment, setSelectedAttachment] = useState(null);
   const [tempTimeInputs, setTempTimeInputs] = useState([]);
   const [showIBKRModal, setShowIBKRModal] = useState(false);
@@ -946,12 +912,26 @@ export default function TradeModal({ trade, onClose }) {
     }
   }
 
-  const handleRequestClose = () => {
+  const handleRequestClose = async () => {
     if (isFormDirty(form, actions, tags, notes, confidence, executionRating, attachments, initialState.current, isEditMode)
       || JSON.stringify(checklist) !== initialChecklist.current) {
-      setShowUnsavedPopup(true);
+      const choice = await choiceDialog('You have unsaved changes. What do you want to do?', {
+        title: 'Unsaved changes',
+        choices: [
+          { value: 'discard', label: "Don't save", kind: 'danger' },
+          ...(canSave ? [{ value: 'save', label: 'Save', kind: 'primary' }] : []),
+        ],
+      });
+      if (choice === 'save') saveTrade();
+      else if (choice === 'discard') onClose();
     } else {
       onClose();
+    }
+  };
+
+  const requestDelete = async () => {
+    if (await confirmDialog('This trade and its notes will be deleted. This cannot be undone.', { title: 'Delete this trade?', confirmLabel: 'Delete', danger: true })) {
+      deleteTrade();
     }
   };
 
@@ -1422,7 +1402,7 @@ export default function TradeModal({ trade, onClose }) {
           </div>
           <div style={{ display: 'flex', gap: 12, alignItems: 'flex-start' }}>
             {isEditMode && (
-              <IconButton icon="trash" caption="Delete" label="Delete this trade" onClick={() => setShowDeletePopup(true)} />
+              <IconButton icon="trash" caption="Delete" label="Delete this trade" onClick={requestDelete} />
             )}
             <IconButton icon="check" caption="Save" label="Save" onClick={saveTrade} disabled={!canSave} />
           </div>
@@ -1486,39 +1466,6 @@ export default function TradeModal({ trade, onClose }) {
           document.body
         )}
         </div>
-        {showUnsavedPopup && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            {/* minWidth:320 + padding used to add up to more than a phone's own
-                width before the buttons even laid out, and with 3 buttons
-                (Cancel/Save/Don't Save) possible in one unwrapped row, this was
-                the same "overflows off the edge, unreachable" failure as the
-                footer buttons above — just easier to miss since it only shows
-                up with a valid, unsaved trade (Save only renders when canSave). */}
-            <div style={{ background: '#161A24', borderRadius: 18, padding: isMobile ? '24px 20px 20px' : '36px 36px 28px 36px', minWidth: isMobile ? 0 : 320, maxWidth: '90vw', boxShadow: '0 4px 32px 0 rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ color: '#fff', fontSize: '1.12rem', marginBottom: 24, textAlign: 'center' }}>
-                You have unsaved changes. What do you want to do?
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 12 }}>
-                <BubbleButton color="#141822" onClick={() => setShowUnsavedPopup(false)} small={isMobile}>Cancel</BubbleButton>
-                {canSave && <BubbleButton color="#3B82F6" onClick={() => { setShowUnsavedPopup(false); saveTrade(); }} small={isMobile}>Save</BubbleButton>}
-                <BubbleButton color="#EF4444" onClick={() => { setShowUnsavedPopup(false); onClose(); }} small={isMobile}>Don't Save</BubbleButton>
-              </div>
-            </div>
-          </div>
-        )}
-        {showDeletePopup && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.5)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
-            <div style={{ background: '#161A24', borderRadius: 18, padding: isMobile ? '24px 20px 20px' : '36px 36px 28px 36px', minWidth: isMobile ? 0 : 320, maxWidth: '90vw', boxShadow: '0 4px 32px 0 rgba(0,0,0,0.18)', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
-              <div style={{ color: '#fff', fontSize: '1.12rem', marginBottom: 24, textAlign: 'center' }}>
-                Are you sure you want to delete this trade? This cannot be undone.
-              </div>
-              <div style={{ display: 'flex', flexWrap: 'wrap', justifyContent: 'center', gap: 18 }}>
-                <BubbleButton color="#141822" onClick={() => setShowDeletePopup(false)} small={isMobile}>Cancel</BubbleButton>
-                <BubbleButton color="#EF4444" onClick={deleteTrade} small={isMobile}>Delete</BubbleButton>
-              </div>
-            </div>
-          </div>
-        )}
         {selectedAttachment && (
           <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ background: '#161A24', borderRadius: 18, padding: 16, maxWidth: '90vw', maxHeight: '90vh', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
@@ -1552,49 +1499,40 @@ export default function TradeModal({ trade, onClose }) {
           </div>
         )}
         {showIBKRModal && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.65)', zIndex: 2000, display: 'flex', alignItems: 'flex-start', justifyContent: 'center', paddingTop: 40 }}>
-            <div style={{ background: '#1a1d27', borderRadius: 16, padding: '24px', width: '100%', maxWidth: 700, maxHeight: '85vh', overflowY: 'auto', boxShadow: '0 8px 40px rgba(0,0,0,0.6)' }}>
-
-              {/* Header */}
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 20 }}>
-                <div>
-                  <span style={{ color: '#fff', fontSize: '1.15rem', fontWeight: 600 }}>
-                    IBKR — {form.symbol} Trade Groups
-                    {ibkrSource === 'flex' && (
-                      <span style={{ color: '#818CF8', fontSize: '0.75rem', marginLeft: 8, fontWeight: 500 }}>
-                        (via Flex)
-                      </span>
-                    )}
+          <AppWindow
+            title={<>IBKR — {form.symbol} trade groups{ibkrSource === 'flex' && <span style={{ color: '#818CF8', fontSize: '0.75rem', marginLeft: 8, fontWeight: 500 }}>(via Flex)</span>}</>}
+            onClose={() => setShowIBKRModal(false)}
+            storageKey="tradeModal.ibkr"
+            width={720}
+          >
+              <div style={{ marginBottom: 16 }}>
+              {!ibkrLoading && (
+                <span style={{ color: '#6B7280', fontSize: '0.8rem' }}>
+                  {ibkrGroups.filter(g => !g.alreadyLogged).length} new group{ibkrGroups.filter(g => !g.alreadyLogged).length !== 1 ? 's' : ''}
+                  {ibkrGroups.some(g => g.alreadyLogged) ? ` (+${ibkrGroups.filter(g => g.alreadyLogged).length} already imported)` : ''}
+                  {ibkrOrphans.length > 0 ? ` + ${ibkrOrphans.length} ungrouped exec${ibkrOrphans.length !== 1 ? 's' : ''}` : ''}
+                </span>
+              )}
+              {!ibkrLoading && ibkrSource === 'flex' && ibkrFetchedAt && (
+                <div style={{ marginTop: 4 }}>
+                  <span style={{ color: '#6B7280', fontSize: '0.72rem' }}>
+                    {ibkrFromCache
+                      ? `Cached · fetched ${formatCacheAge(ibkrFetchedAt)}`
+                      : 'Freshly fetched from IBKR'}
                   </span>
-                  {!ibkrLoading && (
-                    <span style={{ color: '#6B7280', fontSize: '0.8rem', marginLeft: 10 }}>
-                      {ibkrGroups.filter(g => !g.alreadyLogged).length} new group{ibkrGroups.filter(g => !g.alreadyLogged).length !== 1 ? 's' : ''}
-                      {ibkrGroups.some(g => g.alreadyLogged) ? ` (+${ibkrGroups.filter(g => g.alreadyLogged).length} already imported)` : ''}
-                      {ibkrOrphans.length > 0 ? ` + ${ibkrOrphans.length} ungrouped exec${ibkrOrphans.length !== 1 ? 's' : ''}` : ''}
-                    </span>
-                  )}
-                  {!ibkrLoading && ibkrSource === 'flex' && ibkrFetchedAt && (
-                    <div style={{ marginTop: 4 }}>
-                      <span style={{ color: '#6B7280', fontSize: '0.72rem' }}>
-                        {ibkrFromCache
-                          ? `Cached · fetched ${formatCacheAge(ibkrFetchedAt)}`
-                          : 'Freshly fetched from IBKR'}
-                      </span>
-                      <button
-                        onClick={() => fetchIBKRData(true, true)}
-                        style={{ marginLeft: 8, background: 'none', border: 'none', color: '#6366F1', cursor: 'pointer', fontSize: '0.72rem', padding: 0 }}
-                      >
-                        ↻ Refresh
-                      </button>
-                    </div>
-                  )}
-                  {!ibkrLoading && ibkrSource === 'flex' && ibkrWarning && (
-                    <div style={{ marginTop: 6, padding: '6px 10px', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.35)', borderRadius: 6, color: '#F59E0B', fontSize: '0.75rem' }}>
-                      ⚠ {ibkrWarning}
-                    </div>
-                  )}
+                  <button
+                    onClick={() => fetchIBKRData(true, true)}
+                    style={{ marginLeft: 8, background: 'none', border: 'none', color: '#6366F1', cursor: 'pointer', fontSize: '0.72rem', padding: 0 }}
+                  >
+                    ↻ Refresh
+                  </button>
                 </div>
-                <button onClick={() => setShowIBKRModal(false)} className={styles.closeBtn} style={{ fontSize: '1.4rem', lineHeight: 1, background: 'none', border: 'none', color: '#9CA3AF', cursor: 'pointer' }}>×</button>
+              )}
+              {!ibkrLoading && ibkrSource === 'flex' && ibkrWarning && (
+                <div style={{ marginTop: 6, padding: '6px 10px', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.35)', borderRadius: 6, color: '#F59E0B', fontSize: '0.75rem' }}>
+                  ⚠ {ibkrWarning}
+                </div>
+              )}
               </div>
 
               {/* States */}
@@ -1906,8 +1844,7 @@ export default function TradeModal({ trade, onClose }) {
                 </div>
               )}
 
-            </div>
-          </div>
+          </AppWindow>
         )}
       </div>
     </div>
