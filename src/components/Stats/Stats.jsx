@@ -121,6 +121,10 @@ const TAB_GROUPS = [
   { label: 'Journal', ids: ['tradeNotes'] },
 ];
 
+// Cash movements that change the capital (not trade settlements, interest
+// or other income, which are results).
+const CAPITAL_FLOW_TYPES = new Set(['DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT', 'EXCHANGE_IN', 'EXCHANGE_OUT']);
+
 const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilterWeek }) => {
   const { filteredItems: accountFilteredItems, filter, timeFilter, symbolFilter, restrictToActionsInRange, trades: allTrades, accounts, currentAccountId, fetchProcessedTradesForAccount, filterTradeItems } = React.useContext(TradeContext) || { filteredItems: [], filter: [], timeFilter: null, symbolFilter: '', restrictToActionsInRange: false, trades: [] };
 
@@ -214,6 +218,29 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
       String(item.currency || 'USD').toUpperCase() === activeCurrency
     );
   }, [filteredItems, activeCurrency]);
+
+  // Money moved in and out of the account (Capital page), the base for
+  // "Return over time". The endpoint includes sub-accounts' rows; without
+  // them only the account's own count. A transfer between two of the
+  // included accounts cancels out, as it should.
+  const [cashTransactions, setCashTransactions] = useState([]);
+  useEffect(() => {
+    if (!currentAccountId) { setCashTransactions([]); return; }
+    let cancelled = false;
+    fetch(`${process.env.REACT_APP_API_URL}/api/cash-transactions`, { headers: { 'X-Account-ID': currentAccountId } })
+      .then(res => (res.ok ? res.json() : []))
+      .then(rows => { if (!cancelled) setCashTransactions(Array.isArray(rows) ? rows : []); })
+      .catch(() => { if (!cancelled) setCashTransactions([]); });
+    return () => { cancelled = true; };
+  }, [currentAccountId]);
+  const cashFlows = useMemo(() => {
+    const included = new Set([String(currentAccountId), ...(withSubAccounts ? subAccountIds.map(String) : [])]);
+    return cashTransactions
+      .filter(row => CAPITAL_FLOW_TYPES.has(row.type)
+        && included.has(String(row.account_id))
+        && String(row.currency || 'USD').toUpperCase() === activeCurrency)
+      .map(row => ({ date: DateTime.fromISO(row.date_time).toISODate(), amount: Number(row.amount) }));
+  }, [cashTransactions, currentAccountId, withSubAccounts, subAccountIds, activeCurrency]);
 
   const tradesWithJournal = useMemo(() => {
     return trades.filter(t => t.journal && (t.journal.notes_html || t.journal.confidence || t.journal.execution_rating));
@@ -314,7 +341,13 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
     }
   };
 
-  const debouncedFetchHistoricalData = useRef(debounce(fetchHistoricalData, 500));
+  // Through a ref: the debounced function is made once, and holding the
+  // first render's fetchHistoricalData kept fetching for the trades known
+  // then — a parent account's sub-account trades, which arrive later,
+  // never got their daily closes.
+  const fetchHistoricalDataRef = useRef(fetchHistoricalData);
+  fetchHistoricalDataRef.current = fetchHistoricalData;
+  const debouncedFetchHistoricalData = useRef(debounce(() => fetchHistoricalDataRef.current(), 500));
 
   useEffect(() => {
     debouncedFetchHistoricalData.current();
@@ -338,7 +371,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         topTrades: computeTopTrades(trades),
         feesPnlSeries: computeFeesPnlSeries(trades),
         returnVsHoldTime: computeReturnVsHoldTime(trades),
-        returnPercentageSeries: computeReturnPercentageSeries(trades, historicalDataMap),
+        returnPercentageSeries: computeReturnPercentageSeries(trades, historicalDataMap, cashFlows),
         // New professional metrics
         expectancy: computeExpectancy(trades),
         riskRewardRatio: computeRiskRewardRatio(trades),
@@ -387,7 +420,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         avgWinLoss: { avgWin: '0.00', avgLoss: '0.00' },
       };
     }
-  }, [trades, historicalDataMap, displayTimezone]);
+  }, [trades, historicalDataMap, displayTimezone, cashFlows]);
 
   const handleNotesSort = (key) => {
     setNotesSort(prevSort => {
@@ -972,7 +1005,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 value={latestReturn !== undefined && latestReturn !== null && !isFetching ? `${signed(latestReturn)}%` : null}
                 tone={toneOf(latestReturn)}
                 caption="Latest"
-                explanation={`This line chart shows the daily return percentage of the portfolio over time (max 3*365 days), calculated as (portfolio value - total deposits) / total deposits * 100%. It accounts for both cash and the market value of open positions, reflecting the overall investment performance.`}
+                explanation={`Time-weighted return on the capital recorded on the Capital page (deposits, withdrawals, transfers and currency exchanges in this currency), max 3*365 days. Each day's P&L, including open positions at the day's close (futures by their price moves, not their contract value), is divided by the capital at the start of that day, and the days are compounded, so money moved in or out is not counted as a gain or loss. If the first trades are older than the first recorded deposit, that deposit is taken as the starting capital.`}
               >
                 {isFetching ? (
                   <p className={styles.chartEmpty}>Loading historical data…</p>
@@ -981,7 +1014,11 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                     <Line data={returnPercentageChartData} options={returnPercentageChartOptions} plugins={[crosshairPlugin]} />
                   </div>
                 ) : (
-                  <p className={styles.chartEmpty}>No valid data available for the return percentage chart.</p>
+                  <p className={styles.chartEmpty}>
+                    {trades.length > 0 && cashFlows.length === 0
+                      ? `Record this account's deposits in ${activeCurrency} on the Capital page to see the return on them.`
+                      : 'No valid data available for the return percentage chart.'}
+                  </p>
                 )}
               </ChartCard>
               <ChartCard
