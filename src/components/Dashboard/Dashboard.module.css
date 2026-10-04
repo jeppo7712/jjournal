@@ -320,6 +320,63 @@
   width: 100%;
 }
 
+/* Unrealised chart loading: a spinner over the plot (and over the previous
+   chart, dimmed, while a new one is worked out). */
+.chartStage {
+  position: relative;
+  height: 100%;
+}
+
+.chartStageBusy > canvas {
+  opacity: 0.35;
+  transition: opacity 0.2s;
+}
+
+.chartLoading {
+  position: absolute;
+  inset: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  color: var(--ui-muted, #8B93A3);
+  font-size: 13px;
+  font-weight: 500;
+  pointer-events: none;
+  animation: chartLoadingIn 0.15s ease-out;
+}
+
+@keyframes chartLoadingIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.chartSpinner,
+.tileBusy .statLabel::after {
+  width: 16px;
+  height: 16px;
+  box-sizing: border-box;
+  border: 2px solid rgba(96, 165, 250, 0.25);
+  border-top-color: #60A5FA;
+  border-radius: 50%;
+  animation: chartSpin 0.8s linear infinite;
+}
+
+/* The U P&L tile shows it's on it too: the click took. */
+.tileBusy .statLabel::after {
+  content: '';
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-left: 6px;
+  vertical-align: -1px;
+  border-width: 1.5px;
+}
+
+@keyframes chartSpin {
+  to { transform: rotate(360deg); }
+}
+
 .chartEmpty {
   height: 100%;
   display: flex;
