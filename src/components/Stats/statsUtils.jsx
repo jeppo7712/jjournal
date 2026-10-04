@@ -547,7 +547,7 @@ export const computeReturnVsHoldTime = (trades) => {
 // and a partial sell realises P&L on the day it happened. Without a close
 // for a day, the last known close — or the last fill price — is used.
 export const computePortfolioValueSeries = (trades, historicalDataMap) => {
-  if (!trades.length) return { labels: [], series: [], realizedSeries: [] };
+  if (!trades.length) return { labels: [], series: [], realizedSeries: [], positionValueSeries: [] };
 
   const today = DateTime.now().startOf('day');
   const maxDays = 3 * 365;
@@ -574,6 +574,10 @@ export const computePortfolioValueSeries = (trades, historicalDataMap) => {
   const labels = [];
   const series = [];
   const realizedSeries = [];
+  // What the open positions add to the account's value at each close, as
+  // in the sidebar's Total Portfolio: stocks at market value, futures only
+  // by their open P&L (their contract value is never paid).
+  const positionValueSeries = [];
 
   for (let i = 0; i < days; i++) {
     const date = startDate.plus({ days: i });
@@ -581,6 +585,7 @@ export const computePortfolioValueSeries = (trades, historicalDataMap) => {
     const dayEnd = date.endOf('day');
     let realized = 0;
     let unrealized = 0;
+    let positionValue = 0;
 
     replays.forEach(r => {
       while (r.next < r.steps.length && r.steps[r.next].at <= dayEnd) r.next++;
@@ -594,7 +599,9 @@ export const computePortfolioValueSeries = (trades, historicalDataMap) => {
       const close = closes && closes.get ? closes.get(dateISO) : undefined;
       if (typeof close === 'number' && !isNaN(close)) lastClose[symbol] = close;
       const price = lastClose[symbol] ?? state.price;
-      unrealized += r.sign * (price * state.openQty - state.openCost) * r.multiplier - state.openFee;
+      const open = r.sign * (price * state.openQty - state.openCost) * r.multiplier - state.openFee;
+      unrealized += open;
+      positionValue += r.trade.type === 'FUT' ? open : r.sign * price * state.openQty * r.multiplier;
     });
     unreplayable.forEach(t => {
       const closedAt = toDT(t.lastActionDate);
@@ -604,137 +611,78 @@ export const computePortfolioValueSeries = (trades, historicalDataMap) => {
     labels.push(date.toFormat('dd/MM/yyyy'));
     realizedSeries.push(realized);
     series.push(realized + unrealized);
+    positionValueSeries.push(positionValue);
   }
 
-  return { labels, series, realizedSeries };
+  return { labels, series, realizedSeries, positionValueSeries };
 };
 
-export const computeReturnPercentageSeries = (trades, historicalDataMap) => {
-  if (!trades.length) return [];
+// Time-weighted return of the capital recorded on the Capital page.
+// Each day's P&L (the same marked-to-market P&L as the Cumulative P&L
+// chart, so a future counts only its price moves, never its contract value)
+// is divided by the capital at the start of that day, and the days are
+// chained, so a deposit or withdrawal moves the capital without showing up
+// as a gain or loss.
+// cashFlows: [{ date: ISO date, amount }] — deposits, withdrawals, transfers
+// and currency exchanges in the scoped currency, signed (+ in, − out).
+// Capital tracking starts from an opening cash balance, often after years
+// of trades (docs/CAPITAL_TRACKING_DESIGN.md). When the trades are older,
+// the capital on that opening day is the opening cash plus the positions
+// then held, and before it that capital less the P&L made in between — but
+// never less than the positions held the evening before, as money moved
+// in and out before tracking started is unknown. Without any recorded
+// capital there is no return.
+export const computeReturnPercentageSeries = (trades, historicalDataMap, cashFlows = []) => {
+  if (!trades.length || !cashFlows.length) return [];
+  const { labels, series: cumulative, positionValueSeries } = computePortfolioValueSeries(trades, historicalDataMap);
+  if (!labels.length) return [];
 
-  const allActions = trades.flatMap(trade => {
-    if (!Array.isArray(trade.actions)) return []; // Guard against undefined/null actions
+  const dates = labels.map(label => DateTime.fromFormat(label, 'dd/MM/yyyy').toISODate());
+  const flowsByDate = new Map();
+  cashFlows.forEach(({ date, amount }) => {
+    const value = Number(amount);
+    if (!date || !Number.isFinite(value)) return;
+    flowsByDate.set(date, (flowsByDate.get(date) || 0) + value);
+  });
+  const flowOn = i => flowsByDate.get(dates[i]) || 0;
 
-    let tradeTickMultiplier = 1;
-    if (trade.type === 'STK') {
-      tradeTickMultiplier = 1;
-    } else if (trade.type === 'FUT') {
-      const tickValue = Number(trade.tick_value || trade.tickValue || 0);
-      const tickSize = Number(trade.tick_size || trade.tickSize || 0);
-      if (tickSize !== 0 && !isNaN(tickValue) && !isNaN(tickSize)) {
-        tradeTickMultiplier = tickValue / tickSize;
-      } else {
-        tradeTickMultiplier = 1;
-      }
-    }
+  // The P&L series is capped at three years; P&L from before its first day
+  // is already part of the first value and not that day's own.
+  const firstTrade = trades
+    .map(t => toDT(t.firstActionDate))
+    .filter(dt => dt && dt.isValid)
+    .reduce((min, dt) => (!min || dt < min ? dt : min), null);
+  const startsAtFirstTrade = firstTrade && firstTrade.toISODate() === dates[0];
+  const pnl = cumulative.map((value, i) => {
+    const day = i === 0 ? (startsAtFirstTrade ? value : 0) : value - cumulative[i - 1];
+    return Number.isFinite(day) ? day : 0;
+  });
 
-    return trade.actions.map(action => ({
-      ...action,
-      symbol: trade.symbol,
-      typeAction: action.type, 
-      tradeType: trade.type,   
-      tickMultiplier: tradeTickMultiplier,
-      dateTime: DateTime.fromISO(action.dateTime), 
-    }));
-  })
-  .filter(action => action.dateTime && action.dateTime.isValid) 
-  .sort((a, b) => a.dateTime - b.dateTime);
-
-  if (!allActions.length) return [];
-
-  const today = DateTime.now().startOf('day');
-  const maxDays = 3*365;
-  const firstActionDate = allActions[0].dateTime.startOf('day');
-  const startDate = firstActionDate > today.minus({ days: maxDays }) ? firstActionDate : today.minus({ days: maxDays });
-  
-  const numDays = Math.ceil(today.diff(startDate, 'days').days) + 1;
-  if (numDays <= 0) return [];
-
-  const series = [];
-  
-  let cash = 0;
-  let totalDeposits = 0;
-  const openPositions = {}; 
-  const lastKnownPrices = {}; 
-  
-  let currentActionIndex = 0;
-
-  for (let i = 0; i < numDays; i++) {
-    const currentDate = startDate.plus({ days: i });
-    const currentDateISO = currentDate.toISODate();
-
-    while (currentActionIndex < allActions.length && allActions[currentActionIndex].dateTime <= currentDate.endOf('day')) {
-      const action = allActions[currentActionIndex];
-      const price = Number(action.price);
-      const quantity = Number(action.quantity);
-      const fee = Number(action.fee || 0);
-      const tickMultiplier = action.tickMultiplier || 1;
-
-      if (isNaN(price) || isNaN(quantity) || isNaN(fee)) {
-        console.warn('Skipping action with invalid price, quantity, or fee:', action);
-        currentActionIndex++;
-        continue;
-      }
-      
-      const grossAmount = price * quantity * tickMultiplier;
-
-      // Positions are signed: a buy adds, a sell subtracts, so a short is a
-      // negative position (a liability marked at each day's close) and the
-      // buy that covers it brings it back to zero. Treating every buy as
-      // opening a long used to leave a phantom long behind each covered
-      // short, inflating the return for anyone who trades both ways.
-      const signedQty = action.typeAction === 'BUY' ? quantity : action.typeAction === 'SELL' ? -quantity : 0;
-      if (signedQty !== 0) {
-        if (signedQty > 0) {
-          const totalCostWithFee = grossAmount + fee;
-          if (cash < totalCostWithFee) {
-            const deposit = totalCostWithFee - cash;
-            totalDeposits += deposit;
-            cash += deposit;
-          }
-          cash -= totalCostWithFee;
-        } else {
-          cash += grossAmount - fee;
-        }
-        const position = openPositions[action.symbol] || { quantity: 0, tickMultiplier };
-        position.quantity += signedQty;
-        if (Math.abs(position.quantity) <= 0.000001) {
-          delete openPositions[action.symbol];
-        } else {
-          openPositions[action.symbol] = position;
-        }
-        lastKnownPrices[action.symbol] = price;
-      }
-      currentActionIndex++;
-    }
-
-    let marketValue = 0;
-    Object.keys(openPositions).forEach(symbol => {
-      const position = openPositions[symbol];
-      if (Math.abs(position.quantity) > 0.000001) {
-        const historicalData = historicalDataMap[symbol];
-        let currentPrice;
-        if (historicalData && historicalData.has(currentDateISO)) {
-          currentPrice = historicalData.get(currentDateISO);
-          if (typeof currentPrice === 'number' && !isNaN(currentPrice)) {
-            lastKnownPrices[symbol] = currentPrice;
-          } else {
-            currentPrice = lastKnownPrices[symbol] || 0; 
-          }
-        } else {
-          currentPrice = lastKnownPrices[symbol] || 0;
-        }
-        marketValue += position.quantity * currentPrice * position.tickMultiplier;
-      }
-    });
-
-    const portfolioValue = cash + marketValue;
-    const returnPercentage = totalDeposits > 0.000001 ? ((portfolioValue - totalDeposits) / totalDeposits) * 100 : 0;
-    
-    series.push({ date: currentDate.toFormat('dd/MM/yyyy'), returnPercentage: isNaN(returnPercentage) ? 0 : returnPercentage });
+  // Capital at the start of each day up to the opening one, worked back from
+  // it, when the trades are older than the recorded capital.
+  let capital = 0;
+  flowsByDate.forEach((amount, date) => { if (date < dates[0]) capital += amount; });
+  let opening = -1;
+  let openingCapital = 0;
+  if (capital <= 0) {
+    opening = dates.findIndex(date => flowsByDate.has(date));
+    if (opening < 0) return [];
+    openingCapital = flowOn(opening) + (positionValueSeries[opening] || 0);
   }
 
-  return series;
+  let growth = 1;
+  return labels.map((label, i) => {
+    let base;
+    if (i <= opening) {
+      const worked = openingCapital - (cumulative[opening] - cumulative[i]) - pnl[i];
+      base = Math.max(worked, i > 0 ? positionValueSeries[i - 1] || 0 : 0);
+    } else {
+      base = capital + flowOn(i);
+    }
+    if (base > 0) growth *= 1 + pnl[i] / base;
+    capital = i === opening ? openingCapital : base + pnl[i];
+    return { date: label, returnPercentage: (growth - 1) * 100 };
+  });
 };
 
 // Professional Trading Metrics
