@@ -678,39 +678,30 @@ export const computeReturnPercentageSeries = (trades, historicalDataMap) => {
       
       const grossAmount = price * quantity * tickMultiplier;
 
-      if (action.typeAction === 'BUY') {
-        const totalCostWithFee = grossAmount + fee;
-        if (cash < totalCostWithFee) {
-          const deposit = totalCostWithFee - cash;
-          totalDeposits += deposit;
-          cash += deposit;
-        }
-        cash -= totalCostWithFee;
-        
-        if (openPositions[action.symbol]) {
-          openPositions[action.symbol].quantity += quantity;
-          openPositions[action.symbol].cost += grossAmount; // Asset cost basis
+      // Positions are signed: a buy adds, a sell subtracts, so a short is a
+      // negative position (a liability marked at each day's close) and the
+      // buy that covers it brings it back to zero. Treating every buy as
+      // opening a long used to leave a phantom long behind each covered
+      // short, inflating the return for anyone who trades both ways.
+      const signedQty = action.typeAction === 'BUY' ? quantity : action.typeAction === 'SELL' ? -quantity : 0;
+      if (signedQty !== 0) {
+        if (signedQty > 0) {
+          const totalCostWithFee = grossAmount + fee;
+          if (cash < totalCostWithFee) {
+            const deposit = totalCostWithFee - cash;
+            totalDeposits += deposit;
+            cash += deposit;
+          }
+          cash -= totalCostWithFee;
         } else {
-          openPositions[action.symbol] = { quantity: quantity, cost: grossAmount, tickMultiplier: tickMultiplier };
+          cash += grossAmount - fee;
         }
-        lastKnownPrices[action.symbol] = price;
-      } else if (action.typeAction === 'SELL') {
-        const proceedsAfterFee = grossAmount - fee;
-        cash += proceedsAfterFee;
-
-        if (openPositions[action.symbol] && openPositions[action.symbol].quantity > 0.000001) {
-          const avgCostPerUnit = openPositions[action.symbol].cost / openPositions[action.symbol].quantity;
-          const costOfSoldUnits = avgCostPerUnit * quantity;
-
-          if (isFinite(costOfSoldUnits)) {
-             openPositions[action.symbol].cost -= costOfSoldUnits;
-          }
-          
-          openPositions[action.symbol].quantity -= quantity;
-
-          if (openPositions[action.symbol].quantity <= 0.000001 || openPositions[action.symbol].cost < 0) {
-            delete openPositions[action.symbol];
-          }
+        const position = openPositions[action.symbol] || { quantity: 0, tickMultiplier };
+        position.quantity += signedQty;
+        if (Math.abs(position.quantity) <= 0.000001) {
+          delete openPositions[action.symbol];
+        } else {
+          openPositions[action.symbol] = position;
         }
         lastKnownPrices[action.symbol] = price;
       }
@@ -720,7 +711,7 @@ export const computeReturnPercentageSeries = (trades, historicalDataMap) => {
     let marketValue = 0;
     Object.keys(openPositions).forEach(symbol => {
       const position = openPositions[symbol];
-      if (position.quantity > 0.000001) {
+      if (Math.abs(position.quantity) > 0.000001) {
         const historicalData = historicalDataMap[symbol];
         let currentPrice;
         if (historicalData && historicalData.has(currentDateISO)) {
