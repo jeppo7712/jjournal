@@ -4,6 +4,10 @@ A self-hosted trading journal for stocks and futures. Vibe coded. Log trades and
 
 Everything runs on your own machine/server against your own PostgreSQL database — no third-party account required beyond IBKR (optional) and Yahoo (used automatically, no account needed).
 
+<p align="center">
+  <img src="docs/screenshots/dashboard.webp" alt="Dashboard: headline stats, the cumulative P&L chart and the trade list with daily notes" width="100%">
+</p>
+
 ## Features
 
 - Trade log with FIFO PnL/return/R-multiple calculation, per-account column visibility, tags, screenshots
@@ -16,6 +20,27 @@ Everything runs on your own machine/server against your own PostgreSQL database 
 - IBKR Flex Web Service import for reconciling trade activity/executions
 - A [read/write external API](EXTERNAL_API.md) for feeding your data into another tool (e.g. an LLM-based trade analyzer) — no auth by design, see that doc before exposing it beyond localhost
 - USD support only
+
+## Screenshots
+
+<table>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/trade-view.webp" alt="Trade view: net P&L, R-multiple, entry, exit, stop and target, the fills on a timeline and the journal"><br><sub><b>Trade view</b>: P&L and R-multiple at a glance, every fill on a timeline, journal, ratings and checklist.</sub></td>
+    <td width="50%"><img src="docs/screenshots/trade-entry.webp" alt="Trade entry: symbol, target and stop, and the fills with a live summary"><br><sub><b>Trade entry</b>: fills with a live summary of side, P&L, average price, risk and planned reward.</sub></td>
+  </tr>
+  <tr>
+    <td width="50%"><img src="docs/screenshots/stats.webp" alt="Stats: headline numbers and the return over time chart"><br><sub><b>Stats</b>: headline numbers, return over time and cumulative P&L, plus a dozen more sections.</sub></td>
+    <td width="50%"><img src="docs/screenshots/calendar.webp" alt="Calendar: daily and weekly P&L"><br><sub><b>Calendar</b>: daily and weekly P&L. Click a day or week to filter the Dashboard.</sub></td>
+  </tr>
+</table>
+
+Works on phones too:
+
+<p align="center">
+  <img src="docs/screenshots/phone.webp" alt="The journal on a phone: dashboard, trade view and stats" width="85%">
+</p>
+
+<sub>Screenshots show generated demo data.</sub>
 
 ## Stack
 
