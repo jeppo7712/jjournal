@@ -384,6 +384,13 @@ export default function TradeView({ trade, onClose, onEdit }) {
   // snapshot taken before an async fetch starts is stale by the time that
   // fetch resolves if the user kept panning in the meantime).
   const hasAutoFittedRef = useRef(false);
+  // A view set with setVisibleRange only takes effect on the chart's next
+  // frame; until then getVisibleRange still answers the old one. Data that
+  // arrived in between (an edge chunk answers within milliseconds) used to
+  // capture that old view and put it back, losing the centring on the
+  // trade: the chart opened on the newest bars instead. Holds the view last
+  // set until the chart has drawn it.
+  const pendingViewRef = useRef(null);
   // Incremental "load more on scroll" state — the background fetch only
   // loads a generous but bounded window around the trade (see
   // BARS_PADDING_BACKGROUND), not the symbol's entire history; these track
@@ -694,6 +701,13 @@ const [dataVersion, setDataVersion] = useState(0);
         startDate = DateTime.fromSeconds(currentMin - chunkDuration).toISO();
         oldestRequestedTimeRef.current = currentMin - chunkDuration;
       } else {
+        // Nothing can exist after today: past it, every chunk came back
+        // empty (a few more requests each time, reaching decades ahead)
+        // before the newer edge counted as reached.
+        if (currentMax >= Date.now() / 1000) {
+          noMoreNewerDataRef.current = true;
+          return;
+        }
         startDate = DateTime.fromSeconds(currentMax).toISO();
         endDate = DateTime.fromSeconds(currentMax + chunkDuration).toISO();
         newestRequestedTimeRef.current = currentMax + chunkDuration;
@@ -838,8 +852,17 @@ const [dataVersion, setDataVersion] = useState(0);
       // auto-centered at least once; on the very first load there's nothing
       // to preserve yet.
       const preSetDataRange = hasAutoFittedRef.current && chartRef.current
-        ? chartRef.current.timeScale().getVisibleRange()
+        ? (pendingViewRef.current?.range || chartRef.current.timeScale().getVisibleRange())
         : null;
+      const setView = (range) => {
+        chartRef.current.timeScale().setVisibleRange(range);
+        const pending = { range };
+        pendingViewRef.current = pending;
+        // Runs after the chart's own frame, which applies the range.
+        requestAnimationFrame(() => {
+          if (pendingViewRef.current === pending) pendingViewRef.current = null;
+        });
+      };
 
       // lightweight-charts v4.x hard-locks interactive scrolling at the last
       // REAL data point, regardless of rightOffset — confirmed via testing
@@ -931,7 +954,7 @@ const [dataVersion, setDataVersion] = useState(0);
           // the loaded edge, preSetDataRange reflects that and this keeps it
           // that way rather than snapping back.
           if (preSetDataRange) {
-            chartRef.current.timeScale().setVisibleRange(preSetDataRange);
+            setView(preSetDataRange);
           }
         } else {
           // First successful load for this chart generation — auto-center on trade actions.
@@ -967,7 +990,7 @@ const [dataVersion, setDataVersion] = useState(0);
               const fromTime = minActionTime - padding;
               const toTime = maxActionTime + padding;
 
-              chartRef.current.timeScale().setVisibleRange({ from: fromTime, to: toTime });
+              setView({ from: fromTime, to: toTime });
 
           } else if (styledChartData.length > 0) {
               // If there are no actions, default to showing the latest 40 bars.
@@ -975,7 +998,7 @@ const [dataVersion, setDataVersion] = useState(0);
               // Calculate start time based on the last bar time minus the duration of 39 bars
               const fromTime = lastBarTime - ((MINIMUM_BARS_TO_SHOW - 1) * barSpacing);
               
-              chartRef.current.timeScale().setVisibleRange({ from: fromTime, to: lastBarTime });
+              setView({ from: fromTime, to: lastBarTime });
           }
         }
       }
@@ -1084,7 +1107,12 @@ useEffect(() => {
     const guardedFetch = guardedFetchRef.current;
 
     try {
-      const historicalCheckRes = await guardedFetch(`${process.env.REACT_APP_API_URL}/api/historical/db?symbol=${encodeURIComponent(trade.symbol)}&type=${encodeURIComponent(trade.type)}&timeframe=${defaultTimeframe}`, {
+      // Only whether the symbol is set up matters (404 when it isn't), so a
+      // week's window: without one this downloaded the symbol's whole
+      // history (megabytes for an hourly future) each time a trade opened.
+      const checkStart = encodeURIComponent(DateTime.now().minus({ days: 7 }).toISO());
+      const checkEnd = encodeURIComponent(DateTime.now().toISO());
+      const historicalCheckRes = await guardedFetch(`${process.env.REACT_APP_API_URL}/api/historical/db?symbol=${encodeURIComponent(trade.symbol)}&type=${encodeURIComponent(trade.type)}&timeframe=${defaultTimeframe}&startDate=${checkStart}&endDate=${checkEnd}`, {
         headers: { 'x-account-id': '1' },
       });
 
@@ -1111,6 +1139,7 @@ useEffect(() => {
     if (showChart && trade?.symbol && chartContainerRef.current) {
       // Reset so we always auto-center on the first load for this chart generation.
       hasAutoFittedRef.current = false;
+      pendingViewRef.current = null;
       setFullHistoryLoaded(false); // Reset full history flag
       setInitialDataLoaded(false); // *** ADD THIS RESET ***
       // New symbol/timeframe — neither edge has been confirmed exhausted yet.
