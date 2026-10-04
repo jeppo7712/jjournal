@@ -8,12 +8,13 @@ import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
 import styles from './Dashboard.module.css';
 import useScrollLock from '../../utils/useScrollLock';
+import { computeUnrealisedSeries } from '../../utils/unrealisedSeries';
+import { loadDailyCloses, missingCloses, cachedCloses } from '../../utils/dailyCloses';
 import { sumByCurrency, formatTotals, toTotalsList, totalsSign } from '../../utils/currencyTotals';
 import { formatMoney, currencyMark } from '../../utils/formatMoney';
 import { formatNumber } from '../../utils/numberFormat';
 import { DateTime } from 'luxon';
 import { getRealisedPnL } from '../../context/TradeContext';
-import { debounce } from 'lodash';
 
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
@@ -274,311 +275,85 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
       }),
   };
 
-  function computeOpenLotsPerDay(trade) {
-    const openLotsMap = new Map(); // Key: ISO date string, Value: { openQty, openCost, openFee, avgOpenCost }
-    let openLots = [];
-    const actions = trade.actions.sort((a, b) => DateTime.fromISO(a.dateTime) - DateTime.fromISO(b.dateTime));
-
-    let currentDate = null;
-    actions.forEach(action => {
-      const actionDate = DateTime.fromISO(action.dateTime).startOf('day');
-      if (!currentDate || !actionDate.hasSame(currentDate, 'day')) {
-        if (currentDate) {
-          const openQty = openLots.reduce((sum, lot) => sum + lot.quantity, 0);
-          const openCost = openLots.reduce((sum, lot) => sum + lot.price * lot.quantity, 0);
-          const openFee = openLots.reduce((sum, lot) => sum + lot.fee, 0);
-          const avgOpenCost = openQty > 0 ? openCost / openQty : 0;
-          openLotsMap.set(currentDate.toISODate(), { openQty, openCost, openFee, avgOpenCost });
-        }
-        currentDate = actionDate;
-      }
-
-      if (trade.side === 'LONG' && action.type === 'BUY') {
-        openLots.push({
-          quantity: Number(action.quantity || 0),
-          price: Number(action.price || 0),
-          fee: Number(action.fee || 0),
-        });
-      } else if (trade.side === 'SHORT' && action.type === 'SELL') {
-        openLots.push({
-          quantity: Number(action.quantity || 0),
-          price: Number(action.price || 0),
-          fee: Number(action.fee || 0),
-        });
-      } else if ((trade.side === 'LONG' && action.type === 'SELL') || (trade.side === 'SHORT' && action.type === 'BUY')) {
-        let closeQty = Number(action.quantity || 0);
-        while (closeQty > 0 && openLots.length > 0) {
-          let lot = openLots[0];
-          const qtyToClose = Math.min(lot.quantity, closeQty);
-          // Prorate the lot's remaining fee down as it's closed, same fix as
-          // matchLotsFIFO in TradeContext.js, so the fee left on a still-open
-          // lot here (used below for openFee) doesn't double-count fee already
-          // attributed to an earlier partial close of this same lot.
-          lot.fee -= lot.fee * (qtyToClose / lot.quantity);
-          lot.quantity -= qtyToClose;
-          closeQty -= qtyToClose;
-          if (lot.quantity <= 0) openLots.shift();
-        }
-      }
-    });
-
-    // Add the last date
-    if (currentDate) {
-      const openQty = openLots.reduce((sum, lot) => sum + lot.quantity, 0);
-      const openCost = openLots.reduce((sum, lot) => sum + lot.price * lot.quantity, 0);
-      const openFee = openLots.reduce((sum, lot) => sum + lot.fee, 0);
-      const avgOpenCost = openQty > 0 ? openCost / openQty : 0;
-      openLotsMap.set(currentDate.toISODate(), { openQty, openCost, openFee, avgOpenCost });
-    }
-
-    // For open trades, extend open lots until today
-    if (trade.status === 'OPEN') {
-      const lastDate = currentDate || DateTime.fromISO(trade.firstActionDate).startOf('day');
-      const today = DateTime.now().startOf('day');
-      for (let dt = lastDate.plus({ days: 1 }); dt <= today; dt = dt.plus({ days: 1 })) {
-        openLotsMap.set(dt.toISODate(), { ...openLotsMap.get(lastDate.toISODate()) });
-      }
-    }
-
-    return openLotsMap;
-  }
-
-  function computeUnrealisedPnLSeries(trades, historicalDataMap, startDate = null, endDate = null) {
-    const relevantTrades = trades.filter(trade => ['OPEN', 'WIN', 'LOSS', 'WASH'].includes(trade.status) && (trade.type === 'FUT' || trade.type === 'STK'));
-    if (relevantTrades.length === 0) {
-      return { labels: [], seriesByCurrency: {} };
-    }
-
-    const openLotsPerTrade = relevantTrades.map(trade => ({
-      trade,
-      openLotsMap: computeOpenLotsPerDay(trade), // computeOpenLotsPerDay remains the same
-      lastPrice: null,
-    }));
-
-    const firstDates = relevantTrades
-      .map(trade => DateTime.fromISO(trade.firstActionDate).startOf('day'))
-      .filter(dt => dt.isValid);
-    const earliestDateDefault = firstDates.length > 0 ? firstDates.reduce((min, dt) => (dt < min ? dt : min)) : DateTime.now().startOf('day');
-    const today = DateTime.now().startOf('day');
-
-    const earliestDate = startDate ? DateTime.fromISO(startDate).startOf('day') : earliestDateDefault;
-    let latestDate = endDate ? DateTime.fromISO(endDate).startOf('day') : today;
-
-    // Ensure earliestDate is not after latestDate, and latestDate is not before earliestDate
-    if (earliestDate > latestDate) {
-      // If the filter somehow results in an invalid range (e.g. "THIS YR" in a future year context for a past trade)
-      // or if latestDate is before any trade activity that would be charted.
-      // Potentially swap them or return empty if start is truly after end.
-      // For now, let's cap latestDate at today if it's in the future from a filter.
-      if (latestDate > today) latestDate = today;
-      if (earliestDate > latestDate) return { labels: [], seriesByCurrency: {} };
-    }
-
-    const days = Math.ceil(latestDate.diff(earliestDate, 'days').days) + 1;
-    const labels = [];
-    // Unrealised P&L per currency per day. Summing an open EUR position into
-    // the same running number as the USD ones produces a figure denominated
-    // in nothing, exactly as it would for realised P&L, so the series are
-    // kept apart here rather than blended and split later.
-    const seriesCurrencies = [...new Set(relevantTrades.map(t => String(t.currency || 'USD').toUpperCase()))];
-    const seriesByCurrency = {};
-    seriesCurrencies.forEach(code => { seriesByCurrency[code] = []; });
-
-    for (let i = 0; i < days; i++) {
-      const currentDate = earliestDate.plus({ days: i });
-      const currentDateISO = currentDate.toISODate();
-      labels.push(formatDate(currentDate)); // formatDate is from TradeContext
-      const dailyByCurrency = {};
-
-      openLotsPerTrade.forEach(item => { // Renamed to avoid conflict with outer 'trade'
-        const { trade, openLotsMap } = item;
-        let currentLastPrice = item.lastPrice; // Use and update this scoped lastPrice
-
-        // --- START MODIFICATION FOR LOTS LOOKUP ---
-        let effectiveLots = null;
-        // Get sorted keys from the trade's openLotsMap. Map keys are ISO date strings.
-        const sortedMapDates = Array.from(openLotsMap.keys()).sort();
-
-        for (const mapDateISO of sortedMapDates) {
-          if (mapDateISO <= currentDateISO) {
-            effectiveLots = openLotsMap.get(mapDateISO);
-          } else {
-            // Since sortedMapDates are ascending, no further mapDateISO will be <= currentDateISO.
-            break;
-          }
-        }
-        const lots = effectiveLots;
-        // --- END MODIFICATION FOR LOTS LOOKUP ---
-
-        if (!lots || lots.openQty <= 0) {
-          // This means the trade was not open, had zero quantity on currentDateISO,
-          // or currentDateISO is before the trade's first action.
-          // Correctly contributes 0 to unrealised P&L for this day.
-          return;
-        }
-
-        let price = null;
-        const currentTradeHistoricalPrices = historicalDataMap[trade.symbol];
-
-        if (trade.status === 'OPEN' && currentDate.hasSame(today, 'day') && trade.currentPrice) {
-          price = trade.currentPrice;
-        } else if (currentTradeHistoricalPrices) {
-          price = currentTradeHistoricalPrices.get(currentDateISO) || null;
-          // Original modification for price fallback on the first day of chart
-          if (price === null && i === 0 && currentTradeHistoricalPrices && currentTradeHistoricalPrices.size > 0) {
-            const availablePricesBeforeOrOnCurrent = Array.from(currentTradeHistoricalPrices.entries())
-              .map(([dateStr, p]) => ({ date: DateTime.fromISO(dateStr), price: p }))
-              .filter(entry => entry.date.isValid && entry.date <= currentDate)
-              .sort((a, b) => b.date.toMillis() - a.date.toMillis());
-            if (availablePricesBeforeOrOnCurrent.length > 0) {
-              price = availablePricesBeforeOrOnCurrent[0].price;
-            }
-          }
-        }
-        let tickValue, tickSize, tickMultiplier;
-        if (trade.type === 'STK') {
-          tickValue = 1;
-          tickSize = 1;
-          tickMultiplier = 1;
-        } else {
-          tickValue = Number(trade.tick_value || trade.tickValue || 0);
-          tickSize = Number(trade.tick_size || trade.tickSize || 0);
-          tickMultiplier = tickValue !== 0 && tickSize !== 0 ? tickValue / tickSize : 1;
-        }
-
-        // Use last known price if current price is unavailable (for subsequent days)
-        if (price === null && currentLastPrice !== null) { // Changed prevLastPrice to currentLastPrice
-          price = currentLastPrice;
-        } else if (price !== null) {
-          item.lastPrice = price; // Update lastPrice for this trade in the openLotsPerTrade array
-        } else {
-          return; // If no price can be determined, skip this trade's contribution
-        }
-
-        const { avgOpenCost, openQty, openFee } = lots; // openFee from lots might be the fee up to that point
-
-        let unrealised = 0;
-
-        if (trade.side === 'LONG') {
-          // For unrealised P&L, the 'openFee' typically refers to fees incurred to establish the currently open lots.
-          // If openFee in 'lots' accumulates all fees, this is fine. If it's per-lot, care is needed.
-          // Assuming 'avgOpenCost' already includes pro-rata buy fees.
-          unrealised = (price - avgOpenCost) * openQty * tickMultiplier;
-          // If 'openFee' represents total fees for *current* open lots, subtract it.
-          // If avgOpenCost = (sum of (price*qty) + sum of fees) / total qty, then openFee subtraction might double count.
-          // Assuming avgOpenCost is pure price average, and openFee is total fee for current open lots.
-          unrealised -= (lots.openFee || 0);
-
-
-        } else if (trade.side === 'SHORT') {
-          unrealised = (avgOpenCost - price) * openQty * tickMultiplier;
-          unrealised -= (lots.openFee || 0);
-        }
-        const code = String(trade.currency || 'USD').toUpperCase();
-        dailyByCurrency[code] = (dailyByCurrency[code] || 0) + unrealised;
-      });
-      // Every currency gets a point for every label, so all the series stay
-      // aligned to the shared x-axis even on days one of them contributes
-      // nothing.
-      seriesCurrencies.forEach(code => {
-        seriesByCurrency[code].push(dailyByCurrency[code] || 0);
-      });
-    }
-    return { labels, seriesByCurrency };
-  }
-
-  const [historicalDataMap, setHistoricalDataMap] = useState({});
-  const [isFetching, setIsFetching] = useState(false);
-
-  const fetchHistoricalData = async () => {
-    // Group symbols by trade type
-    const symbolsByType = sortedTrades.reduce((acc, trade) => {
-      if (!trade.symbol) return acc;
+  // --- Unrealised P&L chart ---
+  // Daily closes come from a session cache (utils/dailyCloses), prefetched
+  // in the background shortly after the Dashboard opens, so the chart is
+  // usually ready by the time it's asked for. The series itself
+  // (utils/unrealisedSeries) is worked out after the loading state has been
+  // drawn, never inside the click: the tile and chart show at once that
+  // something is happening instead of the page seeming to ignore the click.
+  const closeSymbols = useMemo(() => {
+    const seen = new Map();
+    sortedTrades.forEach(trade => {
+      if (!trade.symbol) return;
       const type = trade.type === 'FUT' ? 'FUT' : 'STK';
-      if (!acc[type]) acc[type] = new Set();
-      acc[type].add(trade.symbol);
-      return acc;
-    }, {});
-
-    // Convert Sets to Arrays and filter missing symbols
-    const fetchPromises = [];
-    for (const [type, symbolSet] of Object.entries(symbolsByType)) {
-      const symbols = [...symbolSet];
-      const missingSymbols = symbols.filter(symbol => !historicalDataMap[symbol]);
-      if (missingSymbols.length === 0) {
-        continue;
-      }
-
-      fetchPromises.push(
-        ...missingSymbols.map(symbol => (
-          fetch(`${process.env.REACT_APP_API_URL}/api/historical/db?symbol=${encodeURIComponent(symbol)}&type=${type}&timeframe=1D&noRefresh=true`, {
-            headers: { 'x-account-id': '1' }
-          })
-            .then(res => res.ok ? res.json() : [])
-            .then(data => {
-              const dateMap = new Map(data.map(bar => [DateTime.fromISO(bar.time).toISODate(), bar.close]));
-              return [symbol, dateMap];
-            })
-            .catch(error => {
-              console.error(`Error fetching ${symbol} (${type}):`, error);
-              return [symbol, new Map()];
-            })
-        ))
-      );
-    }
-
-    if (fetchPromises.length === 0) {
-      return;
-    }
-
-    setIsFetching(true);
-    try {
-      const results = await Promise.all(fetchPromises);
-      setHistoricalDataMap(prev => ({
-        ...prev,
-        ...Object.fromEntries(results),
-      }));
-    } catch (error) {
-      console.error('Failed to fetch historical data:', error);
-    } finally {
-      setIsFetching(false);
-    }
-  };
-  const debouncedFetchHistoricalData = useRef(debounce(fetchHistoricalData, 500));
-
-  useEffect(() => {
-    if (pnlChartType === 'unrealised') {
-      fetchHistoricalData(); // Immediate fetch on chart type change
-    }
-  }, [pnlChartType]);
-
-  useEffect(() => {
-    if (pnlChartType === 'unrealised') {
-      debouncedFetchHistoricalData.current();
-    }
-    return () => debouncedFetchHistoricalData.current.cancel();
+      seen.set(`${type}:${trade.symbol}`, { symbol: trade.symbol, type });
+    });
+    return [...seen.values()];
   }, [sortedTrades]);
 
-  const { labels: unrealisedLabels, seriesByCurrency: unrealisedByCurrency } = useMemo(() => {
-    // PERFORMANCE OPTIMIZATION:
-    // If the user is looking at Realised P&L (default), DO NOT compute the expensive Unrealised P&L series.
-    // This series iterates through every single action of every trade and is very heavy.
-    if (pnlChartType !== 'unrealised') {
-      return { labels: [], seriesByCurrency: {} };
+  const [historicalDataMap, setHistoricalDataMap] = useState(() => cachedCloses(closeSymbols));
+  const [isFetching, setIsFetching] = useState(false);
+
+  useEffect(() => {
+    if (pnlChartType !== 'unrealised') return undefined;
+    let cancelled = false;
+    const missing = missingCloses(closeSymbols);
+    if (missing.length === 0) {
+      setHistoricalDataMap(prev => ({ ...prev, ...cachedCloses(closeSymbols) }));
+      return undefined;
     }
+    setIsFetching(true);
+    loadDailyCloses(closeSymbols, { concurrency: 6 })
+      .then(closes => { if (!cancelled) setHistoricalDataMap(prev => ({ ...prev, ...closes })); })
+      .finally(() => { if (!cancelled) setIsFetching(false); });
+    return () => { cancelled = true; };
+  }, [pnlChartType, closeSymbols]);
 
-    // Ensure getTimeRange is available from context, if not, this line will fail.
-    // Assuming getTimeRange is correctly destructured from TradeContext.
-    const timeRangeResult = timeFilter
-      ? getTimeRange(timeFilter, customStartDate, customEndDate)
-      : { start: null, end: null }; // Default if no timeFilter
+  // Background prefetch, a couple of seconds after the page settles.
+  useEffect(() => {
+    if (closeSymbols.length === 0) return undefined;
+    const timer = setTimeout(() => { loadDailyCloses(closeSymbols, { concurrency: 3 }); }, 2500);
+    return () => clearTimeout(timer);
+  }, [closeSymbols]);
 
-    // Provide a fallback for destructuring if timeRangeResult is null/undefined
-    const { start: filterStart, end: filterEnd } = timeRangeResult || { start: null, end: null };
+  const unrealisedRange = useMemo(() => {
+    const range = timeFilter ? getTimeRange(timeFilter, customStartDate, customEndDate) : null;
+    return { start: range?.start || null, end: range?.end || null };
+  }, [timeFilter, customStartDate, customEndDate, getTimeRange]);
 
-    return computeUnrealisedPnLSeries(sortedTrades, historicalDataMap, filterStart, filterEnd);
-  }, [sortedTrades, historicalDataMap, timeFilter, customStartDate, customEndDate, getTimeRange, pnlChartType]); // Added pnlChartType dependency
+  // Some symbol's closes not here yet (the fetch effect is about to start,
+  // or is running): working out a series now would chart those positions
+  // as flat zero for a moment.
+  const closesPending = closeSymbols.some(({ symbol }) => !historicalDataMap[symbol]);
 
+  const [unrealisedSeries, setUnrealisedSeries] = useState({ labels: [], seriesByCurrency: {}, ready: false });
+  const [isComputingUnrealised, setIsComputingUnrealised] = useState(false);
+
+  useEffect(() => {
+    // Only worked out while the unrealised chart is the one wanted.
+    if (pnlChartType !== 'unrealised' || isFetching || closesPending) return undefined;
+    setIsComputingUnrealised(true);
+    let timer = null;
+    // Let the loading state reach the screen first, then do the work.
+    const frame = requestAnimationFrame(() => {
+      timer = setTimeout(() => {
+        const result = computeUnrealisedSeries(sortedTrades, historicalDataMap, {
+          startDate: unrealisedRange.start,
+          endDate: unrealisedRange.end,
+          formatLabel: formatDate,
+        });
+        setUnrealisedSeries({ ...result, ready: true });
+        setIsComputingUnrealised(false);
+      }, 0);
+    });
+    return () => { cancelAnimationFrame(frame); clearTimeout(timer); };
+  }, [pnlChartType, isFetching, closesPending, sortedTrades, historicalDataMap, unrealisedRange]);
+
+  const { labels: unrealisedLabels, seriesByCurrency: unrealisedByCurrency } = unrealisedSeries;
+  // Busy: fetching closes, or working out a series not drawn yet.
+  const loadingCloses = isFetching || closesPending;
+  const unrealisedBusy = pnlChartType === 'unrealised' && (loadingCloses || isComputingUnrealised || !unrealisedSeries.ready);
 
   // Currencies the unrealised chart could show, in the same stable order used
   // everywhere else.
@@ -1105,6 +880,37 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     );
   };
 
+  // The P&L chart's body, in the panel and in the phone sheet alike. While
+  // the unrealised series loads, a spinner sits over the plot (over the
+  // previous chart, dimmed, when there is one) so the click visibly took.
+  const renderPnlChart = () => {
+    if (pnlChartType === 'realised') {
+      return <Line data={chartData} options={chartOptions} />;
+    }
+    const hasChart = unrealisedSeries.ready && unrealisedLabels.length > 0;
+    let body = null;
+    if (hasChart) {
+      body = <Line data={unrealisedChartData} options={chartOptions} />;
+    } else if (!unrealisedBusy) {
+      body = (
+        <div className={styles.chartEmpty}>
+          {sortedTrades.length === 0 ? 'No trades to chart yet' : 'No price history for the open positions yet'}
+        </div>
+      );
+    }
+    return (
+      <div className={`${styles.chartStage} ${unrealisedBusy && hasChart ? styles.chartStageBusy : ''}`}>
+        {body}
+        {unrealisedBusy && (
+          <div className={styles.chartLoading} role="status">
+            <span className={styles.chartSpinner} aria-hidden="true" />
+            <span>{loadingCloses ? 'Loading price history…' : 'Working out unrealised P&L…'}</span>
+          </div>
+        )}
+      </div>
+    );
+  };
+
   const showChartPanel = !isGraphHidden && chartOpen;
   const chartToggleTitle = chartOpen ? 'Hide the P&L chart' : 'Show the P&L chart';
 
@@ -1120,7 +926,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
             {renderTile(statGrid[2][0], { extraClass: styles.tileAvgWin })}
             {renderTile(statGrid[2][1], { extraClass: styles.tileAvgLoss })}
             {renderTile({ ...realisedPnlStat, title: isGraphHidden ? 'Show the realised P&L chart' : 'Chart realised P&L' }, { align: 'left', lines: pnlStatLines, ring: false, extraClass: `${styles.tilePnl} ${styles.tileRealised} ${pnlChartType === 'realised' && showChartPanel ? styles.charted : ''}` })}
-            {renderTile({ ...unrealisedPnlStat, title: isGraphHidden ? 'Show the unrealised P&L chart' : 'Chart unrealised P&L' }, { align: 'left', lines: pnlStatLines, ring: false, extraClass: `${styles.tilePnl} ${styles.tileUnrealised} ${pnlChartType === 'unrealised' && showChartPanel ? styles.charted : ''}` })}
+            {renderTile({ ...unrealisedPnlStat, title: isGraphHidden ? 'Show the unrealised P&L chart' : 'Chart unrealised P&L' }, { align: 'left', lines: pnlStatLines, ring: false, extraClass: `${styles.tilePnl} ${styles.tileUnrealised} ${pnlChartType === 'unrealised' && showChartPanel ? styles.charted : ''} ${unrealisedBusy && (showChartPanel || showGraphPopup) ? styles.tileBusy : ''}` })}
           </div>
         </div>
 
@@ -1142,21 +948,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
               </div>
             </div>
             <div className={styles.graphArea}>
-              {pnlChartType === 'unrealised' && isFetching && <div className={styles.chartEmpty}>Loading unrealised P&L…</div>}
-              {pnlChartType === 'unrealised' && !isFetching && sortedTrades.filter(trade => ['OPEN', 'WIN', 'LOSS', 'WASH'].includes(trade.status)).length === 0 ? (
-                <div className={styles.chartEmpty}>No trades to chart yet</div>
-              ) : (
-                pnlChartType === 'unrealised' && !isFetching && unrealisedLabels.length === 0 ? (
-                  <div className={styles.chartEmpty}>No price history for the open positions yet</div>
-                ) : (
-                  !isFetching && (
-                    <Line
-                      data={pnlChartType === 'realised' ? chartData : unrealisedChartData}
-                      options={chartOptions}
-                    />
-                  )
-                )
-              )}
+              {renderPnlChart()}
             </div>
           </div>
         )}
@@ -1309,7 +1101,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
               <button type="button" role="tab" aria-selected={pnlChartType === 'unrealised'} className={pnlChartType === 'unrealised' ? styles.segmentOn : ''} onClick={() => setPnlChartType('unrealised')}>Unrealised</button>
             </div>
             <div className={styles.graphPopupArea}>
-              <Line data={chartData} options={chartOptions} />
+              {renderPnlChart()}
             </div>
           </div>
         </div>,
