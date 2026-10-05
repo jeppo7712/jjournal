@@ -93,6 +93,27 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   const statusBoxTriggerRef = useRef(null); // Renamed for clarity, ref for the status trigger area //
   const [tradingViewStatus, setTradingViewStatus] = useState(null);
   const [ibkrDataStatus, setIbkrDataStatus] = useState(null);
+  // IBKR cash activity waiting for the user's add/dismiss on the Capital
+  // page, over all accounts with sync on — a badge next to Capital, so it
+  // gets noticed. Refreshed every few minutes and whenever the Capital
+  // page changes something (the 'broker-activity-changed' event).
+  const [brokerPending, setBrokerPending] = useState({ total: 0, accounts: [] });
+  useEffect(() => {
+    if (!isDatabaseConnected || !currentAccountId) return undefined;
+    let cancelled = false;
+    const load = () => fetch(`${process.env.REACT_APP_API_URL}/api/broker-activity/pending`, { headers: { 'X-Account-ID': currentAccountId } })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => { if (!cancelled && data) setBrokerPending(data); })
+      .catch(() => {});
+    load();
+    const timer = setInterval(load, 5 * 60 * 1000);
+    window.addEventListener('broker-activity-changed', load);
+    return () => {
+      cancelled = true;
+      clearInterval(timer);
+      window.removeEventListener('broker-activity-changed', load);
+    };
+  }, [isDatabaseConnected, currentAccountId]);
 
   useEffect(() => {
     // WebSocket connection is handled by StatusProvider.
@@ -485,6 +506,15 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
           >
             <svg className={styles.navIcon} viewBox="0 0 20 20" fill="currentColor">{NAV_ICONS[page.view]}</svg>
             <span className={styles.navLabel}>{page.label}</span>
+            {page.view === 'capital' && brokerPending.total > 0 && (
+              <span
+                className={styles.navBadge}
+                title={`Waiting for you from IBKR: ${brokerPending.accounts.map(a => `${a.count} on ${a.name}`).join(', ')}`}
+                aria-label={`${brokerPending.total} IBKR item${brokerPending.total > 1 ? 's' : ''} waiting`}
+              >
+                {brokerPending.total > 99 ? '99+' : brokerPending.total}
+              </span>
+            )}
             <kbd className={styles.navKey}>{page.key}</kbd>
           </button>
         ))}

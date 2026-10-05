@@ -4,6 +4,8 @@ A self-hosted trading journal for stocks and futures. Vibe coded. Log trades and
 
 Everything runs on your own machine/server against your own PostgreSQL database — no third-party account required beyond IBKR (optional) and Yahoo (used automatically, no account needed).
 
+**It has no login or any other security features.** Securing the journal and its database is up to you — see [Security](#security).
+
 <p align="center">
   <img src="docs/screenshots/dashboard.webp" alt="Dashboard: headline stats, the cumulative P&L chart and the trade list with daily notes" width="100%">
 </p>
@@ -78,6 +80,10 @@ Then open `http://localhost:3999`, go to **Settings**, and paste in a PostgreSQL
 ## Data & persistence
 
 If running via Docker, mount `/user_data` (holds `config.json` and log files) as a volume, and point `databaseUrl` at a Postgres instance you're backing up separately — the database itself isn't stored in the container. Trade/day-note screenshots are stored in the database too; the app's `Uploads/` directory only holds upload temp files.
+
+## Security
+
+The journal has no login, user accounts or any other access control, and the [external API](EXTERNAL_API.md) has no authentication either: anyone who can reach its address can read and change all your trades and notes, and change its settings (database connection, IBKR access). Securing the journal and the database is the responsibility of whoever runs it. For most people, running it on the home network (LAN) only, without exposing it to the internet, is probably good enough. To reach it from outside, put it behind a VPN or a reverse proxy that asks for a login, rather than opening a port to it.
 
 ## Disclaimer
 
