@@ -345,11 +345,19 @@ async function balanceCheck(db, rootId) {
         journal[r.currency] = Number(own.total);
         pending[r.currency] = Number(waiting.total);
     }
+    // What the journal booked after IBKR's statement day (today's trades,
+    // say): not in the comparison until IBKR's next statement has it too.
+    const { rows: later } = await db.query(
+        `SELECT currency, COALESCE(SUM(amount), 0) AS total FROM cash_transactions
+         WHERE account_id = ANY($1) AND date_time >= ($2::date + 1)::timestamp AT TIME ZONE 'UTC' GROUP BY currency`,
+        [ids, reports[0].as_of]
+    );
+    const since = Object.fromEntries(later.map(r => [r.currency, Number(r.total)]));
     return compareBalances(
         reports.map(r => ({ currency: r.currency, asOf: r.as_of, endingCash: Number(r.ending_cash) })),
         journal,
         pending
-    );
+    ).map(b => ({ ...b, sinceStatement: since[b.currency] || 0 }));
 }
 
 /**

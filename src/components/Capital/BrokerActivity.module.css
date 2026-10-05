@@ -135,6 +135,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+.since {
+  flex-basis: 100%;
+  color: #6B7280;
+  font-size: 0.78rem;
+}
+
 .figureLabel {
   margin-right: 6px;
   color: #6B7280;
@@ -324,6 +330,10 @@
   .figureLabel {
     display: block;
     margin: 0 0 2px;
+  }
+
+  .since {
+    grid-column: 1 / -1;
   }
 
   .balanceStatus {
