@@ -71,6 +71,10 @@ const Capital = () => {
   // per-transaction choice — every transaction under this account is
   // whatever the account is. See docs/CAPITAL_TRACKING_DESIGN.md.
   const isVirtualAccount = currentAccount ? !!currentAccount.is_virtual : false;
+  // Sections this account hides (e.g. dividends and holdings on a crypto
+  // account). Their data still counts in the balance.
+  const hiddenSections = new Set(currentAccount?.hidden_capital_sections || []);
+  const SECTION_NAMES = { DIVIDENDS: 'Dividends', HOLDINGS: 'Holdings' };
 
   const [txForm, setTxForm] = useState({ type: 'DEPOSIT', amount: '', currency: 'USD', date_time: todayISO(), note: '' });
   const [transferForm, setTransferForm] = useState({ to_account_id: '', amount: '', currency: 'USD', date_time: todayISO(), note: '' });
@@ -135,6 +139,21 @@ const Capital = () => {
         ? 'Saved. No balance changed.'
         : `Saved. Balance ${result.changes.map(c => `${c.change > 0 ? '+' : ''}${formatNumber(c.change, 2)} ${c.currency}`).join(', ')}.`, 'success');
       fetchAll();
+    } catch (err) { notify(err.message); }
+  };
+
+  const setSectionHidden = async (section, hide) => {
+    const next = new Set(hiddenSections);
+    if (hide) next.add(section); else next.delete(section);
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/capital-sections`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
+        body: JSON.stringify({ hidden: [...next] }),
+      });
+      if (!res.ok) throw new Error((await res.json()).error || 'Failed to save');
+      await refreshAccounts();
+      if (hide) notify(`${SECTION_NAMES[section]} hidden on ${currentAccount?.name}. Show it again at the bottom of this page.`, 'success');
     } catch (err) { notify(err.message); }
   };
 
@@ -572,15 +591,18 @@ const Capital = () => {
         )}
       </div>
 
-      {!isVirtualAccount && (
+      {!isVirtualAccount && !hiddenSections.has('DIVIDENDS') && (
         <div className={styles.section}>
           <div className={styles.sectionHeaderRow}>
             <h3 className={styles.sectionTitle}>Dividends</h3>
-            {dismissedCount > 0 && (
-              <button type="button" className={styles.secondaryBtn} onClick={() => setShowDismissed(v => !v)}>
-                {showDismissed ? 'Hide removed' : `Show removed (${dismissedCount})`}
-              </button>
-            )}
+            <span className={styles.sectionActions}>
+              {dismissedCount > 0 && (
+                <button type="button" className={styles.secondaryBtn} onClick={() => setShowDismissed(v => !v)}>
+                  {showDismissed ? 'Hide removed' : `Show removed (${dismissedCount})`}
+                </button>
+              )}
+              <button type="button" className={styles.hideSectionBtn} onClick={() => setSectionHidden('DIVIDENDS', true)} title="Hide this section on this account">Hide</button>
+            </span>
           </div>
           <p className={styles.hint} style={{ margin: '-8px 0 16px' }}>
             Each dividend books its gross amount and any tax withheld to the ledger, on the pay date.
@@ -787,12 +809,16 @@ const Capital = () => {
         )}
       </div>
 
+      {!hiddenSections.has('HOLDINGS') && (
       <div className={styles.section}>
         <div className={styles.sectionHeaderRow}>
           <h3 className={styles.sectionTitle}>Holdings (T-bills, bonds, other)</h3>
-          <button type="button" className={styles.secondaryBtn} onClick={checkAccrual} disabled={checkingAccrual}>
-            {checkingAccrual ? 'Checking…' : 'Check for due coupons/maturity'}
-          </button>
+          <span className={styles.sectionActions}>
+            <button type="button" className={styles.secondaryBtn} onClick={checkAccrual} disabled={checkingAccrual}>
+              {checkingAccrual ? 'Checking…' : 'Check for due coupons/maturity'}
+            </button>
+            <button type="button" className={styles.hideSectionBtn} onClick={() => setSectionHidden('HOLDINGS', true)} title="Hide this section on this account">Hide</button>
+          </span>
         </div>
         <p className={styles.hint} style={{ margin: '-8px 0 16px' }}>
           Bond coupons post to the ledger automatically as they come due, and any holding auto-redeems
@@ -897,6 +923,19 @@ const Capital = () => {
           </table>
         </div>
       </div>
+      )}
+
+      {[...hiddenSections].filter(sec => SECTION_NAMES[sec] && (sec !== 'DIVIDENDS' || !isVirtualAccount)).length > 0 && (
+        <p className={styles.hiddenSections}>
+          Hidden on this account:{' '}
+          {[...hiddenSections].filter(sec => SECTION_NAMES[sec] && (sec !== 'DIVIDENDS' || !isVirtualAccount)).map((sec, i) => (
+            <React.Fragment key={sec}>
+              {i > 0 && ' · '}
+              {SECTION_NAMES[sec]} <button type="button" className={styles.linkBtn} onClick={() => setSectionHidden(sec, false)}>Show</button>
+            </React.Fragment>
+          ))}
+        </p>
+      )}
     </div>
   );
 };

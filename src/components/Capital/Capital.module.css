@@ -281,6 +281,37 @@
   border-top: 1px dashed #32384a;
 }
 
+/* --- Hiding sections --- */
+
+.sectionActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.hideSectionBtn {
+  padding: 4px 8px;
+  border: none;
+  border-radius: 6px;
+  background: none;
+  color: #6B7280;
+  font: inherit;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .hideSectionBtn:hover { color: #E5E7EB; background: rgba(255, 255, 255, 0.05); }
+}
+
+.hiddenSections {
+  margin: 8px 0 0;
+  font-size: 0.82rem;
+  color: #6B7280;
+  text-align: center;
+}
+
 /* --- Opening balance setting --- */
 
 .openingLine {
