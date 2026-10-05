@@ -29,6 +29,12 @@ function formatISODate(iso) {
   return new Date(y, m - 1, d).toLocaleDateString();
 }
 
+// "2 Oct": the statement day, short enough for a figure's label.
+function formatShortDate(iso) {
+  const [y, m, d] = iso.split('-').map(Number);
+  return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
+}
+
 const amountText = (amount, currency) => `${Number(amount) >= 0 ? '+' : ''}${formatNumber(Number(amount), 2)} ${currency}`;
 
 // What IBKR reported for a top-level account mapped to an IBKR account:
@@ -210,8 +216,13 @@ const BrokerActivity = ({ accountId, accounts, onLedgerChange }) => {
                   <li key={b.currency} className={styles.balanceRow}>
                     <span className={styles.balanceCurrency}>{b.currency}</span>
                     <span className={styles.balanceFigures}>
-                      <span><span className={styles.figureLabel}>Journal</span>{formatNumber(b.journal, 2)}</span>
-                      <span><span className={styles.figureLabel}>IBKR</span>{formatNumber(b.broker, 2)}</span>
+                      <span><span className={styles.figureLabel}>Journal on {formatShortDate(b.asOf)}</span>{formatNumber(b.journal, 2)}</span>
+                      <span><span className={styles.figureLabel}>IBKR on {formatShortDate(b.asOf)}</span>{formatNumber(b.broker, 2)}</span>
+                      {Math.abs(b.sinceStatement) >= 0.005 && (
+                        <span className={styles.since}>
+                          Since then {b.sinceStatement > 0 ? '+' : ''}{formatNumber(b.sinceStatement, 2)} in the journal, which IBKR's next statement should show too.
+                        </span>
+                      )}
                     </span>
                     <span className={styles.balanceStatus}>
                       {b.inLine ? (
