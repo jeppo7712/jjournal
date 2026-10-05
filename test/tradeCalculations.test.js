@@ -104,3 +104,27 @@ test('symbol settings resolution', () => {
     assert.equal(resolveTradeCurrency('XEON.DE', 'STK', futuresSettings), 'EUR');
     assert.equal(resolveTradeCurrency('ESZ5', 'FUT', futuresSettings), null); // never from DEFAULT
 });
+
+test('settlement: one cash entry per fill, on its own date', () => {
+  const { settlementEntries } = require('../modules/tradeCalculations.js');
+  // A stock bought one day and sold a few days later: the purchase's cash
+  // stays on the purchase day.
+  const stock = settlementEntries('STK', [
+    { type: 'SELL', quantity: 10, price: 99.9, fee: 1.78, dateTime: '2026-10-05T08:16:25Z' },
+    { type: 'BUY', quantity: 10, price: 104, fee: 1.78, dateTime: '2026-09-24T13:41:22Z' },
+  ]);
+  assert.deepEqual(stock.map(e => [e.dateTime.slice(0, 10), Math.round(e.amount * 100) / 100]), [
+    ['2026-09-24', -1041.78],
+    ['2026-10-05', 997.22],
+  ]);
+  // A future: fees always, the realised P&L on the closing fill, never the
+  // contract value; a fill without a fee leaves no entry.
+  const future = settlementEntries('FUT', [
+    { type: 'BUY', quantity: 1, price: 20000, fee: 0, dateTime: '2026-10-01T14:00:00Z' },
+    { type: 'SELL', quantity: 1, price: 20010, fee: 1.24, dateTime: '2026-10-01T15:00:00Z' },
+  ], 0.25, 0.5);
+  assert.deepEqual(future.map(e => Math.round(e.amount * 100) / 100), [18.76]);
+  const { settlementNote } = require('../modules/tradeCalculations.js');
+  assert.equal(settlementNote('MNQ', future[0]), 'MNQ sell 1 @ 20010 · P&L +20.00 · fee 1.24');
+  assert.equal(settlementNote('GDX.L', stock[0]), 'GDX.L buy 10 @ 104 · fee 1.78');
+});

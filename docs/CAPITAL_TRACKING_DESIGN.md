@@ -211,6 +211,15 @@ Every BUY debits cash (`price × quantity + fee`), every SELL credits it
 is saved. This is what keeps the ledger accurate without the user
 double-entering the same activity in two places.
 
+One row per fill, on that fill's own date (`settlementEntries` in
+`modules/tradeCalculations.js`), as the broker books it. It used to be one
+net row per trade dated on its last fill, which moved a purchase's cash to
+the day the position was sold — the journal's cash between the two dates
+was wrong, and the comparison with IBKR's cash showed it. Existing net rows
+were split once on startup (same total per trade, so no balance changed).
+A trade's rows can't be deleted on their own: they're rebuilt from its
+fills on every save.
+
 ### 6. No historical backfill (confirmed)
 
 Cash tracking starts clean from an opening balance the user sets per

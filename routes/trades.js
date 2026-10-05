@@ -2,7 +2,7 @@ const express = require('express');
 const fs = require('fs').promises;
 const router = express.Router();
 const { logger } = require('../modules/logger.js');
-const { getTickMultiplier, computeFuturesRealizedPnLPerAction, resolveTradeCurrency } = require('../modules/tradeCalculations.js');
+const { resolveTradeCurrency, settlementEntries, settlementNote } = require('../modules/tradeCalculations.js');
 
 // A trade's ticked checklist, or null. Labels are kept as they were when
 // ticked (the account's list may change later); `removed` hides the
@@ -79,34 +79,15 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
             logger.warn(`[settleTradeActionsToCash] No futures_settings currency for ${symbol} (${type}); defaulting to USD`);
         }
 
-        // Chronological order regardless of submission order — needed both
-        // for the FIFO match and to find the actual last action's date.
-        const sorted = actions.slice().sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
-
-        let realizedByIndex = new Map();
-        if (type === 'FUT' && sorted.length > 1) {
-            const side = sorted[0].type === 'BUY' ? 'LONG' : 'SHORT';
-            const tickMultiplier = getTickMultiplier({ type, tick_size: tickSize, tick_value: tickValue });
-            realizedByIndex = computeFuturesRealizedPnLPerAction(side, sorted, tickMultiplier);
+        // One ledger row per fill, on its own date (settlementEntries in
+        // modules/tradeCalculations.js).
+        for (const entry of settlementEntries(type, actions, tickSize, tickValue)) {
+            await client.query(
+                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, linked_trade_id, note)
+                 VALUES ($1, $2, 'TRADE_SETTLEMENT', $3, $4, $5, $6)`,
+                [accountId, entry.dateTime, entry.amount, currency, tradeId, settlementNote(symbol, entry)]
+            );
         }
-
-        let totalAmount = 0;
-        sorted.forEach((a, i) => {
-            const qty = Number(a.quantity || 0);
-            const price = Number(a.price || 0);
-            const fee = Number(a.fee || 0);
-            const realizedPnL = realizedByIndex.get(i) || 0;
-            totalAmount += type === 'STK'
-                ? (a.type === 'BUY' ? -1 : 1) * qty * price - fee
-                : -fee + realizedPnL; // FUT: fee always, plus realised PnL if this action closed something
-        });
-
-        const lastActionDate = sorted[sorted.length - 1].dateTime;
-        await client.query(
-            `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, linked_trade_id, note)
-             VALUES ($1, $2, 'TRADE_SETTLEMENT', $3, $4, $5, $6)`,
-            [accountId, lastActionDate, totalAmount, currency, tradeId, `${symbol} trade settlement`]
-        );
     }
 
     // --- Trades Endpoints ---

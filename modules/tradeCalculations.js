@@ -265,4 +265,46 @@ function computeFuturesRealizedPnLPerAction(side, actions, tickMultiplier) {
     return realizedByIndex;
 }
 
-module.exports = { computeTradeDerived, getTickMultiplier, computeFuturesRealizedPnLPerAction, parseActionDate, getFuturesSetting, resolveTradeCurrency };
+/**
+ * A trade's cash effect, one entry per fill on that fill's own time — as the
+ * broker books it. A stock fill moves its value and fee; a futures fill only
+ * its fee and, when it closes something, the P&L realised (the contract
+ * value is never paid). One net entry per trade, dated on its last fill,
+ * used to move a purchase's cash to the day the position was sold.
+ * Zero-amount fills (a futures opening without a fee) are left out.
+ *
+ * @param {'STK'|'FUT'} type
+ * @param {Array} actions - {type, quantity, price, fee, dateTime}, any order
+ * @returns {{ dateTime, amount, action }[]} chronological
+ */
+function settlementEntries(type, actions, tickSize, tickValue) {
+    const sorted = (actions || []).slice().sort((a, b) => new Date(a.dateTime) - new Date(b.dateTime));
+    let realizedByIndex = new Map();
+    if (type === 'FUT' && sorted.length > 1) {
+        const side = sorted[0].type === 'BUY' ? 'LONG' : 'SHORT';
+        realizedByIndex = computeFuturesRealizedPnLPerAction(side, sorted, getTickMultiplier({ type, tick_size: tickSize, tick_value: tickValue }));
+    }
+    return sorted
+        .map((a, i) => {
+            const qty = Number(a.quantity || 0);
+            const price = Number(a.price || 0);
+            const fee = Number(a.fee || 0);
+            const amount = type === 'STK'
+                ? (a.type === 'BUY' ? -1 : 1) * qty * price - fee
+                : -fee + (realizedByIndex.get(i) || 0);
+            return { dateTime: a.dateTime, amount, action: a, realized: type === 'FUT' ? (realizedByIndex.get(i) || 0) : 0, fee };
+        })
+        .filter(e => Math.abs(e.amount) > 1e-9);
+}
+
+// The ledger note of a settlement entry: the fill, and for a future what the
+// amount is made of (it isn't the fill's value).
+function settlementNote(symbol, entry) {
+    const a = entry.action;
+    const parts = [`${symbol} ${String(a.type).toLowerCase()} ${Number(a.quantity)} @ ${Number(a.price)}`];
+    if (Math.abs(entry.realized) > 1e-9) parts.push(`P&L ${entry.realized > 0 ? '+' : ''}${entry.realized.toFixed(2)}`);
+    if (entry.fee) parts.push(`fee ${Number(entry.fee).toFixed(2)}`);
+    return parts.join(' · ');
+}
+
+module.exports = { computeTradeDerived, getTickMultiplier, computeFuturesRealizedPnLPerAction, parseActionDate, getFuturesSetting, resolveTradeCurrency, settlementEntries, settlementNote };
