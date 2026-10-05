@@ -85,6 +85,9 @@ const Capital = () => {
   const [editingDividendId, setEditingDividendId] = useState(null);
   const [showDismissed, setShowDismissed] = useState(false);
   const [checkingAccrual, setCheckingAccrual] = useState(false);
+  const [opening, setOpening] = useState(null);
+  const [editingOpening, setEditingOpening] = useState(false);
+  const [openingDate, setOpeningDate] = useState('');
   const [ledgerFilter, setLedgerFilter] = useState('ALL');
   const [ledgerShown, setLedgerShown] = useState(LEDGER_PAGE);
 
@@ -96,15 +99,17 @@ const Capital = () => {
     setError(null);
     try {
       const headers = { 'X-Account-ID': currentAccountId };
-      const [txRes, divRes] = await Promise.all([
+      const [txRes, divRes, openingRes] = await Promise.all([
         fetch(`${apiBaseUrl}/api/cash-transactions`, { headers }),
         fetch(`${apiBaseUrl}/api/dividends`, { headers }),
+        fetch(`${apiBaseUrl}/api/opening-balance`, { headers }),
         refreshHoldings(),
         refreshAccounts(), // keeps the Balance card (and Navigation's Cash/Total Portfolio) live
       ]);
       if (!txRes.ok || !divRes.ok) throw new Error('Failed to load capital data');
       setTransactions(await txRes.json());
       setDividends(await divRes.json());
+      if (openingRes.ok) setOpening(await openingRes.json());
     } catch (err) {
       setError(err.message);
     } finally {
@@ -113,6 +118,25 @@ const Capital = () => {
   }, [currentAccountId, refreshHoldings, refreshAccounts]);
 
   useEffect(() => { fetchAll(); }, [fetchAll]);
+
+  // Whether the opening balance already holds the trades before a day
+  // (taken from the broker's cash then): those then book no cash.
+  const saveOpening = async (date) => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/opening-balance`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
+        body: JSON.stringify({ covers_before: date || null }),
+      });
+      const result = await res.json();
+      if (!res.ok) throw new Error(result.error || 'Failed to save');
+      setEditingOpening(false);
+      notify(result.changes.length === 0
+        ? 'Saved. No balance changed.'
+        : `Saved. Balance ${result.changes.map(c => `${c.change > 0 ? '+' : ''}${formatNumber(c.change, 2)} ${c.currency}`).join(', ')}.`, 'success');
+      fetchAll();
+    } catch (err) { notify(err.message); }
+  };
 
   const submitTransaction = async (e) => {
     e.preventDefault();
@@ -395,6 +419,31 @@ const Capital = () => {
               </div>
             ))}
           </div>
+        )}
+        {opening && String(opening.id) === String(currentAccountId) && (
+          <p className={`${styles.openingLine} ${editingOpening ? styles.openingEditing : ''}`}>
+            {editingOpening ? (
+              <>
+                Opening balance holds the trades before{' '}
+                <input type="date" value={openingDate} onChange={e => setOpeningDate(e.target.value)} aria-label="Opening balance holds the trades before" />
+                <button type="button" className={styles.redeemBtn} onClick={() => saveOpening(openingDate)} disabled={!openingDate}>Save</button>
+                <button type="button" className={styles.redeemBtn} onClick={() => saveOpening(null)}>None</button>
+                <button type="button" className={styles.linkBtn} onClick={() => setEditingOpening(false)}>Cancel</button>
+                <span className={styles.openingHint}>
+                  Set a day when your opening balance was the broker's cash on that day: it already holds every trade
+                  before it, so those don't book cash again. None: every trade books its cash.
+                </span>
+              </>
+            ) : (
+              <>
+                {opening.opening_covers_before
+                  ? <>Opening balance holds the trades before <strong>{formatISODate(opening.opening_covers_before)}</strong>: those book no cash.</>
+                  : <>Every trade books its cash, also those before your opening balance.</>}
+                {' '}
+                <button type="button" className={styles.linkBtn} onClick={() => { setOpeningDate(opening.opening_covers_before || todayISO()); setEditingOpening(true); }}>Change</button>
+              </>
+            )}
+          </p>
         )}
       </div>
 
