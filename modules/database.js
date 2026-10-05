@@ -457,6 +457,10 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS broker_sync_mode VARCHAR NOT NULL DEFAULT 'OFF'`);
     await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS broker_sync_from DATE`);
     await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS broker_synced_at TIMESTAMP WITH TIME ZONE`);
+    // The opening balance was taken from the broker's cash on this day, so
+    // it already holds every fill before it: those book no cash
+    // (modules/tradeSettlement.js). Unset: every fill books its cash.
+    await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS opening_covers_before DATE`);
     await client.query(`ALTER TABLE accounts DROP CONSTRAINT IF EXISTS check_broker_sync_mode`);
     await client.query(`ALTER TABLE accounts ADD CONSTRAINT check_broker_sync_mode CHECK (broker_sync_mode IN ('OFF', 'SUGGEST', 'AUTO'))`);
 

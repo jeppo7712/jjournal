@@ -220,6 +220,16 @@ were split once on startup (same total per trade, so no balance changed).
 A trade's rows can't be deleted on their own: they're rebuilt from its
 fills on every save.
 
+**Fills from before the opening balance** (`accounts.opening_covers_before`,
+`modules/tradeSettlement.js`, set on the Capital page of a top-level
+account): an opening balance taken from the broker's cash on a day already
+holds every fill before it — buying a stock in 2023 and selling it now must
+book only the sale. With a date set, fills before it book no cash. Unset
+(the default), every fill books its cash, for an opening balance entered as
+if the earlier trades hadn't happened yet. Changing it rebuilds the cash of
+every trade in the account's tree and reports what moved; moving a trade to
+another account rebuilds its cash there.
+
 ### 6. No historical backfill (confirmed)
 
 Cash tracking starts clean from an opening balance the user sets per

@@ -281,6 +281,53 @@
   border-top: 1px dashed #32384a;
 }
 
+/* --- Opening balance setting --- */
+
+.openingLine {
+  margin: 14px 0 0;
+  font-size: 0.82rem;
+  color: #6B7280;
+}
+
+.openingEditing {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 8px;
+}
+
+.openingLine strong {
+  color: #A5ADBA;
+}
+
+.openingLine input {
+  padding: 3px 8px;
+  border: 1px solid #32384a;
+  border-radius: 6px;
+  background: #171A24;
+  color: #E5E7EB;
+  font: inherit;
+  color-scheme: dark;
+}
+
+.openingLine .redeemBtn {
+  margin-right: 0;
+}
+
+.openingHint {
+  flex-basis: 100%;
+  font-size: 0.78rem;
+}
+
+.linkBtn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #60A5FA;
+  font: inherit;
+  cursor: pointer;
+}
+
 /* --- Ledger --- */
 
 .ledgerCount {

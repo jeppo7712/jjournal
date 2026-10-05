@@ -2,7 +2,8 @@ const express = require('express');
 const fs = require('fs').promises;
 const router = express.Router();
 const { logger } = require('../modules/logger.js');
-const { resolveTradeCurrency, settlementEntries, settlementNote } = require('../modules/tradeCalculations.js');
+const { resolveTradeCurrency } = require('../modules/tradeCalculations.js');
+const { settleTrade, resettleTrades } = require('../modules/tradeSettlement.js');
 
 // A trade's ticked checklist, or null. Labels are kept as they were when
 // ticked (the account's list may change later); `removed` hides the
@@ -36,57 +37,14 @@ async function saveJournal(client, tradeId, journal) {
 
 module.exports = (pool, upload, broadcastStatus, uuidv4) => {
 
-    // Auto-settles a trade's actions to the cash ledger as ONE row per
-    // trade, not one per fill — a trade scaled across many fills (common
-    // for futures, and for stocks scaling in/out) would otherwise flood the
-    // ledger with one entry per contract/fill. Dated at the last action's
-    // date, matching the same convention the Dashboard's realised P&L chart
-    // already uses (relevantDate = trade.lastActionDate) for "when did this
-    // trade's PnL count." Trade-off: intermediate cash impact during a
-    // trade spanning days/weeks isn't visible day-by-day, only once
-    // settled here — a deliberate simplicity choice for a personal journal,
-    // not built for t+0 reconciliation.
-    //
-    // STK actions move the full notional value (price*qty) plus fee —
-    // that's genuinely what buying/selling a stock does to cash. FUT
-    // actions settle fee always (a broker charges commission per fill
-    // regardless of PnL realisation), PLUS the realised PnL for closing
-    // actions specifically — a futures BUY/SELL doesn't move notional cash
-    // (only margin), the cash impact of closing a position IS its realised
-    // PnL. Uses the same FIFO matching TradeContext.js does client-side
-    // (computeFuturesRealizedPnLPerAction in modules/tradeCalculations.js —
-    // price-difference only, no fee attribution needed there since fees
-    // are already fully handled by the flat per-action charge below).
+    // Auto-settles a trade's fills to the cash ledger. STK fills move their
+    // value plus fee; FUT fills move only the fee and, when closing, the
+    // realised P&L (the contract value is never paid, only margin).
+    // One ledger row per fill, on its own date — modules/tradeSettlement.js.
     async function settleTradeActionsToCash(client, tradeId, accountId, type, symbol, actions, tickSize, tickValue) {
-        if (!actions || actions.length === 0) return;
-
-        // Paper-vs-real is derived from the account, not stored per
-        // transaction — see docs/CAPITAL_TRACKING_DESIGN.md.
-        //
-        // Currency comes from the SYMBOL's settings, resolved through the
-        // same startsWith+DEFAULT logic the rest of the app uses
-        // (resolveTradeCurrency) rather than the exact-match lookup this
-        // used to do — an exact match silently missed a contract-suffixed
-        // symbol (MNQZ5 against an "MNQ" setting) and fell through to USD.
-        // Harmless while everything was USD; actively wrong the moment a
-        // non-USD instrument is traded, which is why the fallback now warns
-        // instead of assuming quietly.
-        const { rows: allSettings } = await client.query('SELECT symbol, type, currency FROM futures_settings');
-        const resolved = resolveTradeCurrency(symbol, type, allSettings);
-        const currency = resolved || 'USD';
-        if (!resolved) {
+        const { currencyResolved } = await settleTrade(client, { tradeId, accountId, type, symbol, actions, tickSize, tickValue });
+        if (!currencyResolved) {
             broadcastStatus(uuidv4(), `No currency configured for ${symbol} (${type}) — settling as USD. Set it in Settings → Symbols if that's wrong.`, 'warning');
-            logger.warn(`[settleTradeActionsToCash] No futures_settings currency for ${symbol} (${type}); defaulting to USD`);
-        }
-
-        // One ledger row per fill, on its own date (settlementEntries in
-        // modules/tradeCalculations.js).
-        for (const entry of settlementEntries(type, actions, tickSize, tickValue)) {
-            await client.query(
-                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, linked_trade_id, note)
-                 VALUES ($1, $2, 'TRADE_SETTLEMENT', $3, $4, $5, $6)`,
-                [accountId, entry.dateTime, entry.amount, currency, tradeId, settlementNote(symbol, entry)]
-            );
         }
     }
 
@@ -444,14 +402,13 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
     //   Left stale, later attachment management (delete/relink, which scope
     //   by trade_id AND account_id together) would silently stop finding
     //   them once the trade's own account_id no longer matches.
-    // - cash_transactions.account_id for any row already settled against
-    //   this trade (linked_trade_id) — so the trade's cash impact follows it
-    //   to the new account rather than staying attributed to the old one.
+    // - the trade's cash rows (linked_trade_id), rebuilt in the new account
+    //   so its cash impact follows it.
     //
     // Does NOT touch trade_journals or trade_actions (no account_id column
-    // on either — already move for free via trade_id), and does not
-    // re-derive/re-settle cash — the existing settlement amount and date are
-    // preserved exactly, just reattributed to the new account.
+    // on either — already move for free via trade_id). The cash is
+    // re-derived from the fills in the new account, since that account's
+    // opening balance may already hold some of them.
     router.post('/trades/:id/move', async (req, res) => {
         const client = await pool.connect();
         const { id } = req.params;
@@ -487,7 +444,9 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
                 `UPDATE trade_attachments SET account_id=$1 WHERE trade_id=$2 AND account_id=$3`,
                 [toAccountId, id, req.accountId]
             );
-            await client.query(`UPDATE cash_transactions SET account_id=$1 WHERE linked_trade_id=$2`, [toAccountId, id]);
+            // Re-derived in the new account: its opening balance may already
+            // hold some of the fills (opening_covers_before).
+            await resettleTrades(client, [id]);
 
             await client.query('COMMIT');
             broadcastStatus(uuidv4(), `Moved ${tradeRows[0].symbol} (trade ${id}) to ${destRows[0].name}`, 'success');
