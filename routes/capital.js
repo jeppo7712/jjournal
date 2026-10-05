@@ -3,6 +3,7 @@ const router = express.Router();
 const { logger } = require('../modules/logger.js');
 const { processHoldingsAccrual } = require('../modules/holdingsAccrual.js');
 const { syncDividendLedger } = require('../modules/dividends.js');
+const { resettleTrades } = require('../modules/tradeSettlement.js');
 
 // Cash ledger + non-trade holdings (T-bills/bonds). See
 // docs/CAPITAL_TRACKING_DESIGN.md for the design this implements.
@@ -221,6 +222,76 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         } catch (err) {
             logger.error('Error deleting cash transaction:', err);
             res.status(500).json({ error: err.message });
+        }
+    });
+
+    // --- Opening balance and older trades (modules/tradeSettlement.js) ---
+    // Set on the top-level account; covers its sub-accounts too.
+
+    async function rootAccount(accountId) {
+        const { rows } = await pool.query(
+            `WITH RECURSIVE up AS (
+                SELECT id, parent_account_id FROM accounts WHERE id = $1
+                UNION SELECT a.id, a.parent_account_id FROM accounts a JOIN up u ON a.id = u.parent_account_id
+            )
+            SELECT a.id, a.name, a.opening_covers_before::text AS opening_covers_before
+            FROM up JOIN accounts a ON a.id = up.id WHERE up.parent_account_id IS NULL`,
+            [accountId]
+        );
+        return rows[0] || null;
+    }
+
+    router.get('/opening-balance', async (req, res) => {
+        try {
+            const root = await rootAccount(req.accountId);
+            if (!root) return res.status(404).json({ error: 'Account not found' });
+            res.json(root);
+        } catch (err) {
+            logger.error('Error reading opening balance setting:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // PUT /opening-balance { covers_before: 'YYYY-MM-DD' | null } — then
+    // rebuilds the cash of every trade in the account's tree, and reports
+    // what that changed per currency.
+    router.put('/opening-balance', async (req, res) => {
+        const date = req.body?.covers_before || null;
+        if (date !== null && !/^\d{4}-\d{2}-\d{2}$/.test(String(date))) {
+            return res.status(400).json({ error: 'covers_before must be YYYY-MM-DD or null' });
+        }
+        const client = await pool.connect();
+        try {
+            const root = await rootAccount(req.accountId);
+            if (!root) return res.status(404).json({ error: 'Account not found' });
+            await client.query('BEGIN');
+            const { rows: tree } = await client.query(
+                `WITH RECURSIVE tree AS (
+                    SELECT id FROM accounts WHERE id = $1
+                    UNION SELECT a.id FROM accounts a JOIN tree t ON a.parent_account_id = t.id
+                ) SELECT id FROM tree`,
+                [root.id]
+            );
+            const ids = tree.map(t => t.id);
+            const totals = async () => (await client.query(
+                `SELECT currency, SUM(amount) AS total FROM cash_transactions WHERE account_id = ANY($1) GROUP BY currency`, [ids]
+            )).rows.reduce((acc, r) => ({ ...acc, [r.currency]: Number(r.total) }), {});
+            const before = await totals();
+            await client.query(`UPDATE accounts SET opening_covers_before = $2, updated_at = NOW() WHERE id = $1`, [root.id, date]);
+            const { rows: trades } = await client.query(`SELECT id FROM trades WHERE account_id = ANY($1)`, [ids]);
+            await resettleTrades(client, trades.map(t => t.id));
+            const after = await totals();
+            await client.query('COMMIT');
+            const changes = [...new Set([...Object.keys(before), ...Object.keys(after)])]
+                .map(currency => ({ currency, change: Math.round(((after[currency] || 0) - (before[currency] || 0)) * 100) / 100 }))
+                .filter(c => c.change !== 0);
+            res.json({ success: true, account: root.name, covers_before: date, changes });
+        } catch (err) {
+            await client.query('ROLLBACK').catch(() => {});
+            logger.error('Error saving opening balance setting:', err);
+            res.status(500).json({ error: err.message });
+        } finally {
+            client.release();
         }
     });
 
