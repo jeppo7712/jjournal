@@ -9,6 +9,21 @@ const apiBaseUrl = process.env.REACT_APP_API_URL || '';
 
 const CASH_TX_TYPES = ['DEPOSIT', 'WITHDRAWAL', 'INTEREST', 'FEE', 'OTHER'];
 const HOLDING_TYPES = ['TBILL', 'BOND', 'OTHER'];
+
+const TYPE_LABELS = {
+  DEPOSIT: 'Deposit', WITHDRAWAL: 'Withdrawal', TRANSFER_IN: 'Transfer in', TRANSFER_OUT: 'Transfer out',
+  EXCHANGE_IN: 'Exchange in', EXCHANGE_OUT: 'Exchange out', TRADE_SETTLEMENT: 'Trade', INTEREST: 'Interest',
+  FEE: 'Fee', DIVIDEND: 'Dividend', WITHHOLDING_TAX: 'Tax withheld', OTHER: 'Other', ADJUSTMENT: 'Adjustment',
+};
+
+// The ledger grows with every fill; these keep it browsable.
+const LEDGER_FILTERS = [
+  { key: 'ALL', label: 'All' },
+  { key: 'TRADES', label: 'Trades', types: ['TRADE_SETTLEMENT'] },
+  { key: 'MONEY', label: 'Deposits & transfers', types: ['DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT', 'EXCHANGE_IN', 'EXCHANGE_OUT'] },
+  { key: 'INCOME', label: 'Income & costs', types: ['INTEREST', 'FEE', 'DIVIDEND', 'WITHHOLDING_TAX', 'OTHER', 'ADJUSTMENT'] },
+];
+const LEDGER_PAGE = 50;
 const COUPON_FREQUENCIES = ['ANNUAL', 'SEMI_ANNUAL', 'QUARTERLY'];
 const CASH_TABS = [
   { key: 'ADD', label: 'Deposit / Withdraw' },
@@ -70,6 +85,10 @@ const Capital = () => {
   const [editingDividendId, setEditingDividendId] = useState(null);
   const [showDismissed, setShowDismissed] = useState(false);
   const [checkingAccrual, setCheckingAccrual] = useState(false);
+  const [ledgerFilter, setLedgerFilter] = useState('ALL');
+  const [ledgerShown, setLedgerShown] = useState(LEDGER_PAGE);
+
+  useEffect(() => { setLedgerShown(LEDGER_PAGE); }, [ledgerFilter, currentAccountId]);
 
   const fetchAll = useCallback(async () => {
     if (!currentAccountId) return;
@@ -321,6 +340,21 @@ const Capital = () => {
   const dismissedCount = dividends.filter(d => d.dismissed).length;
   const visibleDividends = dividends.filter(d => showDismissed || !d.dismissed);
   const formNet = (Number(dividendForm.gross_amount) || 0) - (Number(dividendForm.withholding_tax) || 0);
+
+  // Newest first (as the API returns them), filtered, a page at a time,
+  // under a header per month with that month's net per currency.
+  const filterTypes = LEDGER_FILTERS.find(f => f.key === ledgerFilter)?.types;
+  const ledgerRows = filterTypes ? transactions.filter(tx => filterTypes.includes(tx.type)) : transactions;
+  const monthKey = tx => { const d = new Date(tx.date_time); return `${d.getFullYear()}-${d.getMonth()}`; };
+  const monthNets = new Map();
+  ledgerRows.forEach(tx => {
+    const key = monthKey(tx);
+    const nets = monthNets.get(key) || {};
+    nets[tx.currency] = (nets[tx.currency] || 0) + Number(tx.amount);
+    monthNets.set(key, nets);
+  });
+  const visibleLedger = ledgerRows.slice(0, ledgerShown);
+  const ledgerColumns = hasChildAccounts ? 6 : 5;
 
   return (
     <div className={styles.page}>
@@ -606,7 +640,26 @@ const Capital = () => {
       )}
 
       <div className={styles.section}>
-        <h3 className={styles.sectionTitle}>Ledger</h3>
+        <div className={styles.sectionHeaderRow}>
+          <h3 className={styles.sectionTitle}>Ledger</h3>
+          {ledgerRows.length > 0 && (
+            <span className={styles.ledgerCount}>{ledgerRows.length} entr{ledgerRows.length === 1 ? 'y' : 'ies'}</span>
+          )}
+        </div>
+        <div className={styles.ledgerFilters} role="tablist" aria-label="Show">
+          {LEDGER_FILTERS.map(f => (
+            <button
+              key={f.key}
+              type="button"
+              role="tab"
+              aria-selected={ledgerFilter === f.key}
+              className={`${styles.ledgerFilter} ${ledgerFilter === f.key ? styles.ledgerFilterActive : ''}`}
+              onClick={() => setLedgerFilter(f.key)}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
         {loading ? <p className={styles.emptyState}>Loading…</p> : (
           <div className={styles.tableWrap}>
             <table className={styles.table}>
@@ -618,40 +671,69 @@ const Capital = () => {
                 </tr>
               </thead>
               <tbody>
-                {transactions.map(tx => {
+                {visibleLedger.map((tx, index) => {
                   const isOwnAccount = String(tx.account_id) === String(currentAccountId);
                   // Dividend rows are derived from their dividend (see the
                   // Dividends section) and can't be deleted on their own.
                   const isDividendRow = !!tx.linked_dividend_id;
-                  const canDelete = isOwnAccount && !isDividendRow;
+                  // Trade rows follow the trade's fills (rebuilt on every save).
+                  const isTradeRow = !!tx.linked_trade_id;
+                  const canDelete = isOwnAccount && !isDividendRow && !isTradeRow;
+                  const key = monthKey(tx);
+                  const newMonth = index === 0 || monthKey(visibleLedger[index - 1]) !== key;
                   return (
-                    <tr key={tx.id}>
-                      <td>{new Date(tx.date_time).toLocaleDateString()}</td>
-                      {hasChildAccounts && <td className={!isOwnAccount ? styles.mutedCell : undefined}>{tx.account_name}</td>}
-                      <td>{tx.type}</td>
-                      <td className={Number(tx.amount) >= 0 ? styles.positive : styles.negative}>
-                        {Number(tx.amount) >= 0 ? '+' : ''}{formatNumber(Number(tx.amount), 2)} {tx.currency}
-                      </td>
-                      <td>{tx.note}</td>
-                      <td>
-                        <button
-                          className={styles.iconBtn}
-                          onClick={() => canDelete && deleteTransaction(tx.id)}
-                          disabled={!canDelete}
-                          title={isDividendRow ? 'Part of a dividend — edit or remove it under Dividends'
-                            : isOwnAccount ? 'Delete' : `Belongs to ${tx.account_name} — switch to it to delete this`}
-                        >
-                          ×
-                        </button>
-                      </td>
-                    </tr>
+                    <React.Fragment key={tx.id}>
+                      {newMonth && (
+                        <tr className={styles.monthRow}>
+                          <td colSpan={ledgerColumns}>
+                            {new Date(tx.date_time).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}
+                            <span className={styles.monthNet}>
+                              {Object.entries(monthNets.get(key) || {}).map(([currency, net]) => (
+                                <span key={currency} className={net >= 0 ? styles.positive : styles.negative}>
+                                  {net >= 0 ? '+' : ''}{formatNumber(net, 2)} {currency}
+                                </span>
+                              ))}
+                            </span>
+                          </td>
+                        </tr>
+                      )}
+                      <tr>
+                        <td>{new Date(tx.date_time).toLocaleDateString()}</td>
+                        {hasChildAccounts && <td className={!isOwnAccount ? styles.mutedCell : undefined}>{tx.account_name}</td>}
+                        <td>{TYPE_LABELS[tx.type] || tx.type}</td>
+                        <td className={Number(tx.amount) >= 0 ? styles.positive : styles.negative}>
+                          {Number(tx.amount) >= 0 ? '+' : ''}{formatNumber(Number(tx.amount), 2)} {tx.currency}
+                        </td>
+                        <td>{tx.note}</td>
+                        <td>
+                          <button
+                            className={styles.iconBtn}
+                            onClick={() => canDelete && deleteTransaction(tx.id)}
+                            disabled={!canDelete}
+                            title={isDividendRow ? 'Part of a dividend — edit or remove it under Dividends'
+                              : isTradeRow ? 'Part of a trade — edit the trade instead'
+                              : isOwnAccount ? 'Delete' : `Belongs to ${tx.account_name} — switch to it to delete this`}
+                          >
+                            ×
+                          </button>
+                        </td>
+                      </tr>
+                    </React.Fragment>
                   );
                 })}
-                {transactions.length === 0 && (
-                  <tr><td colSpan={hasChildAccounts ? 6 : 5} className={styles.emptyRow}>No cash transactions yet.</td></tr>
+                {ledgerRows.length === 0 && (
+                  <tr><td colSpan={ledgerColumns} className={styles.emptyRow}>{transactions.length === 0 ? 'No cash transactions yet.' : 'Nothing of this kind.'}</td></tr>
                 )}
               </tbody>
             </table>
+          </div>
+        )}
+        {ledgerRows.length > ledgerShown && (
+          <div className={styles.ledgerMore}>
+            <span>Showing the latest {ledgerShown} of {ledgerRows.length}</span>
+            <button type="button" className={styles.secondaryBtn} onClick={() => setLedgerShown(n => n + LEDGER_PAGE)}>
+              Show {Math.min(LEDGER_PAGE, ledgerRows.length - ledgerShown)} more
+            </button>
           </div>
         )}
       </div>

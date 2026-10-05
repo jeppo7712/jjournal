@@ -182,7 +182,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         const { id } = req.params;
         try {
             const { rows } = await pool.query(
-                `SELECT transfer_pair_id, linked_dividend_id FROM cash_transactions WHERE id = $1 AND account_id = $2`,
+                `SELECT transfer_pair_id, linked_dividend_id, linked_trade_id FROM cash_transactions WHERE id = $1 AND account_id = $2`,
                 [id, req.accountId]
             );
             if (rows.length === 0) {
@@ -192,6 +192,10 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
             // one here would just come back on the dividend's next change.
             if (rows[0].linked_dividend_id) {
                 return res.status(400).json({ error: 'This entry belongs to a dividend — edit or remove the dividend instead' });
+            }
+            // Same for a trade's: rebuilt from its fills on every save.
+            if (rows[0].linked_trade_id) {
+                return res.status(400).json({ error: 'This entry belongs to a trade — edit the trade instead' });
             }
             const pairId = rows[0].transfer_pair_id;
             // Broker items tied to the entry: one it booked counts as
