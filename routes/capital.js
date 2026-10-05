@@ -51,7 +51,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
     // settlements (created automatically by routes/trades.js).
     router.post('/cash-transactions', async (req, res) => {
         const { type, amount, currency, date_time, note } = req.body;
-        const allowedTypes = ['DEPOSIT', 'WITHDRAWAL', 'INTEREST', 'OTHER'];
+        const allowedTypes = ['DEPOSIT', 'WITHDRAWAL', 'INTEREST', 'FEE', 'OTHER'];
         if (!allowedTypes.includes(type)) {
             return res.status(400).json({ error: `type must be one of: ${allowedTypes.join(', ')}` });
         }
@@ -61,7 +61,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         // Sign is implied by type, not left to the caller to get right —
         // a WITHDRAWAL is always cash out regardless of the sign the form
         // happened to submit.
-        const signedAmount = (type === 'WITHDRAWAL') ? -Math.abs(amount) : Math.abs(amount);
+        const signedAmount = (type === 'WITHDRAWAL' || type === 'FEE') ? -Math.abs(amount) : Math.abs(amount);
         try {
             const { rows } = await pool.query(
                 `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, note)
@@ -194,9 +194,23 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
                 return res.status(400).json({ error: 'This entry belongs to a dividend — edit or remove the dividend instead' });
             }
             const pairId = rows[0].transfer_pair_id;
+            // Broker items tied to the entry: one it booked counts as
+            // dismissed (the user removed it, so the next sync mustn't add it
+            // back); one the user's own entry matched waits in the inbox again.
+            const { rows: linked } = await pool.query(
+                `SELECT item_id FROM broker_item_links WHERE cash_transaction_id = ANY($1)`,
+                [[id, pairId].filter(Boolean)]
+            );
             await pool.query(`DELETE FROM cash_transactions WHERE id = $1`, [id]);
             if (pairId) {
                 await pool.query(`DELETE FROM cash_transactions WHERE id = $1`, [pairId]);
+            }
+            if (linked.length > 0) {
+                await pool.query(
+                    `UPDATE broker_cash_items b SET status = CASE WHEN b.status = 'BOOKED' THEN 'DISMISSED' ELSE 'PENDING' END, updated_at = NOW()
+                     WHERE b.id = ANY($1) AND NOT EXISTS (SELECT 1 FROM broker_item_links l WHERE l.item_id = b.id)`,
+                    [linked.map(l => l.item_id)]
+                );
             }
             broadcastStatus(uuidv4(), `Deleted cash transaction ${id}`, 'success');
             res.json({ success: true });
@@ -348,6 +362,11 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
                 return res.status(404).json({ error: 'Dividend not found' });
             }
             if (rows[0].source === 'MANUAL') {
+                // Broker rows this dividend stood for wait in the inbox again.
+                await client.query(
+                    `UPDATE broker_cash_items SET status = 'PENDING', dividend_id = NULL, updated_at = NOW() WHERE dividend_id = $1 AND status = 'MATCHED'`,
+                    [req.params.id]
+                );
                 await client.query(`DELETE FROM dividends WHERE id = $1`, [req.params.id]);
             } else {
                 await client.query(`UPDATE dividends SET dismissed = true, updated_at = NOW() WHERE id = $1`, [req.params.id]);

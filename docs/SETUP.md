@@ -60,7 +60,7 @@ Open the app and go to **Settings**:
    - In TWS/Gateway: enable the API (**Configuration → API → Settings → Enable ActiveX and Socket Clients**), and add the app's host to **Trusted IPs** if it's not running on the same machine.
    - In the app's Settings: enter the host/port (default paper-trading port is `7497`, live is `7496`). A second address can be set as a fallback.
    - Without IBKR connected, the app still works fully off Yahoo Finance — you'll just miss IBKR's higher-quality data and Flex Web Service imports.
-3. **IBKR Flex Web Service (optional)** — for importing trade activity/executions directly from IBKR: generate a Flex Web Service token and a Flex Query (Activity or Trade Confirmation) in IBKR Account Management, and paste the token + query ID(s) into Settings.
+3. **IBKR Flex Web Service (optional)** — for importing trades directly from IBKR, and optionally the account's cash activity (fees, interest, dividends, deposits): generate a Flex Web Service token and the Flex Queries in IBKR's Client Portal, and paste the token + query IDs into Settings → IBKR API. That page has a step-by-step guide to what to tick in IBKR's Flex Query editor, and a **Check** button that tests the saved queries and says what's missing.
 4. **Symbols** — add each symbol you trade (Settings → Symbols), including tick size/value, fees, exchange, and which timeframes to fetch. Every enabled timeframe is fetched as far back as the provider allows — no need to guess how much history to request.
 
 ## 4. Verify it's working

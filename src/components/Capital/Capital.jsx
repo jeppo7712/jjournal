@@ -3,10 +3,11 @@ import { TradeContext } from '../../context/TradeContext';
 import styles from './Capital.module.css';
 import { formatNumber } from '../../utils/numberFormat';
 import { notify, confirmDialog, promptDialog } from '../common/Dialogs';
+import BrokerActivity from './BrokerActivity';
 
 const apiBaseUrl = process.env.REACT_APP_API_URL || '';
 
-const CASH_TX_TYPES = ['DEPOSIT', 'WITHDRAWAL', 'INTEREST', 'OTHER'];
+const CASH_TX_TYPES = ['DEPOSIT', 'WITHDRAWAL', 'INTEREST', 'FEE', 'OTHER'];
 const HOLDING_TYPES = ['TBILL', 'BOND', 'OTHER'];
 const COUPON_FREQUENCIES = ['ANNUAL', 'SEMI_ANNUAL', 'QUARTERLY'];
 const CASH_TABS = [
@@ -362,6 +363,12 @@ const Capital = () => {
           </div>
         )}
       </div>
+
+      {/* Broker sync lives on the account linked to the IBKR account (a
+          top-level one); paper accounts have no real cash to sync. */}
+      {currentAccount?.broker_account_id && !currentAccount.parent_account_id && !isVirtualAccount && (
+        <BrokerActivity key={currentAccountId} accountId={currentAccountId} accounts={accounts} onLedgerChange={fetchAll} />
+      )}
 
       <div className={styles.section}>
         <h3 className={styles.sectionTitle}>Cash Activity</h3>
