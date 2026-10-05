@@ -507,6 +507,16 @@ linked to a journal account, period, date format, and each section's
 fields (the ones the journal can't do without vs. ones that make it more
 precise).
 
-Next: a balance check against IBKR's Cash Report (ending cash per
-currency), showing a deviation and offering — never forcing — a visible
-correction entry.
+### Cash vs IBKR (balance check)
+
+Each sync also stores IBKR's ending cash per currency from the Cash
+Report section (`broker_cash_reports`, replaced on every sync). An account
+holding only its base currency gets just the `BASE_SUMMARY` row; it counts
+as the base currency, read from any statement row whose `fxRateToBase` is
+1 (nothing is guessed otherwise). The Capital page compares it with the
+journal's cash of the same tree, as of IBKR's statement day (later journal
+entries don't count), and says how much of a difference is broker items
+still waiting in the inbox. Under 0.05 is rounding. **Align** books only
+the rest, on request, as an `ADJUSTMENT` ledger row on the top-level
+account, dated on the statement day — visible, labelled, deletable. It
+is neither a capital flow nor P&L in Stats' return.

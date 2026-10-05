@@ -40,6 +40,7 @@ const BrokerActivity = ({ accountId, accounts, onLedgerChange }) => {
   const [fromDate, setFromDate] = useState('');
   const [showDone, setShowDone] = useState(false);
   const [targets, setTargets] = useState({});
+  const [editingFrom, setEditingFrom] = useState(false);
 
   const headers = useMemo(() => ({ 'Content-Type': 'application/json', 'X-Account-ID': accountId }), [accountId]);
 
@@ -109,8 +110,23 @@ const BrokerActivity = ({ accountId, accounts, onLedgerChange }) => {
     }
   };
 
+  const align = async (b) => {
+    const signed = `${b.unexplained > 0 ? '+' : ''}${formatNumber(b.unexplained, 2)} ${b.currency}`;
+    if (!await confirmDialog(
+      `Book an adjustment of ${signed} on ${formatISODate(b.asOf)}, so the journal's ${b.currency} cash matches IBKR's? It shows in the ledger as ADJUSTMENT, and you can delete it.`,
+      { title: `Align ${b.currency} with IBKR`, confirmLabel: 'Align', danger: false }
+    )) return;
+    await act('/align', { currency: b.currency }, `${b.currency} cash aligned with IBKR.`);
+  };
+
+  const saveFrom = () => {
+    setEditingFrom(false);
+    const current = data.account.broker_sync_mode;
+    if (current !== 'OFF' && fromDate && fromDate !== data.account.broker_sync_from) saveSettings(current, fromDate);
+  };
+
   if (!data) return null;
-  const { account, items } = data;
+  const { account, items, balances = [] } = data;
   const mode = account.broker_sync_mode;
   const pending = items.filter(i => i.status === 'PENDING');
   const done = items.filter(i => i.status === 'BOOKED' || i.status === 'MATCHED');
@@ -158,20 +174,66 @@ const BrokerActivity = ({ accountId, accounts, onLedgerChange }) => {
         {mode !== 'OFF' && account.broker_synced_at && <>Last synced {new Date(account.broker_synced_at).toLocaleString()}.</>}
       </p>
 
-      <div className={styles.fromRow}>
-        <label htmlFor="broker-sync-from">Read activity from</label>
-        <input
-          id="broker-sync-from"
-          type="date"
-          value={fromDate}
-          onChange={e => setFromDate(e.target.value)}
-          onBlur={() => mode !== 'OFF' && fromDate && fromDate !== account.broker_sync_from && saveSettings(mode, fromDate)}
-        />
-        <span className={styles.fromHint}>Your opening balance already holds everything before this day, so nothing earlier is read.</span>
-      </div>
+      {/* The opening balance holds all earlier activity; reading from before
+          it would bring old deposits, fees and dividends in a second time. */}
+      <p className={styles.fromLine}>
+        {mode === 'OFF' ? 'Once on, reads' : 'Reading'} IBKR activity since{' '}
+        {editingFrom ? (
+          <input
+            type="date"
+            value={fromDate}
+            autoFocus
+            onChange={e => setFromDate(e.target.value)}
+            onBlur={saveFrom}
+            onKeyDown={e => { if (e.key === 'Enter') e.currentTarget.blur(); }}
+            aria-label="Read IBKR activity since"
+          />
+        ) : <strong>{formatISODate(fromDate)}</strong>}
+        {' '}— your opening balance holds everything before.{' '}
+        {!editingFrom && <button type="button" className={styles.linkBtn} onClick={() => setEditingFrom(true)}>Change</button>}
+      </p>
 
       {mode !== 'OFF' && (
         <>
+          <div className={styles.balances}>
+            <h4>
+              Cash vs IBKR
+              {balances[0] && <span className={styles.asOf}>IBKR's statement of {formatISODate(balances[0].asOf)}</span>}
+            </h4>
+            {balances.length === 0 ? (
+              <p className={styles.empty}>
+                Sync to compare the journal's cash with IBKR's. This needs the Cash Report section in the Flex query (Settings → IBKR API).
+              </p>
+            ) : (
+              <ul className={styles.balanceRows}>
+                {balances.map(b => (
+                  <li key={b.currency} className={styles.balanceRow}>
+                    <span className={styles.balanceCurrency}>{b.currency}</span>
+                    <span className={styles.balanceFigures}>
+                      <span><span className={styles.figureLabel}>Journal</span>{formatNumber(b.journal, 2)}</span>
+                      <span><span className={styles.figureLabel}>IBKR</span>{formatNumber(b.broker, 2)}</span>
+                    </span>
+                    <span className={styles.balanceStatus}>
+                      {b.inLine ? (
+                        <span className={styles.inLine}>
+                          {Math.abs(b.waiting) >= 0.005 ? 'In line once the waiting items are added' : 'In line'}
+                        </span>
+                      ) : (
+                        <>
+                          <span className={styles.offBy}>
+                            Journal {formatNumber(Math.abs(b.unexplained), 2)} {b.unexplained > 0 ? 'lower' : 'higher'}
+                            {Math.abs(b.waiting) >= 0.005 && `, besides ${formatNumber(b.waiting, 2)} waiting`}
+                          </span>
+                          <button type="button" className={capitalStyles.redeemBtn} onClick={() => align(b)}>Align</button>
+                        </>
+                      )}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+
           <div className={styles.listHead}>
             <h4>Waiting for you {pending.length > 0 && <span className={styles.count}>{pending.length}</span>}</h4>
             {pending.length > 1 && (

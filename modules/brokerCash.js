@@ -99,6 +99,79 @@ function parseCashItems(statements) {
     return items;
 }
 
+// The account's base currency, from the statement itself: a row whose rate
+// to the base currency is exactly 1 is in it.
+function baseCurrencyOf(statement) {
+    const rows = [
+        ...rowsOf(statement, 'CashTransactions', 'CashTransaction'),
+        ...rowsOf(statement, 'Trades', 'Trade'),
+    ];
+    const row = rows.find(r => Number(r.fxRateToBase) === 1 && /^[A-Z]{3}$/.test(String(r.currency || '')));
+    return row ? String(row.currency).toUpperCase() : null;
+}
+
+/**
+ * IBKR's ending cash per account and currency (the Cash Report section),
+ * as of the statement's last day. The BASE_SUMMARY row (everything
+ * converted to the base currency) isn't a balance anyone holds — except
+ * when it's the only row: an account holding just its base currency gets
+ * no per-currency breakdown, so then it is that currency's cash.
+ */
+function parseCashReport(statements) {
+    const rows = [];
+    for (const statement of statements || []) {
+        const brokerAccountId = String(statement.accountId || '').toUpperCase();
+        const own = [];
+        let summary = null;
+        for (const row of rowsOf(statement, 'CashReport', 'CashReportCurrency')) {
+            const currency = String(row.currency || '').toUpperCase();
+            const endingCash = Number(row.endingCash);
+            const asOf = flexDate(row.toDate || statement.toDate);
+            if (!Number.isFinite(endingCash) || !asOf) continue;
+            const account = String(row.accountId || brokerAccountId).toUpperCase();
+            if (currency === 'BASE_SUMMARY') summary = { brokerAccountId: account, asOf, endingCash };
+            else if (/^[A-Z]{3}$/.test(currency)) own.push({ brokerAccountId: account, currency, asOf, endingCash });
+        }
+        if (own.length === 0 && summary) {
+            const base = baseCurrencyOf(statement);
+            if (base) own.push({ ...summary, currency: base });
+        }
+        rows.push(...own);
+    }
+    return rows;
+}
+
+// Differences under this are rounding: IBKR reports cash to many decimals.
+const BALANCE_TOLERANCE = 0.05;
+
+/**
+ * The journal's cash against IBKR's, per currency, as of IBKR's statement
+ * day. Part of a difference can be broker items still waiting in the inbox;
+ * only the rest (`unexplained`) is something to align. Pure.
+ *
+ * @param {{ currency, asOf, endingCash }[]} reports
+ * @param {Object<string, number>} journal   journal cash per currency as of each report's day
+ * @param {Object<string, number>} pending   pending inbox items per currency up to that day
+ */
+function compareBalances(reports, journal, pending) {
+    return reports.map(r => {
+        const journalCash = Number(journal[r.currency] || 0);
+        const waiting = Number(pending[r.currency] || 0);
+        const difference = r.endingCash - journalCash;
+        const unexplained = Math.round((difference - waiting) * 100) / 100;
+        return {
+            currency: r.currency,
+            asOf: r.asOf,
+            broker: r.endingCash,
+            journal: journalCash,
+            difference,
+            waiting,
+            unexplained,
+            inLine: Math.abs(unexplained) < BALANCE_TOLERANCE,
+        };
+    });
+}
+
 const cents = value => Math.round(Number(value) * 100);
 const dayGap = (a, b) => Math.abs(Date.parse(a) - Date.parse(b)) / 86400000;
 const toISODate = value => (value instanceof Date ? value.toISOString() : String(value)).slice(0, 10);
@@ -246,6 +319,57 @@ async function defaultSyncFrom(db, rootId) {
     );
     const date = rows[0]?.from_date;
     return date ? toISODate(date) : new Date().toISOString().slice(0, 10);
+}
+
+// Journal cash and waiting inbox items, as of each stored report's day.
+async function balanceCheck(db, rootId) {
+    const { rows: reports } = await db.query(
+        `SELECT currency, as_of::text AS as_of, ending_cash FROM broker_cash_reports WHERE account_id = $1 ORDER BY currency`,
+        [rootId]
+    );
+    if (reports.length === 0) return [];
+    const ids = await treeAccountIds(db, rootId);
+    const journal = {};
+    const pending = {};
+    for (const r of reports) {
+        const { rows: [own] } = await db.query(
+            `SELECT COALESCE(SUM(amount), 0) AS total FROM cash_transactions
+             WHERE account_id = ANY($1) AND currency = $2 AND date_time < ($3::date + 1)::timestamp AT TIME ZONE 'UTC'`,
+            [ids, r.currency, r.as_of]
+        );
+        const { rows: [waiting] } = await db.query(
+            `SELECT COALESCE(SUM(amount), 0) AS total FROM broker_cash_items
+             WHERE account_id = $1 AND currency = $2 AND status = 'PENDING' AND date_time < ($3::date + 1)::timestamp AT TIME ZONE 'UTC'`,
+            [rootId, r.currency, r.as_of]
+        );
+        journal[r.currency] = Number(own.total);
+        pending[r.currency] = Number(waiting.total);
+    }
+    return compareBalances(
+        reports.map(r => ({ currency: r.currency, asOf: r.as_of, endingCash: Number(r.ending_cash) })),
+        journal,
+        pending
+    );
+}
+
+/**
+ * Books what the journal's cash in one currency is off from IBKR's (beyond
+ * what's waiting in the inbox) as an ADJUSTMENT on IBKR's statement day,
+ * on the top-level account: a visible ledger entry the user can delete.
+ * Only ever on request.
+ */
+async function alignBalance(db, rootId, currency) {
+    const row = (await balanceCheck(db, rootId)).find(b => b.currency === currency);
+    if (!row) throw new Error(`IBKR reported no ${currency} cash for this account`);
+    if (row.inLine) return { amount: 0, row };
+    const sign = row.unexplained > 0 ? '+' : '';
+    await db.query(
+        `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, note)
+         VALUES ($1, $2::date::timestamp AT TIME ZONE 'UTC', 'ADJUSTMENT', $3, $4, $5)`,
+        [rootId, row.asOf, row.unexplained, currency,
+         `Aligned with IBKR's ${currency} cash of ${row.asOf} (${sign}${row.unexplained.toFixed(2)})`]
+    );
+    return { amount: row.unexplained, row };
 }
 
 async function linkRows(db, itemId, rowIds) {
@@ -420,6 +544,7 @@ async function bookItems(db, rootId, itemIds, targetAccountId = null) {
  */
 async function syncBrokerCash(pool, statements) {
     const items = parseCashItems(statements);
+    const reports = parseCashReport(statements);
     const brokerIds = [...new Set([
         ...(statements || []).map(s => String(s.accountId || '').toUpperCase()),
         ...items.map(i => i.brokerAccountId),
@@ -455,6 +580,18 @@ async function syncBrokerCash(pool, statements) {
                 added += rowCount;
             }
             const matched = await matchPending(client, account.id);
+            // IBKR's latest ending cash, for the balance check. Replaced as a
+            // whole: a currency IBKR no longer reports is no longer held.
+            const ownReports = reports.filter(r => r.brokerAccountId === account.broker_account_id.toUpperCase());
+            if (ownReports.length > 0) {
+                await client.query(`DELETE FROM broker_cash_reports WHERE account_id = $1`, [account.id]);
+                for (const r of ownReports) {
+                    await client.query(
+                        `INSERT INTO broker_cash_reports (account_id, currency, as_of, ending_cash) VALUES ($1, $2, $3, $4)`,
+                        [account.id, r.currency, r.asOf, r.endingCash]
+                    );
+                }
+            }
             let booked = 0;
             if (account.broker_sync_mode === 'AUTO') {
                 const { rows: pending } = await client.query(
@@ -482,6 +619,10 @@ async function syncBrokerCash(pool, statements) {
 module.exports = {
     classifyCashType,
     parseCashItems,
+    parseCashReport,
+    compareBalances,
+    balanceCheck,
+    alignBalance,
     matchItems,
     flexDate,
     sameSymbol,
