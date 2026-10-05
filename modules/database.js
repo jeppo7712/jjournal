@@ -461,6 +461,10 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     // it already holds every fill before it: those book no cash
     // (modules/tradeSettlement.js). Unset: every fill books its cash.
     await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS opening_covers_before DATE`);
+    // Capital page sections the user hid on this account (e.g. dividends
+    // and holdings on a crypto account). Only hidden: their data still
+    // counts in the balance.
+    await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS hidden_capital_sections TEXT[] NOT NULL DEFAULT '{}'`);
     await client.query(`ALTER TABLE accounts DROP CONSTRAINT IF EXISTS check_broker_sync_mode`);
     await client.query(`ALTER TABLE accounts ADD CONSTRAINT check_broker_sync_mode CHECK (broker_sync_mode IN ('OFF', 'SUGGEST', 'AUTO'))`);
 

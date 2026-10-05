@@ -295,6 +295,27 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         }
     });
 
+    // PUT /capital-sections { hidden: ['DIVIDENDS', 'HOLDINGS'] } — which
+    // Capital page sections this account hides.
+    const HIDEABLE_SECTIONS = ['DIVIDENDS', 'HOLDINGS'];
+    router.put('/capital-sections', async (req, res) => {
+        const hidden = Array.isArray(req.body?.hidden) ? [...new Set(req.body.hidden.map(String))] : null;
+        if (!hidden || hidden.some(h => !HIDEABLE_SECTIONS.includes(h))) {
+            return res.status(400).json({ error: `hidden must be a list of: ${HIDEABLE_SECTIONS.join(', ')}` });
+        }
+        try {
+            const { rowCount } = await pool.query(
+                `UPDATE accounts SET hidden_capital_sections = $2, updated_at = NOW() WHERE id = $1`,
+                [req.accountId, hidden]
+            );
+            if (rowCount === 0) return res.status(404).json({ error: 'Account not found' });
+            res.json({ success: true, hidden });
+        } catch (err) {
+            logger.error('Error saving Capital sections:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     // --- Dividends ---
     // Each dividend owns its ledger rows (DIVIDEND + WITHHOLDING_TAX), rebuilt
     // by syncDividendLedger on every change. Paper accounts don't track
