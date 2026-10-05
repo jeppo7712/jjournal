@@ -56,6 +56,8 @@ const BrokerActivity = ({ accountId, accounts, onLedgerChange }) => {
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to load IBKR activity');
       const next = await res.json();
       setData(next);
+      // The menu's badge next to Capital counts what's waiting.
+      window.dispatchEvent(new Event('broker-activity-changed'));
       setFromDate(next.account.broker_sync_from || next.suggestedFrom || '');
     } catch (err) {
       notify(err.message);

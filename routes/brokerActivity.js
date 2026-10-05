@@ -77,6 +77,22 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         }
     });
 
+    // GET /broker-activity/pending — items waiting for the user, over all
+    // accounts with sync on (the menu's badge next to Capital).
+    router.get('/broker-activity/pending', async (req, res) => {
+        try {
+            const { rows } = await pool.query(
+                `SELECT a.id, a.name, COUNT(*)::int AS count FROM broker_cash_items b JOIN accounts a ON a.id = b.account_id
+                 WHERE b.status = 'PENDING' AND a.broker_sync_mode <> 'OFF'
+                 GROUP BY a.id, a.name ORDER BY a.name`
+            );
+            res.json({ total: rows.reduce((sum, r) => sum + r.count, 0), accounts: rows });
+        } catch (err) {
+            logger.error('Error counting pending broker items:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     // PUT /broker-activity/settings { mode, sync_from }
     router.put('/broker-activity/settings', async (req, res) => {
         const { mode, sync_from: syncFrom } = req.body || {};

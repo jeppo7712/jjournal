@@ -181,6 +181,27 @@
   flex: 1;
 }
 
+/* Items waiting on the page (IBKR activity next to Capital). */
+.navBadge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 18px;
+  height: 18px;
+  padding: 0 5px;
+  box-sizing: border-box;
+  border-radius: 999px;
+  background: #3B82F6;
+  color: #fff;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+}
+
+.navBadge + .navKey {
+  display: none;
+}
+
 .navKey {
   opacity: 0;
   background: rgba(255, 255, 255, 0.06);
@@ -695,6 +716,18 @@
   .navIcon {
     width: 20px;
     height: 20px;
+  }
+
+  /* No label to sit next to: on the icon's corner instead. */
+  .navBadge {
+    position: absolute;
+    top: 2px;
+    right: 2px;
+    min-width: 16px;
+    height: 16px;
+    padding: 0 4px;
+    font-size: 9.5px;
+    box-shadow: 0 0 0 2px #151821;
   }
 
   .navActive::before {
