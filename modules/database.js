@@ -376,7 +376,7 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
       ALTER TABLE cash_transactions ADD CONSTRAINT check_cash_transaction_type CHECK (type IN (
         'DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT',
         'TRADE_SETTLEMENT', 'INTEREST', 'OTHER', 'EXCHANGE_IN', 'EXCHANGE_OUT',
-        'DIVIDEND', 'WITHHOLDING_TAX'
+        'DIVIDEND', 'WITHHOLDING_TAX', 'FEE'
       ))
     `);
     logger.debug('cash_transactions type constraint up to date');
@@ -449,6 +449,57 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS broker_account_id VARCHAR`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_broker_account_id ON accounts (broker_account_id) WHERE broker_account_id IS NOT NULL`);
     logger.debug('accounts.broker_account_id ready');
+
+    // Broker cash sync (modules/brokerCash.js): per top-level account, off
+    // unless switched on — the journal is its own ledger by default.
+    // broker_sync_from: the first day read; capital tracking starts from an
+    // opening balance that already holds everything before it.
+    await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS broker_sync_mode VARCHAR NOT NULL DEFAULT 'OFF'`);
+    await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS broker_sync_from DATE`);
+    await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS broker_synced_at TIMESTAMP WITH TIME ZONE`);
+    await client.query(`ALTER TABLE accounts DROP CONSTRAINT IF EXISTS check_broker_sync_mode`);
+    await client.query(`ALTER TABLE accounts ADD CONSTRAINT check_broker_sync_mode CHECK (broker_sync_mode IN ('OFF', 'SUGGEST', 'AUTO'))`);
+
+    // Every cash row the broker reported, kept so it's never imported twice,
+    // and what became of it (see the status list in modules/brokerCash.js).
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS broker_cash_items (
+        id SERIAL PRIMARY KEY,
+        account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        source VARCHAR NOT NULL DEFAULT 'IBKR',
+        external_id VARCHAR NOT NULL,
+        broker_account_id VARCHAR NOT NULL,
+        broker_type VARCHAR NOT NULL,
+        kind VARCHAR NOT NULL,
+        date_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        currency VARCHAR NOT NULL,
+        amount NUMERIC NOT NULL,
+        symbol VARCHAR,
+        description TEXT,
+        action_id VARCHAR,
+        ex_date DATE,
+        status VARCHAR NOT NULL DEFAULT 'PENDING',
+        -- The user undid a match: leave it to them from then on.
+        manual_only BOOLEAN NOT NULL DEFAULT false,
+        dividend_id INTEGER REFERENCES dividends(id) ON DELETE SET NULL,
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        CONSTRAINT check_broker_item_status CHECK (status IN ('PENDING', 'BOOKED', 'MATCHED', 'DISMISSED')),
+        CONSTRAINT check_broker_item_kind CHECK (kind IN ('DEPOSIT', 'WITHDRAWAL', 'INTEREST', 'FEE', 'DIVIDEND', 'PAYMENT_IN_LIEU', 'WITHHOLDING_TAX', 'OTHER'))
+      );
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_broker_items_external ON broker_cash_items (source, external_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_broker_items_account ON broker_cash_items (account_id, status)`);
+    // The ledger rows an item booked, or the user's own entries it matched.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS broker_item_links (
+        item_id INTEGER NOT NULL REFERENCES broker_cash_items(id) ON DELETE CASCADE,
+        cash_transaction_id INTEGER NOT NULL REFERENCES cash_transactions(id) ON DELETE CASCADE,
+        PRIMARY KEY (item_id, cash_transaction_id)
+      );
+    `);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_broker_links_cash ON broker_item_links (cash_transaction_id)`);
+    logger.debug('Broker cash sync tables ready');
 
     logger.debug('Creating futures_settings table...');
     await client.query(`

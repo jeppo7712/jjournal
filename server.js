@@ -188,6 +188,9 @@ async function connectDatabaseWithRetry(databaseUrl) {
   }
 }
 
+// Set once the routes are built (below); the broker cash cron uses it.
+let brokerActivity = null;
+
 (async () => {
   try {
     const config = await configManager.loadConfig();
@@ -199,6 +202,7 @@ async function connectDatabaseWithRetry(databaseUrl) {
     const historicalRouter = require('./routes/historical.js')(db, taskManager, historicalDataService, broadcastStatus, uuidv4, triggerTaskProcessor);
     const ibkrRouter = require('./routes/ibkr.js')(ibkr, broadcastStatus, uuidv4, lazyPool);
     const capitalRouter = require('./routes/capital.js')(lazyPool, broadcastStatus, uuidv4);
+    brokerActivity = require('./routes/brokerActivity.js')(lazyPool, broadcastStatus, uuidv4);
 
     apiRouter.use('/', tradesRouter);
     apiRouter.use('/accounts', accountsRouter);
@@ -206,6 +210,7 @@ async function connectDatabaseWithRetry(databaseUrl) {
     apiRouter.use('/', historicalRouter);
     apiRouter.use('/ibkr', ibkrRouter);
     apiRouter.use('/', capitalRouter);
+    apiRouter.use('/', brokerActivity.router);
 
     await startServer(PORT); // Start the HTTP server
 
@@ -595,6 +600,22 @@ cron.schedule('0 */6 * * *', async () => {
 });
 
 logger.info('[HoldingsCron] Scheduled coupon/maturity check every 6 hours');
+
+// Broker cash activity (fees, interest, dividends, deposits) for accounts
+// with IBKR sync switched on — see modules/brokerCash.js. IBKR refreshes the
+// Activity statement once a day, so a few runs a day are plenty; offset from
+// the hour so it doesn't meet the holdings check.
+cron.schedule('20 */6 * * *', async () => {
+  if (!brokerActivity) return;
+  try {
+    const { rows: [{ count }] } = await db.getPool().query(`SELECT COUNT(*)::int AS count FROM accounts WHERE broker_sync_mode <> 'OFF'`);
+    if (count === 0) return;
+    const { accounts } = await brokerActivity.runSync();
+    logger.info(`[BrokerCashCron] synced ${accounts.length} account(s)`);
+  } catch (err) {
+    logger.warn(`[BrokerCashCron] ${err.message}`);
+  }
+});
 
 // Serve static files and handle frontend routes in production
 if (process.env.NODE_ENV === 'production') {
