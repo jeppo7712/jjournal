@@ -281,6 +281,72 @@
   border-top: 1px dashed #32384a;
 }
 
+/* --- Ledger --- */
+
+.ledgerCount {
+  color: #6B7280;
+  font-size: 0.8rem;
+}
+
+.ledgerFilters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-bottom: 14px;
+}
+
+.ledgerFilter {
+  padding: 6px 12px;
+  border: 1px solid #32384a;
+  border-radius: 999px;
+  background: transparent;
+  color: #A5ADBA;
+  font: inherit;
+  font-size: 0.8rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.ledgerFilterActive {
+  border-color: rgba(59, 130, 246, 0.5);
+  background: rgba(59, 130, 246, 0.14);
+  color: #BFDBFE;
+}
+
+@media (hover: hover) {
+  .ledgerFilter:not(.ledgerFilterActive):hover { color: #fff; border-color: #4B5468; }
+}
+
+.table tr.monthRow td {
+  padding-top: 16px;
+  border-bottom-color: #32384a;
+  color: #E5E7EB;
+  font-weight: 600;
+}
+
+.table tbody tr.monthRow:hover {
+  background: none;
+}
+
+.monthNet {
+  display: inline-flex;
+  gap: 12px;
+  margin-left: 14px;
+  font-size: 0.78rem;
+  font-weight: 500;
+}
+
+.ledgerMore {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 14px;
+  font-size: 0.82rem;
+  color: #6B7280;
+}
+
 /* --- Tables --- */
 
 .tableWrap {

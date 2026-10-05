@@ -513,6 +513,14 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     `);
     logger.debug('Broker cash sync tables ready');
 
+    // Trade settlement used to book one net row per trade, dated on its last
+    // fill: selling a position moved the purchase's cash to the sale day.
+    // Settlement is one row per fill now (settlementEntries); split the old
+    // net rows the same way. Same total per trade, so no balance changes —
+    // only the dates. Old rows are recognisable by their note (every new
+    // one has a "·" in it); idempotent.
+    await splitNetTradeSettlements(client);
+
     logger.debug('Creating futures_settings table...');
     await client.query(`
 CREATE TABLE IF NOT EXISTS futures_settings (
@@ -864,6 +872,44 @@ ON trades (symbol, type, contract_month);
 //   per-contract fetch planning) as index lookups instead of scans.
 // - idx_historical_data_rollovers: the continuous series' rollover bars,
 //   a few hundred rows.
+// See the call in connectDatabase: one settlement row per fill instead of
+// one net row per trade.
+async function splitNetTradeSettlements(client) {
+    const { settlementEntries, settlementNote } = require('./tradeCalculations.js');
+    const { rows: trades } = await client.query(
+        `SELECT t.id, t.type, t.symbol, t.tick_size, t.tick_value,
+                MIN(ct.account_id) AS account_id, MIN(ct.currency) AS currency, SUM(ct.amount) AS total
+         FROM trades t JOIN cash_transactions ct ON ct.linked_trade_id = t.id AND ct.type = 'TRADE_SETTLEMENT'
+         GROUP BY t.id
+         HAVING bool_or(ct.note LIKE '% trade settlement' OR ct.note NOT LIKE '%·%')`
+    );
+    let split = 0;
+    for (const trade of trades) {
+        const { rows: actions } = await client.query(
+            `SELECT type, quantity, price, fee, date_time AS "dateTime" FROM trade_actions WHERE trade_id = $1`,
+            [trade.id]
+        );
+        const entries = settlementEntries(trade.type, actions, trade.tick_size, trade.tick_value);
+        const total = entries.reduce((sum, e) => sum + e.amount, 0);
+        if (Math.abs(total - Number(trade.total)) > 0.005) {
+            // Not what the trade's fills add up to: leave it for the trade's
+            // next save to rebuild, rather than silently change a balance.
+            logger.warn(`[Settlement] trade ${trade.id}: stored ${trade.total} vs fills ${total.toFixed(2)}; left as is`);
+            continue;
+        }
+        await client.query(`DELETE FROM cash_transactions WHERE linked_trade_id = $1 AND type = 'TRADE_SETTLEMENT'`, [trade.id]);
+        for (const e of entries) {
+            await client.query(
+                `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, linked_trade_id, note)
+                 VALUES ($1, $2, 'TRADE_SETTLEMENT', $3, $4, $5, $6)`,
+                [trade.account_id, e.dateTime, e.amount, trade.currency, trade.id, settlementNote(trade.symbol, e)]
+            );
+        }
+        split++;
+    }
+    if (trades.length > 0) logger.info(`[Settlement] ${split} of ${trades.length} trades' cash split per fill`);
+}
+
 const BACKGROUND_INDEXES = [
   ['idx_historical_data_ranges', `ON historical_data (futures_setting_id, timeframe, source, (COALESCE(contract_month, '')), time) WHERE NOT is_continuous`],
   ['idx_historical_data_rollovers', `ON historical_data (futures_setting_id, timeframe, time) WHERE is_continuous AND is_rollover`],
