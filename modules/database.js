@@ -376,7 +376,7 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
       ALTER TABLE cash_transactions ADD CONSTRAINT check_cash_transaction_type CHECK (type IN (
         'DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT',
         'TRADE_SETTLEMENT', 'INTEREST', 'OTHER', 'EXCHANGE_IN', 'EXCHANGE_OUT',
-        'DIVIDEND', 'WITHHOLDING_TAX', 'FEE'
+        'DIVIDEND', 'WITHHOLDING_TAX', 'FEE', 'ADJUSTMENT'
       ))
     `);
     logger.debug('cash_transactions type constraint up to date');
@@ -499,6 +499,18 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
       );
     `);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_broker_links_cash ON broker_item_links (cash_transaction_id)`);
+    // IBKR's ending cash per currency from the last sync (Cash Report
+    // section), for comparing with the journal's.
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS broker_cash_reports (
+        account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        currency VARCHAR NOT NULL,
+        as_of DATE NOT NULL,
+        ending_cash NUMERIC NOT NULL,
+        fetched_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        PRIMARY KEY (account_id, currency)
+      );
+    `);
     logger.debug('Broker cash sync tables ready');
 
     logger.debug('Creating futures_settings table...');

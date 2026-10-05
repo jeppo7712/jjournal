@@ -65,7 +65,12 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
                  ORDER BY b.date_time DESC, b.id DESC`,
                 [rootId]
             );
-            res.json({ account, items, suggestedFrom: account.broker_sync_from ? null : await brokerCash.defaultSyncFrom(pool, rootId) });
+            res.json({
+                account,
+                items,
+                balances: await brokerCash.balanceCheck(pool, rootId),
+                suggestedFrom: account.broker_sync_from ? null : await brokerCash.defaultSyncFrom(pool, rootId),
+            });
         } catch (err) {
             logger.error('Error loading broker activity:', err);
             res.status(500).json({ error: err.message });
@@ -122,6 +127,29 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         } catch (err) {
             await client.query('ROLLBACK').catch(() => {});
             logger.error('Error booking broker items:', err);
+            res.status(400).json({ error: err.message });
+        } finally {
+            client.release();
+        }
+    });
+
+    // POST /broker-activity/align { currency } — books the part of the
+    // difference with IBKR's cash that nothing waiting explains.
+    router.post('/broker-activity/align', async (req, res) => {
+        const currency = String(req.body?.currency || '').toUpperCase();
+        if (!/^[A-Z]{3}$/.test(currency)) return res.status(400).json({ error: 'currency is required' });
+        const client = await pool.connect();
+        try {
+            const rootId = await rootOf(req, res);
+            if (!rootId) return;
+            await client.query('BEGIN');
+            const { amount } = await brokerCash.alignBalance(client, rootId, currency);
+            await client.query('COMMIT');
+            if (amount) broadcastStatus(uuidv4(), `${currency} cash aligned with IBKR (${amount > 0 ? '+' : ''}${amount.toFixed(2)})`, 'success');
+            res.json({ success: true, amount });
+        } catch (err) {
+            await client.query('ROLLBACK').catch(() => {});
+            logger.error('Error aligning cash with IBKR:', err);
             res.status(400).json({ error: err.message });
         } finally {
             client.release();

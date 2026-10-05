@@ -1,7 +1,7 @@
 // Run with: npm test
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { classifyCashType, parseCashItems, matchItems, flexDate } = require('../modules/brokerCash.js');
+const { classifyCashType, parseCashItems, matchItems, flexDate, parseCashReport, compareBalances } = require('../modules/brokerCash.js');
 const { checkFlexQuery } = require('../modules/flexCheck.js');
 
 // Rows shaped like IBKR's Flex XML attributes (made-up account and values).
@@ -154,4 +154,41 @@ test('query check: wrong query type, paper account in the real set, alias instea
   assert.equal(statusOf(paperSet, 'Cash Transactions'), undefined); // paper accounts don't track cash
   const dates = checkFlexQuery({ type: 'AF', statements: [statement([cashRow({ transactionID: '1', dateTime: '09/18/2026' })])] }, 'activity', { kind: 'real' });
   assert.equal(statusOf(dates, 'Date format'), 'missing');
+});
+
+test('cash report: one row per held currency, the base-currency summary left out', () => {
+  const rows = parseCashReport([{ accountId: 'U1000001', toDate: '20261002', CashReport: { CashReportCurrency: [
+    { accountId: 'U1000001', currency: 'BASE_SUMMARY', endingCash: '20559.8', toDate: '20261002' },
+    { accountId: 'U1000001', currency: 'EUR', endingCash: '17575.228', toDate: '20261002' },
+    { accountId: 'U1000001', currency: 'USD', endingCash: '784.18164', toDate: '20261002' },
+  ] } }]);
+  assert.deepEqual(rows, [
+    { brokerAccountId: 'U1000001', currency: 'EUR', asOf: '2026-10-02', endingCash: 17575.228 },
+    { brokerAccountId: 'U1000001', currency: 'USD', asOf: '2026-10-02', endingCash: 784.18164 },
+  ]);
+});
+
+test('cash report: an account holding only its base currency reports just the summary', () => {
+  const rows = parseCashReport([{
+    accountId: 'U1000002', toDate: '20261002',
+    CashTransactions: { CashTransaction: [{ currency: 'USD', fxRateToBase: '1', amount: '-10' }] },
+    CashReport: { CashReportCurrency: { accountId: 'U1000002', currency: 'BASE_SUMMARY', endingCash: '7002.84', toDate: '20261002' } },
+  }]);
+  assert.deepEqual(rows, [{ brokerAccountId: 'U1000002', currency: 'USD', asOf: '2026-10-02', endingCash: 7002.84 }]);
+  // Without a way to tell the base currency, nothing is guessed.
+  assert.deepEqual(parseCashReport([{ accountId: 'U1000002', CashReport: { CashReportCurrency: { currency: 'BASE_SUMMARY', endingCash: '1', toDate: '20261002' } } }]), []);
+});
+
+test('balance check: rounding is in line, items waiting in the inbox explain their part', () => {
+  const [eur, usd, gbp] = compareBalances(
+    [{ currency: 'EUR', asOf: '2026-10-02', endingCash: 17575.228 }, { currency: 'USD', asOf: '2026-10-02', endingCash: 784.18164 },
+     { currency: 'GBP', asOf: '2026-10-02', endingCash: 90 }],
+    { EUR: 17575.2444, USD: 782.6116, GBP: 100 },
+    { GBP: -10 }
+  );
+  assert.equal(eur.inLine, true);
+  assert.equal(usd.inLine, false);
+  assert.equal(usd.unexplained, 1.57);
+  assert.equal(gbp.inLine, true); // a waiting -10 fee is the whole difference
+  assert.equal(gbp.waiting, -10);
 });

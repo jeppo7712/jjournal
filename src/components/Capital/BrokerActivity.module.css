@@ -45,30 +45,120 @@
   .mode:not(.modeActive):hover { color: #fff; }
 }
 
-.fromRow {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  flex-wrap: wrap;
-  margin-bottom: 18px;
-  font-size: 0.85rem;
-  color: #A5ADBA;
+.fromLine {
+  margin: 0 0 18px;
+  font-size: 0.82rem;
+  color: #6B7280;
 }
 
-.fromRow input {
-  padding: 6px 10px;
+.fromLine strong {
+  color: #A5ADBA;
+  font-weight: 600;
+}
+
+.fromLine input {
+  padding: 3px 8px;
   border: 1px solid #32384a;
-  border-radius: 8px;
+  border-radius: 6px;
   background: #171A24;
   color: #E5E7EB;
   font: inherit;
   color-scheme: dark;
 }
 
-.fromHint {
-  flex-basis: 100%;
-  font-size: 0.78rem;
+.linkBtn {
+  padding: 0;
+  border: none;
+  background: none;
+  color: #60A5FA;
+  font: inherit;
+  cursor: pointer;
+}
+
+.balances {
+  margin-bottom: 22px;
+}
+
+.balances h4 {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  flex-wrap: wrap;
+  margin: 0 0 10px;
+  font-size: 0.92rem;
+  font-weight: 600;
+  color: #E5E7EB;
+}
+
+.asOf {
+  font-size: 0.76rem;
+  font-weight: 400;
   color: #6B7280;
+}
+
+.balanceRows {
+  display: flex;
+  flex-direction: column;
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  border: 1px solid #2C3244;
+  border-radius: 12px;
+  overflow: hidden;
+}
+
+.balanceRow {
+  display: grid;
+  grid-template-columns: 56px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 14px;
+  padding: 10px 14px;
+  border-top: 1px solid #252A38;
+  font-size: 0.86rem;
+}
+
+.balanceRow:first-child {
+  border-top: none;
+}
+
+.balanceCurrency {
+  color: #E5E7EB;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+}
+
+.balanceFigures {
+  display: flex;
+  gap: 22px;
+  flex-wrap: wrap;
+  color: #E5E7EB;
+  font-variant-numeric: tabular-nums;
+}
+
+.figureLabel {
+  margin-right: 6px;
+  color: #6B7280;
+  font-size: 0.74rem;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.balanceStatus {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.inLine {
+  color: #4ADE80;
+  font-weight: 600;
+}
+
+.offBy {
+  color: #FBBF24;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 
 .listHead {
@@ -216,6 +306,27 @@
   }
 
   .actions {
+    grid-column: 1 / -1;
+    justify-content: flex-start;
+  }
+
+  .balanceRow {
+    grid-template-columns: 48px minmax(0, 1fr);
+    align-items: start;
+  }
+
+  .balanceFigures {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 12px;
+  }
+
+  .figureLabel {
+    display: block;
+    margin: 0 0 2px;
+  }
+
+  .balanceStatus {
     grid-column: 1 / -1;
     justify-content: flex-start;
   }
