@@ -37,7 +37,8 @@ function formatFlexDateTime(raw) {
   return `${datePart} ${timePart}`;
 }
 
-// Runs the SendRequest → GetStatement flow and returns the raw <Trade> entries.
+// Runs the SendRequest → GetStatement flow and returns the statement(s): one
+// per IBKR account the query covers, every section as parsed.
 async function requestFlexStatement(token, queryId) {
   const sendUrl = `${FLEX_BASE}/SendRequest?t=${token}&q=${queryId}&v=3`;
   const sendRes = await fetch(sendUrl);
@@ -101,27 +102,32 @@ async function requestFlexStatement(token, queryId) {
       throw new Error(`Flex GetStatement for query ${queryId} returned no FlexStatement: "${snippet}"`);
     }
 
-    const allTrades = statements.flatMap(s => {
-      // Activity Flex Query ("Trades" section, type="AF") uses <Trades><Trade>.
-      // Trade Confirmation Flex Query (type="TCF") uses <TradeConfirms><TradeConfirm>
-      // instead — different tag, and (below) some different field names too.
-      const activityTrades = s?.Trades?.Trade;
-      const confirmTrades = s?.TradeConfirms?.TradeConfirm;
-      const combined = [
-        ...(activityTrades ? (Array.isArray(activityTrades) ? activityTrades : [activityTrades]) : []),
-        ...(confirmTrades ? (Array.isArray(confirmTrades) ? confirmTrades : [confirmTrades]) : []),
-      ];
-      // A query without the row-level Account ID field still says whose
-      // statement it is; carry that onto each row so the paper/live check
-      // (assertAccountKind) can always verify it.
-      return combined.map(t => (t.accountId || !s?.accountId ? t : { ...t, accountId: s.accountId }));
-    });
-
-    logger.debug(`[Flex] query ${queryId} statement ready, ${allTrades.length} raw trade rows`);
-    return allTrades;
+    logger.debug(`[Flex] query ${queryId} statement ready, ${statements.length} statement(s)`);
+    return { statements, type: parsed?.FlexQueryResponse?.type || null };
   }
 
   throw new Error(`Flex GetStatement for query ${queryId} timed out — IB did not finish generating the report in time`);
+}
+
+// A section's rows as an array, whatever the XML held: several (array), one
+// (object), or none (absent, or an empty element parsed as '').
+function sectionRows(statement, section, row) {
+  const rows = statement?.[section]?.[row];
+  if (!rows) return [];
+  return Array.isArray(rows) ? rows : [rows];
+}
+
+function extractTrades(statements) {
+  return statements.flatMap(s => {
+    // Activity Flex Query ("Trades" section, type="AF") uses <Trades><Trade>.
+    // Trade Confirmation Flex Query (type="TCF") uses <TradeConfirms><TradeConfirm>
+    // instead — different tag, and (below) some different field names too.
+    const combined = [...sectionRows(s, 'Trades', 'Trade'), ...sectionRows(s, 'TradeConfirms', 'TradeConfirm')];
+    // A query without the row-level Account ID field still says whose
+    // statement it is; carry that onto each row so the paper/live check
+    // (assertAccountKind) can always verify it.
+    return combined.map(t => (t.accountId || !s?.accountId ? t : { ...t, accountId: s.accountId }));
+  });
 }
 
 // ─── In-memory cache for raw Flex pulls ───────────────────────────────────
@@ -130,70 +136,81 @@ async function requestFlexStatement(token, queryId) {
 // Cache the raw (all-symbols) pull here; each symbol's fetch just re-filters
 // the cached data instead of hitting IBKR again.
 const CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
-let rawTradesCache = null; // { key, trades, fetchedAt }
+// Per query ID: { statements, type, fetchedAt }. Shared by everything that
+// reads Flex (trade imports, the broker cash sync, the query check), so they
+// don't each pull the same statement.
+const statementCache = new Map();
+// Per query ID: the pull in progress. IBKR refuses a second concurrent
+// request under the same token ("Too many requests have been made from this
+// token"), so a caller arriving mid-pull waits for that one instead.
+const inFlight = new Map();
 
-function cacheKeyFor(queryIds) {
-  return [...queryIds].sort().join(',');
+/**
+ * One Flex query's statements, from the cache while fresh.
+ * @returns {Promise<{ statements: object[], type: string|null, fetchedAt: number, fromCache: boolean }>}
+ */
+async function getFlexStatements(token, queryId, { forceRefresh = false } = {}) {
+  const cached = statementCache.get(queryId);
+  if (cached && !forceRefresh && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
+    logger.debug(`[Flex] query ${queryId} from cache (${Math.round((Date.now() - cached.fetchedAt) / 1000)}s old)`);
+    return { ...cached, fromCache: true };
+  }
+  if (inFlight.has(queryId)) return inFlight.get(queryId);
+  const pull = (async () => {
+    try {
+      const { statements, type } = await requestFlexStatement(token, queryId);
+      const entry = { statements, type, fetchedAt: Date.now() };
+      statementCache.set(queryId, entry);
+      return { ...entry, fromCache: false };
+    } finally {
+      inFlight.delete(queryId);
+    }
+  })();
+  inFlight.set(queryId, pull);
+  return pull;
 }
 
 // Fetches raw (unfiltered, all-symbols) trade rows from all configured Flex
-// queries, using the cache when it's fresh and matches the same query IDs.
+// queries, using the cache when it's fresh.
 async function fetchRawFlexTrades(token, queryIds, { forceRefresh = false } = {}) {
   const ids = (Array.isArray(queryIds) ? queryIds : [queryIds]).filter(Boolean);
   if (ids.length === 0) throw new Error('No Flex Query ID configured');
-  const key = cacheKeyFor(ids);
 
-  const isFresh = rawTradesCache
-    && rawTradesCache.key === key
-    && (Date.now() - rawTradesCache.fetchedAt) < CACHE_TTL_MS;
-
-  if (isFresh && !forceRefresh) {
-    logger.debug(`[Flex] serving from cache (${Math.round((Date.now() - rawTradesCache.fetchedAt) / 1000)}s old)`);
-    return { trades: rawTradesCache.trades, fetchedAt: rawTradesCache.fetchedAt, fromCache: true, failedQueryIds: rawTradesCache.failedQueryIds || [] };
-  }
-
-  // Fetch each configured query one at a time, NOT in parallel. IBKR's Flex
-  // Web Service appears to reject a second concurrent request under the same
-  // token with "Too many requests have been made from this token" — this is
-  // a concurrency limit, not a time-based one, so waiting between attempts
-  // doesn't help if two queries are always fired together. A failing query
-  // still doesn't block the other from returning data; it just runs after it.
-  const results = [];
-  for (const id of ids) {
-    try {
-      const trades = await requestFlexStatement(token, id);
-      results.push({ status: 'fulfilled', value: trades });
-    } catch (err) {
-      results.push({ status: 'rejected', reason: err });
-    }
-  }
-
+  // One query at a time, NOT in parallel: IBKR's Flex Web Service rejects a
+  // second concurrent request under the same token — a concurrency limit,
+  // not a time-based one. A failing query still doesn't block the other.
   const trades = [];
   const failedQueryIds = [];
-  results.forEach((r, i) => {
-    if (r.status === 'fulfilled') {
-      trades.push(...r.value);
-    } else {
-      logger.warn(`[Flex] query ${ids[i]} failed: ${r.reason?.message || r.reason}`);
-      failedQueryIds.push(ids[i]);
+  const fetchedTimes = [];
+  let allFromCache = true;
+  let stale = false;
+  let firstError = null;
+  for (const id of ids) {
+    try {
+      const result = await getFlexStatements(token, id, { forceRefresh });
+      trades.push(...extractTrades(result.statements));
+      fetchedTimes.push(result.fetchedAt);
+      allFromCache = allFromCache && result.fromCache;
+    } catch (err) {
+      logger.warn(`[Flex] query ${id} failed: ${err.message || err}`);
+      firstError = firstError || err;
+      // Better slightly old data than nothing when IB is having a hiccup.
+      const old = statementCache.get(id);
+      if (old) {
+        trades.push(...extractTrades(old.statements));
+        fetchedTimes.push(old.fetchedAt);
+        stale = true;
+      } else {
+        failedQueryIds.push(id);
+      }
     }
-  });
-
-  if (trades.length === 0 && results.every(r => r.status === 'rejected')) {
-    // All configured queries failed outright. Fall back to a stale cache
-    // rather than surfacing an error, if one happens to exist — better to
-    // show slightly old data than nothing when IB is having a hiccup.
-    if (rawTradesCache && rawTradesCache.key === key) {
-      logger.warn('[Flex] all queries failed, falling back to stale cache');
-      return { trades: rawTradesCache.trades, fetchedAt: rawTradesCache.fetchedAt, fromCache: true, stale: true, failedQueryIds: [] };
-    }
-    throw new Error(results[0].reason?.message || 'All Flex queries failed');
   }
 
-  const fetchedAt = Date.now();
-  rawTradesCache = { key, trades, fetchedAt, failedQueryIds };
-  logger.debug(`[Flex] fetched fresh, ${trades.length} raw rows across ${ids.length} quer${ids.length !== 1 ? 'ies' : 'y'}${failedQueryIds.length ? ` (${failedQueryIds.length} failed)` : ''}`);
-  return { trades, fetchedAt, fromCache: false, failedQueryIds };
+  if (failedQueryIds.length === ids.length) {
+    throw new Error(firstError?.message || 'All Flex queries failed');
+  }
+  logger.debug(`[Flex] ${trades.length} raw trade rows across ${ids.length} quer${ids.length !== 1 ? 'ies' : 'y'}${failedQueryIds.length ? ` (${failedQueryIds.length} failed)` : ''}`);
+  return { trades, fetchedAt: Math.min(...fetchedTimes), fromCache: allFromCache, stale, failedQueryIds };
 }
 
 // Filters + maps raw Flex trade rows down to one symbol's executions,
@@ -327,4 +344,4 @@ async function fetchFlexExecutions(token, queryIds, symbol, effectiveType, opts 
   return { executions, fetchedAt, fromCache, stale: !!stale, failedQueryIds: failedQueryIds || [] };
 }
 
-module.exports = { fetchFlexExecutions, isPaperIbkrAccountId };
+module.exports = { fetchFlexExecutions, isPaperIbkrAccountId, getFlexStatements, sectionRows, formatFlexDateTime };

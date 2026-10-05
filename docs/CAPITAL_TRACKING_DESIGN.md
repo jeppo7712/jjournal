@@ -455,7 +455,58 @@ Those rows can't be deleted from the ledger on their own.
   mirrors, so imported cash activity lands on the right one. Child accounts
   never carry one; they resolve through their parent.
 
-Planned next: an IBKR Flex import of dividends and withholding tax
-(Cash Transactions section), live accounts only, booking only cash
-movements dated after tracking was switched on — earlier activity is
-already reflected in the ledger's balances and must not be booked twice.
+## Broker cash sync (IBKR Flex)
+
+`modules/brokerCash.js`, `routes/brokerActivity.js`, the "From IBKR"
+section of the Capital page. Reads the Cash Transactions section of the
+real accounts' Activity Flex query: deposits and withdrawals, fees,
+interest, dividends, payments in lieu and withholding tax.
+
+- **Off unless switched on, per account.** `accounts.broker_sync_mode`:
+  `OFF` (default — the journal is its own ledger), `SUGGEST` (an inbox to
+  add or dismiss from) or `AUTO`. Set on the top-level account mapped to
+  the broker account (`broker_account_id`). Paper accounts are never
+  synced. Someone who keeps their own books never sees any of it.
+- **Nothing before tracking started.** `broker_sync_from` (default: the
+  day after the account's first ledger entry, its opening balance) is the
+  first day read; the opening balance already holds everything earlier.
+- **Every broker row is kept** in `broker_cash_items`, unique on IBKR's
+  transaction ID, so a sync never imports the same row twice, and with
+  what became of it: `MATCHED` (an entry the user made covers it),
+  `BOOKED` (added by the sync), `PENDING` or `DISMISSED`.
+  `broker_item_links` ties an item to the ledger rows it booked or matched.
+- **The user's own entries are never changed.** Matching only links:
+  same currency and sign, within 3 days (5 for dividends), one-to-one
+  first, then a day's broker rows against one entry (two transfers
+  entered as one deposit) and one broker row against a day's entries.
+  "Not the same" undoes a match and leaves that row to the user
+  (`manual_only`).
+- **Dividends go through `dividends`**: a payment's dividend and tax rows
+  share IBKR's action ID and are booked together as one IBKR dividend
+  (accepting either books both), on the account in the tree that last
+  traded the stock. A later correction row updates the same dividend
+  unless the user edited it. Tax without a dividend in the sync (paid
+  before tracking) books as its own `WITHHOLDING_TAX` row.
+- **Deleting what a sync added** marks its item dismissed, so it doesn't
+  come back; deleting an entry a broker row was matched to puts that row
+  back in the inbox.
+- Fees book as the ledger type `FEE` (also offered for manual entries).
+- Runs on demand (Sync now) and every 6 hours for accounts with sync on.
+  One Flex pull serves the trade import, the sync and the query check
+  (`getFlexStatements` in `routes/ibkrFlex.js`, cached 5 minutes): IBKR
+  refuses concurrent requests under one token.
+
+### Setting up the Flex queries
+
+Settings → IBKR API has a step-by-step guide to the sections, options and
+general settings to tick in IBKR's Flex Query editor, and a check
+(`modules/flexCheck.js`, `GET /api/ibkr-flex/check`) that runs the saved
+queries and says, per check, what's missing and what to change: query
+type, real vs paper account, alias instead of account ID, accounts not
+linked to a journal account, period, date format, and each section's
+fields (the ones the journal can't do without vs. ones that make it more
+precise).
+
+Next: a balance check against IBKR's Cash Report (ending cash per
+currency), showing a deviation and offering — never forcing — a visible
+correction entry.

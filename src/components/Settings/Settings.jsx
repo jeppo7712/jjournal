@@ -9,6 +9,7 @@ import { DateTime } from 'luxon';
 import { findExchangePreset, findFuturesPreset } from '../../data/marketReference';
 import { NUMBER_FORMATS, getNumberFormat, setNumberFormat } from '../../utils/numberFormat';
 import HistoricalDataSummary from './HistoricalDataSummary';
+import FlexGuide from './FlexGuide';
 import { FaSlidersH, FaTerminal, FaWallet, FaTasks, FaPlug, FaGlobeAmericas, FaChartLine, FaDatabase, FaPlus, FaSyncAlt, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { notify, confirmDialog } from '../common/Dialogs';
 
@@ -2209,6 +2210,7 @@ export default function Settings() {
             </div>
             </div>
             </section>
+            <FlexGuide />
           </div>
         )}
         {activeTab === 'exchanges' && dbStatus?.isConnected && (
