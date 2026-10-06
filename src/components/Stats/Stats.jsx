@@ -285,9 +285,6 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
       return acc;
     }, {});
 
-    const maxDays = 3 * 365;
-    const threeYearsAgo = DateTime.now().minus({ days: maxDays });
-
     const firstTradeDate = trades.reduce((earliest, trade) => {
       if (trade.firstActionDate) {
         const tradeDate = DateTime.fromISO(trade.firstActionDate);
@@ -298,7 +295,8 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
       return earliest;
     }, DateTime.now());
 
-    const apiStartDate = (firstTradeDate > threeYearsAgo ? firstTradeDate : threeYearsAgo).toISODate();
+    // Daily closes from the first trade on, as far back as the charts go.
+    const apiStartDate = firstTradeDate.toISODate();
     const apiEndDate = DateTime.now().toISODate();
 
     const fetchPromises = [];
@@ -1005,7 +1003,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 value={latestReturn !== undefined && latestReturn !== null && !isFetching ? `${signed(latestReturn)}%` : null}
                 tone={toneOf(latestReturn)}
                 caption="Latest"
-                explanation={`Time-weighted return on the capital recorded on the Capital page (deposits, withdrawals, transfers and currency exchanges in this currency), max 3*365 days. Each day's P&L, including open positions at the day's close (futures by their price moves, not their contract value), is divided by the capital at the start of that day, and the days are compounded, so money moved in or out is not counted as a gain or loss. If the first trades are older than the first recorded deposit, that deposit is taken as the starting capital.`}
+                explanation={`Time-weighted return on the capital recorded on the Capital page (deposits, withdrawals, transfers and currency exchanges in this currency), from the first trade on. Each day's P&L, including open positions at the day's close (futures by their price moves, not their contract value), is divided by the capital at the start of that day, and the days are compounded, so money moved in or out is not counted as a gain or loss. If the first trades are older than the first recorded deposit (your opening balance), the capital before it is that opening cash plus the positions then held, less the P&L made in between — and at least the value of the positions held.`}
               >
                 {isFetching ? (
                   <p className={styles.chartEmpty}>Loading historical data…</p>
@@ -1027,7 +1025,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 value={latestTotalPnl !== null && !isFetching ? `${latestTotalPnl < 0 ? '-' : latestTotalPnl > 0 ? '+' : ''}${mark}${absAmount(latestTotalPnl)}` : null}
                 tone={toneOf(latestTotalPnl)}
                 caption="Total incl. open"
-                explanation={`Cumulative P&L per day (max 3*365 days). The blue line is realised P&L (closed trades and partial sells, on the day they happened) plus the unrealised P&L of positions open at that day’s close, valued at the symbol’s daily close. The grey line is realised P&L alone. Fees are included in both.`}
+                explanation={`Cumulative P&L per day, from the first trade on. The blue line is realised P&L (closed trades and partial sells, on the day they happened) plus the unrealised P&L of positions open at that day’s close, valued at the symbol’s daily close. The grey line is realised P&L alone. Fees are included in both.`}
               >
                 {isFetching ? (
                   <p className={styles.chartEmpty}>Loading historical data…</p>
