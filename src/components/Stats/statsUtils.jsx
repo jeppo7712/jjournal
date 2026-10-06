@@ -549,14 +549,13 @@ export const computeReturnVsHoldTime = (trades) => {
 export const computePortfolioValueSeries = (trades, historicalDataMap) => {
   if (!trades.length) return { labels: [], series: [], realizedSeries: [], positionValueSeries: [] };
 
+  // From the first trade on, however long ago: a day per day.
   const today = DateTime.now().startOf('day');
-  const maxDays = 3 * 365;
-  const firstDate = trades
+  const startDate = trades
     .map(t => toDT(t.firstActionDate))
     .filter(dt => dt && dt.isValid)
     .reduce((min, dt) => (dt < min ? dt : min), today)
     .startOf('day');
-  const startDate = firstDate > today.minus({ days: maxDays }) ? firstDate : today.minus({ days: maxDays });
   const days = Math.ceil(today.diff(startDate, 'days').days) + 1;
 
   const replays = trades.map(t => {
@@ -646,15 +645,10 @@ export const computeReturnPercentageSeries = (trades, historicalDataMap, cashFlo
   });
   const flowOn = i => flowsByDate.get(dates[i]) || 0;
 
-  // The P&L series is capped at three years; P&L from before its first day
-  // is already part of the first value and not that day's own.
-  const firstTrade = trades
-    .map(t => toDT(t.firstActionDate))
-    .filter(dt => dt && dt.isValid)
-    .reduce((min, dt) => (!min || dt < min ? dt : min), null);
-  const startsAtFirstTrade = firstTrade && firstTrade.toISODate() === dates[0];
+  // The series starts on the first trade's day, so its first value is
+  // that day's own P&L.
   const pnl = cumulative.map((value, i) => {
-    const day = i === 0 ? (startsAtFirstTrade ? value : 0) : value - cumulative[i - 1];
+    const day = i === 0 ? value : value - cumulative[i - 1];
     return Number.isFinite(day) ? day : 0;
   });
 
