@@ -281,8 +281,23 @@
 .cellContainer,
 .cellColumn,
 .cellTop,
-.cellBottom {
+.cellBottom,
+.mobileTags {
   display: none;
+}
+
+/* A trade's tags; the ones that don't fit are cut off (the trade view
+   shows them all). */
+.colTags {
+  flex: 1.6;
+  gap: 4px;
+  overflow: hidden;
+  mask-image: linear-gradient(90deg, #000 85%, transparent);
+  -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
+}
+
+.colTags > * {
+  flex-shrink: 0;
 }
 
 .desktopCells {
@@ -634,6 +649,18 @@
     display: flex;
     width: 100%;
     gap: 8px;
+  }
+
+  .tradeRow {
+    flex-wrap: wrap;
+  }
+
+  .mobileTags {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 4px;
+    width: 100%;
+    margin-top: 6px;
   }
 
   .cellColumn {

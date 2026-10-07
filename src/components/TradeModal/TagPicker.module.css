@@ -1,0 +1,151 @@
+/* Same panel look as TradeChecklist.module.css; the Journal tab spaces it. */
+.panel {
+  background: #2a2e38;
+  border-radius: 12px;
+  padding: 12px 16px;
+}
+
+.header {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+  margin-bottom: 8px;
+}
+
+.title {
+  color: #e0e2e6;
+  font-weight: 600;
+}
+
+.hint {
+  color: #6B7280;
+  font-size: 0.8em;
+  margin: 0;
+}
+
+.row {
+  display: grid;
+  grid-template-columns: 92px 1fr;
+  align-items: start;
+  gap: 10px;
+  padding: 5px 0;
+}
+
+.groupName {
+  color: #9CA3AF;
+  font-size: 0.75em;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  padding-top: 5px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.single {
+  display: inline-block;
+  margin-left: 5px;
+  padding: 0 4px;
+  border-radius: 4px;
+  background: rgba(255, 255, 255, 0.08);
+  color: #9CA3AF;
+  font-size: 0.9em;
+}
+
+.chips {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.addBtn {
+  width: 24px;
+  height: 24px;
+  border-radius: 999px;
+  border: 1px dashed #4B5563;
+  background: transparent;
+  color: #9CA3AF;
+  font-size: 15px;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.addBtn:hover {
+  border-color: #3B82F6;
+  color: #E5E7EB;
+}
+
+.addBox {
+  position: relative;
+}
+
+.addInput {
+  width: 170px;
+  max-width: 100%;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid #3B82F6;
+  background: #1c1f27;
+  color: #E5E7EB;
+  font: inherit;
+  font-size: 13px;
+  outline: none;
+}
+
+.suggestions {
+  position: absolute;
+  top: calc(100% + 4px);
+  left: 0;
+  z-index: 20;
+  min-width: 200px;
+  padding: 4px;
+  border-radius: 10px;
+  border: 1px solid #2C3244;
+  background: #141822;
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+}
+
+.suggestion {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  padding: 6px 8px;
+  border: none;
+  border-radius: 6px;
+  background: transparent;
+  color: #E5E7EB;
+  font: inherit;
+  font-size: 13px;
+  text-align: left;
+  cursor: pointer;
+}
+
+.suggestion:hover {
+  background: rgba(59, 130, 246, 0.15);
+}
+
+.suggestionGroup {
+  color: #6B7280;
+  font-size: 0.9em;
+}
+
+@media (max-width: 600px) {
+  .row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+
+  .groupName {
+    padding-top: 0;
+  }
+
+  /* Bigger targets for fingers. */
+  .chips :global(button) {
+    min-height: 30px;
+  }
+}

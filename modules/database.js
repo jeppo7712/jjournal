@@ -151,6 +151,8 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     // default means every column stays visible unless the user hides one.
     await client.query(`ALTER TABLE account_filters ADD COLUMN IF NOT EXISTS hidden_columns JSONB NOT NULL DEFAULT '[]'::jsonb`);
     logger.debug('account_filters.hidden_columns ready');
+    // The Dashboard's tag filter (src/utils/tagFilter.js).
+    await client.query(`ALTER TABLE account_filters ADD COLUMN IF NOT EXISTS tag_filter JSONB NOT NULL DEFAULT '[]'::jsonb`);
 
     // Create trades table with symbol_type
     logger.debug('Creating trades table...');
@@ -815,6 +817,8 @@ ON trades (symbol, type, contract_month);
     logger.debug('Additional indexes created successfully');
     // --- End New General Indexes ---
 
+    await createTagTables(client);
+
     const { rows: accounts } = await client.query('SELECT * FROM accounts');
     if (accounts.length === 0) {
       await client.query('INSERT INTO accounts (name) VALUES ($1)', ['Default']);
@@ -885,6 +889,85 @@ ON trades (symbol, type, contract_month);
 //   a few hundred rows.
 // See the call in connectDatabase: one settlement row per fill instead of
 // one net row per trade.
+// Trade tags, shared by all accounts, each in a group with a meaning
+// (Setup, Mistake, ...). A trade's tags are its rows in trade_tags; the old
+// free-text trade_journals.tags is read once, when trade_tags is created,
+// and not written any more.
+const DEFAULT_TAG_GROUPS = [
+  { name: 'Setup', color: '#3B82F6', single: true },
+  { name: 'Mistake', color: '#EF4444', single: false },
+  { name: 'Market', color: '#F59E0B', single: false },
+];
+
+async function createTagTables(client) {
+  const { rows: [existing] } = await client.query(
+    `SELECT to_regclass('public.tag_groups') IS NOT NULL AS groups, to_regclass('public.trade_tags') IS NOT NULL AS links`
+  );
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS tag_groups (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(60) NOT NULL,
+      color VARCHAR(9) NOT NULL DEFAULT '#8B5CF6',
+      -- At most one tag of this group per trade (e.g. its setup).
+      single_choice BOOLEAN NOT NULL DEFAULT false,
+      sort_order INTEGER NOT NULL DEFAULT 0,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+  `);
+  await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_tag_groups_name ON tag_groups (lower(name))`);
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS tags (
+      id SERIAL PRIMARY KEY,
+      name VARCHAR(60) NOT NULL,
+      group_id INTEGER REFERENCES tag_groups(id) ON DELETE SET NULL,
+      created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    );
+  `);
+  // One "FVG", never also an "fvg".
+  await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_tags_name ON tags (lower(name))`);
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS trade_tags (
+      trade_id INTEGER NOT NULL REFERENCES trades(id) ON DELETE CASCADE,
+      tag_id INTEGER NOT NULL REFERENCES tags(id) ON DELETE CASCADE,
+      PRIMARY KEY (trade_id, tag_id)
+    );
+  `);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_trade_tags_tag ON trade_tags (tag_id)`);
+
+  // Only when the tables are new: deleting the groups later sticks.
+  if (!existing.groups) {
+    for (const [i, g] of DEFAULT_TAG_GROUPS.entries()) {
+      await client.query(
+        `INSERT INTO tag_groups (name, color, single_choice, sort_order) VALUES ($1, $2, $3, $4)`,
+        [g.name, g.color, g.single, i]
+      );
+    }
+  }
+  if (!existing.links) {
+    const { rows } = await client.query(`SELECT trade_id, tags FROM trade_journals WHERE COALESCE(tags, '') <> ''`);
+    for (const { trade_id: tradeId, tags } of rows) {
+      for (const name of parseLegacyTags(tags)) {
+        const { rows: [tag] } = await client.query(
+          `WITH found AS (SELECT id FROM tags WHERE lower(name) = lower($1)),
+                made AS (INSERT INTO tags (name) SELECT $1 WHERE NOT EXISTS (SELECT 1 FROM found) RETURNING id)
+           SELECT id FROM found UNION ALL SELECT id FROM made`,
+          [name]
+        );
+        await client.query(`INSERT INTO trade_tags (trade_id, tag_id) VALUES ($1, $2) ON CONFLICT DO NOTHING`, [tradeId, tag.id]);
+      }
+    }
+    if (rows.length) logger.info(`[Tags] Carried over the tags of ${rows.length} trades`);
+  }
+}
+
+// "breakout, #News ,breakout" → ['breakout', 'News']
+function parseLegacyTags(text) {
+  const seen = new Set();
+  return String(text || '').split(',')
+    .map(t => t.trim().replace(/^#+/, '').trim().slice(0, 60))
+    .filter(t => t && !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase()));
+}
+
 async function splitNetTradeSettlements(client) {
     const { settlementEntries, settlementNote } = require('./tradeCalculations.js');
     const { rows: trades } = await client.query(
@@ -984,4 +1067,5 @@ module.exports = {
   getPool,
   handlePoolErrors,
   getIsConnected,
+  parseLegacyTags,
 };

@@ -3,6 +3,8 @@ import useDraggableWindow from '../../utils/useDraggableWindow';
 import useScrollLock from '../../utils/useScrollLock';
 import TradeChecklist from '../TradeModal/TradeChecklist';
 import IconButton from '../common/IconButton';
+import TagChip from '../common/TagChip';
+import { useTags } from '../../context/TagsContext';
 import { TradeContext, calculateRisk, getEnabledTimeframesForSetting } from '../../context/TradeContext';
 import { DateTime } from 'luxon';
 import { sanitizeNotesHtml } from '../../utils/sanitizeHtml';
@@ -207,6 +209,7 @@ function getBackAdjustmentInfo(bars) {
 
 export default function TradeView({ trade, onClose, onEdit }) {
   const { futuresSettings, accounts, currentAccountId, refreshTrades, refreshAccounts } = useContext(TradeContext);
+  const { tagsOfTrade } = useTags();
   const [showMoveMenu, setShowMoveMenu] = useState(false);
   const [moveTargetId, setMoveTargetId] = useState('');
   const [isMoving, setIsMoving] = useState(false);
@@ -1663,7 +1666,7 @@ useEffect(() => {
 
   // For the header and tiles.
   const returnPct = trade.status === 'OPEN' ? trade.currentReturnPercentage : trade.returnPercentage;
-  const journalTags = String(trade.journal?.tags || '').split(',').map(t => t.trim()).filter(Boolean);
+  const journalTags = tagsOfTrade(trade.tag_ids);
   const spanZone = resolveDisplayZone(displayTimezone, exchangeTimezone);
   const fmtWhen = (dt) => {
     const d = dt && (DateTime.isDateTime(dt) ? dt : DateTime.fromISO(String(dt)));
@@ -1894,7 +1897,9 @@ useEffect(() => {
             </div>
             {journalTags.length > 0 && (
               <div className={styles.tvTags}>
-                {journalTags.map(tag => <span key={tag} className={styles.tvTag}>#{tag}</span>)}
+                {journalTags.map(({ tag, group }) => (
+                  <TagChip key={tag.id} name={tag.name} color={group?.color} title={group ? group.name : undefined} />
+                ))}
               </div>
             )}
             <div className={styles.notesWrapper}>

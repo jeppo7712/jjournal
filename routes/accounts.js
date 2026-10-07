@@ -316,6 +316,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
                     restrict_to_actions_in_range: false,
                     trades_per_page: 100,
                     hidden_columns: [],
+                    tag_filter: [],
                 });
             }
         } catch (err) {
@@ -338,6 +339,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
             restrict_to_actions_in_range,
             trades_per_page,
             hidden_columns,
+            tag_filter,
         } = req.body;
         try {
             await pool.query(
@@ -352,8 +354,9 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         show_day_notes,
         restrict_to_actions_in_range,
         trades_per_page,
-        hidden_columns
-      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+        hidden_columns,
+        tag_filter
+      ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
       ON CONFLICT (account_id) DO UPDATE SET
         status_filters = EXCLUDED.status_filters,
         time_filter = EXCLUDED.time_filter,
@@ -364,7 +367,8 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         show_day_notes = EXCLUDED.show_day_notes,
         restrict_to_actions_in_range = EXCLUDED.restrict_to_actions_in_range,
         trades_per_page = EXCLUDED.trades_per_page,
-        hidden_columns = EXCLUDED.hidden_columns
+        hidden_columns = EXCLUDED.hidden_columns,
+        tag_filter = EXCLUDED.tag_filter
       `,
                 [
                     id,
@@ -378,6 +382,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
                     restrict_to_actions_in_range,
                     trades_per_page,
                     JSON.stringify(hidden_columns || []),
+                    JSON.stringify(Array.isArray(tag_filter) ? tag_filter : []),
                 ]
             );
             res.json({ success: true });

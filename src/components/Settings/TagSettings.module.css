@@ -1,0 +1,161 @@
+.intro {
+  margin: 0 0 16px;
+  color: #8B93A3;
+  font-size: 0.85rem;
+  line-height: 1.5;
+  max-width: 760px;
+}
+
+.groups {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(340px, 1fr));
+  gap: 16px;
+}
+
+.group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.groupHead {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 6px;
+  min-width: 0;
+}
+
+.groupName {
+  border: none;
+  background: none;
+  padding: 0;
+  font: inherit;
+  font-size: 0.95rem;
+  font-weight: 700;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  min-width: 0;
+}
+
+span.groupName {
+  cursor: default;
+}
+
+.swatch {
+  width: 18px;
+  height: 18px;
+  flex: none;
+  padding: 0;
+  border-radius: 50%;
+  border: 2px solid rgba(255, 255, 255, 0.15);
+  cursor: pointer;
+}
+
+.swatchOn {
+  border-color: #fff;
+}
+
+.palette {
+  display: flex;
+  gap: 8px;
+  padding: 4px 0 8px;
+}
+
+.single {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  color: #8B93A3;
+  font-size: 0.78rem;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.single input {
+  accent-color: #3B82F6;
+}
+
+.headActions,
+.tagActions {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  flex: none;
+}
+
+.smallBtn {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  background: #141822;
+  border: 1px solid #2C3244;
+  color: #A5ADBA;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.smallBtn:disabled {
+  opacity: 0.35;
+  cursor: default;
+}
+
+.tagRow {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 4px 0;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  min-width: 0;
+}
+
+.count {
+  color: #6B7280;
+  font-size: 0.78rem;
+  white-space: nowrap;
+}
+
+.select {
+  max-width: 130px;
+  padding: 4px 6px;
+  border-radius: 8px;
+  border: 1px solid #2C3244;
+  background: #141822;
+  color: #A5ADBA;
+  font-size: 0.78rem;
+}
+
+.addRow {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.addRow input {
+  flex: 1;
+  min-width: 0;
+  padding: 7px 11px;
+}
+
+.muted {
+  color: #6B7280;
+  font-size: 0.85rem;
+  font-weight: 400;
+  margin: 0;
+}
+
+@media (max-width: 600px) {
+  .groups {
+    grid-template-columns: 1fr;
+  }
+
+  .groupHead {
+    flex-wrap: wrap;
+  }
+}

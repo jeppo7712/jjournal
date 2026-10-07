@@ -3,6 +3,7 @@ import styles from './Settings.module.css';
 import AppWindow, { WindowButton } from '../common/AppWindow';
 import { TradeContext } from '../../context/TradeContext';
 import ChecklistSettings from './ChecklistSettings';
+import TagSettings from './TagSettings';
 import IconButton, { ACTION_COLORS } from '../common/IconButton';
 import { useStatus } from '../../context/StatusContext';
 import { DateTime } from 'luxon';
@@ -10,7 +11,7 @@ import { findExchangePreset, findFuturesPreset } from '../../data/marketReferenc
 import { NUMBER_FORMATS, getNumberFormat, setNumberFormat } from '../../utils/numberFormat';
 import HistoricalDataSummary from './HistoricalDataSummary';
 import FlexGuide from './FlexGuide';
-import { FaSlidersH, FaTerminal, FaWallet, FaTasks, FaPlug, FaGlobeAmericas, FaChartLine, FaDatabase, FaPlus, FaSyncAlt, FaEye, FaEyeSlash } from 'react-icons/fa';
+import { FaSlidersH, FaTerminal, FaWallet, FaTasks, FaTags, FaPlug, FaGlobeAmericas, FaChartLine, FaDatabase, FaPlus, FaSyncAlt, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { notify, confirmDialog } from '../common/Dialogs';
 
 // The sections of the Settings page, in menu order. Without a database only
@@ -20,6 +21,7 @@ const SECTIONS = [
   { id: 'logs', label: 'Server Logs', icon: FaTerminal, description: 'The latest lines of the server log.' },
   { id: 'accounts', label: 'Accounts', icon: FaWallet, description: 'Trading accounts, where their cash is held and how they nest.' },
   { id: 'checklists', label: 'Checklists', icon: FaTasks, description: 'Checks to tick off when entering and leaving a trade, per account.' },
+  { id: 'tags', label: 'Tags', icon: FaTags, description: 'Tag groups and tags for your trades, shared by all accounts.' },
   { id: 'tws', label: 'IBKR API', icon: FaPlug, description: 'TWS and IB Gateway connections, and Flex Web Service imports.' },
   { id: 'exchanges', label: 'Exchanges', icon: FaGlobeAmericas, description: 'Trading venues with their timezone and opening hours.' },
   { id: 'symbols', label: 'Symbols', icon: FaChartLine, description: 'Contract specs, fees and which timeframes to fetch.' },
@@ -1686,6 +1688,11 @@ export default function Settings() {
         {activeTab === 'checklists' && dbStatus?.isConnected && (
           <section className={styles.card}>
             <ChecklistSettings styles={styles} apiBaseUrl={apiBaseUrl} />
+          </section>
+        )}
+        {activeTab === 'tags' && dbStatus?.isConnected && (
+          <section className={styles.card}>
+            <TagSettings styles={styles} />
           </section>
         )}
         {activeTab === 'accounts' && dbStatus?.isConnected && (
