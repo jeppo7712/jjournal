@@ -809,8 +809,12 @@ export const TradeProvider = ({ children }) => {
   const refreshSubAccountItemsRef = useRef(() => {});
   const { tagsById } = useTags();
 
+  // Live prices, kept a minute: the list, its sub-accounts and the sidebar
+  // all ask for the same symbols when an account loads. Lookups already on
+  // their way are shared rather than sent again.
   const priceCacheRef = useRef(new Map());
-  const CACHE_DURATION = 5 * 1000;
+  const priceInFlightRef = useRef(new Map());
+  const CACHE_DURATION = 60 * 1000;
   // How often the open positions' live prices are refreshed while the page
   // is open (see refreshOpenTradePrices).
   const LIVE_PRICE_REFRESH_MS = 5 * 60 * 1000;
@@ -962,12 +966,15 @@ export const TradeProvider = ({ children }) => {
     if (cached && now - cached.timestamp < CACHE_DURATION) {
       return cached.price;
     }
+    const inFlight = priceInFlightRef.current.get(cacheKey);
+    if (inFlight) return inFlight;
 
-    const price = await fetchCurrentPrice(symbol, type);
-    if (price !== null) {
-      priceCacheRef.current.set(cacheKey, { price, timestamp: now });
-    }
-    return price;
+    const request = fetchCurrentPrice(symbol, type).then(price => {
+      if (price !== null) priceCacheRef.current.set(cacheKey, { price, timestamp: Date.now() });
+      return price;
+    }).finally(() => priceInFlightRef.current.delete(cacheKey));
+    priceInFlightRef.current.set(cacheKey, request);
+    return request;
   }, []);
 
   const updateTradePriceData = useCallback(async (trade, futuresSettings) => {
@@ -1313,13 +1320,15 @@ export const TradeProvider = ({ children }) => {
   // an account and its descendants (see docs/CAPITAL_TRACKING_DESIGN.md) —
   // reuses the exact same pipeline refreshTrades uses so these numbers can't
   // drift from what Dashboard/TradeList show for that account.
-  const fetchProcessedTradesForAccount = useCallback(async (accountId) => {
+  // { prices: false } returns them without waiting for the live prices.
+  const fetchProcessedTradesForAccount = useCallback(async (accountId, { prices = true } = {}) => {
     if (!accountId || !futuresSettings) return [];
     try {
       const res = await fetch(`${process.env.REACT_APP_API_URL}/api/trades`, { headers: { 'X-Account-ID': accountId } });
       if (!res.ok) return [];
       const tradesData = await res.json();
       const processedTrades = await processRawTradesArray(tradesData, futuresSettings);
+      if (!prices) return processedTrades;
 
       const openTrades = processedTrades.filter(t => t.status === 'OPEN' && ['STK', 'FUT'].includes(t.type) && t.symbol);
       if (openTrades.length === 0) return processedTrades;
@@ -1347,7 +1356,7 @@ export const TradeProvider = ({ children }) => {
     try {
       const results = await Promise.all(ids.map(async (id) => {
         const [subTradesOfAccount, notes] = await Promise.all([
-          fetchProcessedTradesForAccount(id),
+          fetchProcessedTradesForAccount(id, { prices: false }),
           fetch(`${process.env.REACT_APP_API_URL}/api/daynotes`, { headers: { 'X-Account-ID': id } })
             .then(res => (res.ok ? res.json() : []))
             .catch(() => []),
@@ -1357,8 +1366,22 @@ export const TradeProvider = ({ children }) => {
       if (seq !== subSeqRef.current) return;
       const allTrades = results.flatMap(r => r.trades);
       const allNotes = results.flatMap(r => r.notes);
+      // Listed straight away; the open ones' live prices follow (as for the
+      // account's own trades in refreshTrades).
       setSubTrades(allTrades);
       setSubDayNotes(allNotes);
+      const open = allTrades.filter(t => t.status === 'OPEN' && ['STK', 'FUT'].includes(t.type) && t.symbol);
+      Promise.all(open.map(t => updateTradePriceData(t, futuresSettings).catch(() => null))).then(results => {
+        if (seq !== subSeqRef.current) return;
+        const byKey = new Map(open.map((t, i) => [`${t.account_id}:${t.id}`, results[i]]));
+        setSubTrades(prev => prev.map(t => {
+          const key = `${t.account_id}:${t.id}`;
+          if (!byKey.has(key)) return t;
+          const priceData = byKey.get(key);
+          if (priceData) return { ...t, ...priceData, priceUnavailable: false };
+          return t.currentPrice == null ? { ...t, priceUnavailable: true } : t;
+        }));
+      });
       // Their screenshots, from each item's own account.
       const withAttachments = [
         ...allTrades.filter(t => t.attachments?.length).map(t => ({ kind: 'trade', item: t, url: `/api/trades/${t.id}` })),
@@ -1380,7 +1403,7 @@ export const TradeProvider = ({ children }) => {
     } catch (err) {
       console.error('Failed to load the sub-accounts\' trades:', err);
     }
-  }, [includeSubAccounts, subAccountKey, futuresSettings, fetchProcessedTradesForAccount]);
+  }, [includeSubAccounts, subAccountKey, futuresSettings, fetchProcessedTradesForAccount, updateTradePriceData]);
   refreshSubAccountItemsRef.current = refreshSubAccountItems;
 
   // Another account's sub-accounts must not show under this one meanwhile.
