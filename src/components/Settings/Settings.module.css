@@ -1037,3 +1037,6 @@ select.inputBubble {
     flex: 1 1 140px;
   }
 }
+
+/* An archived account: still there, but out of the way. */
+.archivedRow td:not(.actionsCell) { opacity: 0.55; }
