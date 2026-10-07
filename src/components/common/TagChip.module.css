@@ -1,0 +1,65 @@
+.chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 3px;
+  max-width: 100%;
+  padding: 3px 10px;
+  border-radius: 999px;
+  border: 1px solid color-mix(in srgb, var(--tag-color) 35%, transparent);
+  background: color-mix(in srgb, var(--tag-color) 16%, transparent);
+  color: color-mix(in srgb, var(--tag-color) 55%, #ffffff);
+  font: inherit;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  box-sizing: border-box;
+}
+
+.small {
+  padding: 1px 7px;
+  font-size: 11px;
+}
+
+.clickable {
+  cursor: pointer;
+  transition: background-color 0.12s, border-color 0.12s, color 0.12s;
+}
+
+/* Pickable but not picked: quiet, so the picked ones stand out. */
+.off {
+  background: transparent;
+  border-color: rgba(255, 255, 255, 0.14);
+  color: #9CA3AF;
+}
+
+.off:hover {
+  border-color: color-mix(in srgb, var(--tag-color) 50%, transparent);
+  color: color-mix(in srgb, var(--tag-color) 55%, #ffffff);
+}
+
+.on,
+.include {
+  background: color-mix(in srgb, var(--tag-color) 30%, transparent);
+  border-color: var(--tag-color);
+  color: #ffffff;
+}
+
+.exclude {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.6);
+  color: #FCA5A5;
+  text-decoration: line-through;
+}
+
+.mark {
+  font-weight: 700;
+  text-decoration: none;
+}
+
+.clickable:focus-visible {
+  outline: 2px solid rgba(59, 130, 246, 0.7);
+  outline-offset: 1px;
+}

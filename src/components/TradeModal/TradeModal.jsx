@@ -5,6 +5,8 @@ import useScrollLock from '../../utils/useScrollLock';
 import AppWindow from '../common/AppWindow';
 import ReactQuill from 'react-quill';
 import TradeChecklist from './TradeChecklist';
+import TagPicker from './TagPicker';
+import { useTags } from '../../context/TagsContext';
 import IconButton from '../common/IconButton';
 import { useDropzone } from 'react-dropzone';
 import 'react-quill/dist/quill.snow.css';
@@ -57,6 +59,8 @@ function getFuturesSettings(symbol, type, futuresSettings) {
   return defaultSetting || null;
 }
 
+const tagKey = ids => [...(ids || [])].map(Number).sort((a, b) => a - b).join(',');
+
 function isFormDirty(form, actions, tags, notes, confidence, executionRating, attachments, initial, isEditMode) {
   if (isEditMode) {
     if (!initial) return false;
@@ -67,7 +71,7 @@ function isFormDirty(form, actions, tags, notes, confidence, executionRating, at
       form.tickSize !== initial.form.tickSize ||
       form.tickValue !== initial.form.tickValue ||
       form.type !== initial.form.type ||
-      tags !== initial.tags ||
+      tagKey(tags) !== tagKey(initial.tags) ||
       notes !== initial.notes ||
       confidence !== initial.confidence ||
       executionRating !== initial.executionRating ||
@@ -85,7 +89,7 @@ function isFormDirty(form, actions, tags, notes, confidence, executionRating, at
       form.target ||
       form.stopLoss ||
       form.type !== 'FUT' ||
-      tags ||
+      tags.length > 0 ||
       notes ||
       confidence !== 0 ||
       executionRating !== 0 ||
@@ -124,6 +128,7 @@ function StarRating({ value, onChange, max = 5 }) {
 
 export default function TradeModal({ trade, onClose }) {
   const { refreshTrades, currentAccountId, futuresSettings, trades, accounts } = useContext(TradeContext);
+  const { refreshTags } = useTags();
   // Requests for an existing trade go to the account it's booked in, which
   // isn't the selected one when it was opened from a parent account's Stats.
   const tradeAccountId = trade?.account_id ?? currentAccountId;
@@ -235,7 +240,8 @@ export default function TradeModal({ trade, onClose }) {
 
   const [activeTab, setActiveTab] = useState('general');
   const [touched, setTouched] = useState(isEditMode ? actions.map(() => ({})) : [{}]);
-  const [tags, setTags] = useState(isEditMode ? (trade.journal?.tags || '') : '');
+  // The trade's tag ids (TagPicker).
+  const [tags, setTags] = useState(isEditMode ? (trade.tag_ids || []).map(Number) : []);
   const [notes, setNotes] = useState(isEditMode ? (trade.journal?.notes_html || '') : '');
   const [confidence, setConfidence] = useState(isEditMode ? (trade.journal?.confidence || 0) : 0);
   const [executionRating, setExecutionRating] = useState(isEditMode ? (trade.journal?.execution_rating || 0) : 0);
@@ -875,7 +881,7 @@ export default function TradeModal({ trade, onClose }) {
         ...a,
         dateTime: a.dateTime.isValid ? a.dateTime.toISO() : DateTime.now().setZone(exchangeTimezone).toISO(),
       })),
-      journal: { tags, notes_html: notes, confidence, execution_rating: executionRating, checklist },
+      journal: { tag_ids: tags, notes_html: notes, confidence, execution_rating: executionRating, checklist },
       attachments: attachments.map(a => ({ attachment_id: a.attachment_id }))
     };
     const url = isEditMode
@@ -892,6 +898,7 @@ export default function TradeModal({ trade, onClose }) {
     });
     if (resp.ok) {
       refreshTrades();
+      refreshTags(); // the tags' trade counts
       onClose();
     } else {
       notify('Error saving trade');
@@ -906,6 +913,7 @@ export default function TradeModal({ trade, onClose }) {
     });
     if (resp.ok) {
       refreshTrades();
+      refreshTags();
       onClose();
     } else {
       notify('Error deleting trade');
@@ -1299,17 +1307,7 @@ export default function TradeModal({ trade, onClose }) {
             </>
           ) : (
             <div className={styles.journalTab}>
-              <div className={styles.formFieldFull}>
-                <label htmlFor="tags">Tags</label>
-                <input
-                  id="tags"
-                  className={styles.inputBubble}
-                  placeholder="Comma separated tags"
-                  value={tags}
-                  onChange={e => setTags(e.target.value)}
-                  autoComplete="off"
-                />
-              </div>
+              <TagPicker value={tags} onChange={setTags} />
               <TradeChecklist template={checklistTemplate} value={checklist} onChange={setChecklist} />
               <div className={styles.formFieldFull}>
                 <label htmlFor="notes">Notes</label>

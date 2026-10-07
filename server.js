@@ -203,6 +203,7 @@ let brokerActivity = null;
     const ibkrRouter = require('./routes/ibkr.js')(ibkr, broadcastStatus, uuidv4, lazyPool);
     const capitalRouter = require('./routes/capital.js')(lazyPool, broadcastStatus, uuidv4);
     brokerActivity = require('./routes/brokerActivity.js')(lazyPool, broadcastStatus, uuidv4);
+    const tagsRouter = require('./routes/tags.js')(lazyPool);
 
     apiRouter.use('/', tradesRouter);
     apiRouter.use('/accounts', accountsRouter);
@@ -211,6 +212,7 @@ let brokerActivity = null;
     apiRouter.use('/ibkr', ibkrRouter);
     apiRouter.use('/', capitalRouter);
     apiRouter.use('/', brokerActivity.router);
+    apiRouter.use('/', tagsRouter);
 
     await startServer(PORT); // Start the HTTP server
 
@@ -280,7 +282,9 @@ apiRouter.use((req, res, next) => {
     '/historical/populate',
     '/historical/db',
     '/yahoo-finance',
-    '/ibkr'
+    '/ibkr',
+    '/tags', // shared by all accounts
+    '/tag-groups'
   ];
   if (exemptPaths.some(path => req.path.startsWith(path)) || (req.path === '/accounts' && req.method === 'POST')) {
     req.accountId = parseInt(accountId, 10) || null; // Set accountId if provided, else null

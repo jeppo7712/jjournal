@@ -6,6 +6,7 @@ import TradeList from '../TradeList/TradeList';
 import { TradeContext, parseActionDate, formatDate } from '../../context/TradeContext';
 import DatePicker from 'react-datepicker';
 import 'react-datepicker/dist/react-datepicker.css';
+import TagFilterMenu from './TagFilterMenu';
 import styles from './Dashboard.module.css';
 import useScrollLock from '../../utils/useScrollLock';
 import { computeUnrealisedSeries } from '../../utils/unrealisedSeries';
@@ -1025,6 +1026,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
                 </svg>
               </button>
             </div>
+            <TagFilterMenu />
             <div className={styles.symbolFilterContainer}>
               <svg className={styles.searchIcon} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M9 3.5a5.5 5.5 0 100 11 5.5 5.5 0 000-11zM2 9a7 7 0 1112.45 4.39l3.08 3.08a.75.75 0 11-1.06 1.06l-3.08-3.08A7 7 0 012 9z" clipRule="evenodd" /></svg>
               <input

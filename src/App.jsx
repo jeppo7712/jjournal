@@ -9,6 +9,7 @@ import Stats from './components/Stats/Stats';
 import Capital from './components/Capital/Capital';
 import LoadingIndicator from './components/LoadingIndicator';
 import { TradeProvider } from './context/TradeContext';
+import { TagsProvider } from './context/TagsContext';
 import { StatusProvider } from './context/StatusContext';
 import { getNumberFormat, subscribeNumberFormat } from './utils/numberFormat';
 import ErrorBoundary, { PageBoundary } from './components/common/ErrorBoundary';
@@ -132,6 +133,7 @@ function App() {
 
   return (
     <StatusProvider>
+      <TagsProvider>
       <TradeProvider>
         <div className="app">
           <ErrorBoundary>
@@ -194,6 +196,7 @@ function App() {
           <DialogHost />
         </div>
       </TradeProvider>
+      </TagsProvider>
     </StatusProvider>
   );
 }

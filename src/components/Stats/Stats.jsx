@@ -45,6 +45,7 @@ import styles from './Stats.module.css';
 import { currencyMark } from '../../utils/formatMoney';
 import { formatNumber, formatNumberText } from '../../utils/numberFormat';
 import ChartCard from './ChartCard';
+import TagStats from './TagStats';
 import {
   COLORS, CATEGORICAL, HOLD_TICKS, rgba, polarityStroke, polarityFill, areaFill, endDot, lineStyle,
   crosshairPlugin, scaleX, scaleY, baseOptions, signed, percentTick, moneyTick, dateTick, dateTitle, formatHold,
@@ -97,6 +98,7 @@ const TAB_META = {
   hourlyAnalysis: { description: 'How you trade by hour of the day.', icon: <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" /> },
   feeAnalysis: { description: 'What you pay in fees, by month and by symbol.', icon: <path fillRule="evenodd" d="M4 4a2 2 0 00-2 2v4a2 2 0 002 2V6h10a2 2 0 00-2-2H4zm2 6a2 2 0 012-2h8a2 2 0 012 2v4a2 2 0 01-2 2H8a2 2 0 01-2-2v-4zm6 4a2 2 0 100-4 2 2 0 000 4z" clipRule="evenodd" /> },
   visualizations: { description: 'Return distribution, win rate over time and return vs. hold time.', icon: <path d="M3 3a1 1 0 011 1v11h12a1 1 0 110 2H3a1 1 0 01-1-1V4a1 1 0 011-1zm13.7 3.3a1 1 0 010 1.4l-4 4a1 1 0 01-1.4 0L9 9.42l-2.3 2.3a1 1 0 01-1.4-1.42l3-3a1 1 0 011.4 0L12 9.58l3.3-3.3a1 1 0 011.4 0z" /> },
+  tags: { description: 'How your setups, mistakes and other tags do: win rate and P&L per tag.', icon: <path fillRule="evenodd" clipRule="evenodd" d="M17.707 9.293a1 1 0 010 1.414l-7 7a1 1 0 01-1.414 0l-7-7A.997.997 0 012 10V5a3 3 0 013-3h5c.256 0 .512.098.707.293l7 7zM5 6a1 1 0 100-2 1 1 0 000 2z" /> },
   tradeNotes: { description: 'Your journal entries, ratings and screenshots in one place.', icon: <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" /> },
 };
 
@@ -118,7 +120,7 @@ const TAB_GROUPS = [
   { label: 'Overview', ids: ['general', 'calendar', 'holdings'] },
   { label: 'Performance', ids: ['advanced', 'risk', 'tradeAnalysis', 'bestAssets'] },
   { label: 'Habits', ids: ['hourlyAnalysis', 'feeAnalysis', 'visualizations'] },
-  { label: 'Journal', ids: ['tradeNotes'] },
+  { label: 'Journal', ids: ['tags', 'tradeNotes'] },
 ];
 
 // Cash movements that change the capital (not trade settlements, interest
@@ -126,7 +128,7 @@ const TAB_GROUPS = [
 const CAPITAL_FLOW_TYPES = new Set(['DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT', 'EXCHANGE_IN', 'EXCHANGE_OUT']);
 
 const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilterWeek }) => {
-  const { filteredItems: accountFilteredItems, filter, timeFilter, symbolFilter, restrictToActionsInRange, trades: allTrades, accounts, currentAccountId, fetchProcessedTradesForAccount, filterTradeItems } = React.useContext(TradeContext) || { filteredItems: [], filter: [], timeFilter: null, symbolFilter: '', restrictToActionsInRange: false, trades: [] };
+  const { filteredItems: accountFilteredItems, filter, timeFilter, symbolFilter, restrictToActionsInRange, trades: allTrades, accounts, currentAccountId, fetchProcessedTradesForAccount, filterTradeItems, tagFilter = [], setTagFilter } = React.useContext(TradeContext) || { filteredItems: [], filter: [], timeFilter: null, symbolFilter: '', restrictToActionsInRange: false, trades: [] };
 
   // A parent account's stats include its sub-accounts' trades (switchable):
   // a parent like a broker's main account often holds no trades itself,
@@ -477,6 +479,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
     { id: 'tradeAnalysis', label: 'Trade Analysis' },
     { id: 'feeAnalysis', label: 'Fee Analysis' },
     { id: 'bestAssets', label: 'Best Performing Assets' },
+    { id: 'tags', label: 'Tags' },
     { id: 'hourlyAnalysis', label: 'Hourly Analysis' },
     { id: 'visualizations', label: 'Visualizations' },
     { id: 'tradeNotes', label: 'Trade Notes' },
@@ -814,7 +817,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                   </div>
                 </div>
               </div>
-              {(filter.length > 0 || timeFilter || symbolFilter || restrictToActionsInRange) && (
+              {(filter.length > 0 || timeFilter || symbolFilter || restrictToActionsInRange || tagFilter.length > 0) && (
                 <div className={styles.filterWarning}>
                   <svg viewBox="0 0 20 20" fill="currentColor" aria-hidden="true"><path fillRule="evenodd" d="M8.485 2.495c.673-1.167 2.357-1.167 3.03 0l6.28 10.875c.673 1.167-.17 2.625-1.516 2.625H3.72c-1.347 0-2.189-1.458-1.515-2.625L8.485 2.495zM10 6a.75.75 0 01.75.75v3.5a.75.75 0 01-1.5 0v-3.5A.75.75 0 0110 6zm0 9a1 1 0 100-2 1 1 0 000 2z" clipRule="evenodd" /></svg>
                   <span><strong>Filtered.</strong> These stats only cover the trades matching the Dashboard's current filters.</span>
@@ -1341,6 +1344,16 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 <p>No best performing assets available.</p>
               )}
             </div>
+          )}
+          {currentTab === 'tags' && (
+            <TagStats
+              trades={trades}
+              mark={currencyMark(activeCurrency)}
+              onFilterTag={(id) => {
+                setTagFilter([{ kind: 'tag', id, mode: 'include' }]);
+                setCurrentView('dashboard');
+              }}
+            />
           )}
           {currentTab === 'visualizations' && (
             <div>

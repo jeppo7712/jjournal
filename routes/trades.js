@@ -18,22 +18,36 @@ function normalizeChecklist(checklist) {
 }
 
 // Creates or updates a trade's journal row, leaving the AI analysis
-// columns (written by the external API) untouched.
+// columns (written by the external API) untouched. Its tags are rows in
+// trade_tags (routes/tags.js); the old free-text tags column isn't written.
 async function saveJournal(client, tradeId, journal) {
     const checklist = normalizeChecklist(journal.checklist);
     await client.query(
-        `INSERT INTO trade_journals (trade_id, tags, notes_html, confidence, execution_rating, checklist)
-         VALUES ($1, $2, $3, $4, $5, $6)
+        `INSERT INTO trade_journals (trade_id, notes_html, confidence, execution_rating, checklist)
+         VALUES ($1, $2, $3, $4, $5)
          ON CONFLICT (trade_id) DO UPDATE SET
-            tags = EXCLUDED.tags,
             notes_html = EXCLUDED.notes_html,
             confidence = EXCLUDED.confidence,
             execution_rating = EXCLUDED.execution_rating,
             checklist = EXCLUDED.checklist`,
-        [tradeId, journal.tags, journal.notes_html, journal.confidence, journal.execution_rating || null,
+        [tradeId, journal.notes_html, journal.confidence, journal.execution_rating || null,
          checklist ? JSON.stringify(checklist) : null]
     );
+    if (Array.isArray(journal.tag_ids)) await saveTradeTags(client, tradeId, journal.tag_ids);
 }
+
+// Makes the trade's tags exactly these (unknown ids are skipped).
+async function saveTradeTags(client, tradeId, tagIds) {
+    const ids = [...new Set(tagIds.map(Number).filter(Number.isInteger))];
+    await client.query(`DELETE FROM trade_tags WHERE trade_id = $1 AND NOT (tag_id = ANY($2::int[]))`, [tradeId, ids]);
+    await client.query(
+        `INSERT INTO trade_tags (trade_id, tag_id) SELECT $1, id FROM tags WHERE id = ANY($2::int[]) ON CONFLICT DO NOTHING`,
+        [tradeId, ids]
+    );
+}
+
+// A trade's tag ids, as a column of the trade queries below.
+const TAG_IDS_SQL = `(SELECT COALESCE(array_agg(tt.tag_id ORDER BY tt.tag_id), '{}') FROM trade_tags tt WHERE tt.trade_id = t.id) AS tag_ids`;
 
 module.exports = (pool, upload, broadcastStatus, uuidv4) => {
 
@@ -83,7 +97,8 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
                             'mime_type', att.mime_type
                         )), '[]'::json)
                         FROM trade_attachments att WHERE att.trade_id = t.id
-                    ) as attachments
+                    ) as attachments,
+                    ${TAG_IDS_SQL}
                 FROM trades t
                 WHERE t.account_id = $1
                 ORDER BY t.created_at DESC
@@ -128,7 +143,8 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
               'image_base64', encode(att.image_data, 'base64')
             )), '[]'::json)
             FROM trade_attachments att WHERE att.trade_id = t.id
-          ) as attachments
+          ) as attachments,
+          ${TAG_IDS_SQL}
         FROM trades t
         WHERE t.id = $1 AND t.account_id = $2
       `;
