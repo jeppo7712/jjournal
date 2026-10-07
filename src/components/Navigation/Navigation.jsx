@@ -7,6 +7,7 @@ import { setNumberFormat } from '../../utils/numberFormat';
 import { descendantAccountIds } from '../../utils/accountTree';
 import AccountOptions from '../common/AccountOptions';
 import { sumByCurrency, mergeTotals, toTotalsList } from '../../utils/currencyTotals';
+import { timeframeLabel } from '../../utils/timeframeLabel';
 
 // The TradingView light: green while alerts keep delivering bars, amber once
 // they've stopped for longer than a couple of bars (normal when the market is
@@ -22,7 +23,7 @@ function describeTradingViewLight(status) {
   const age = ageMinutes < 60 ? `${Math.max(0, Math.round(ageMinutes))} min`
     : ageMinutes < 48 * 60 ? `${Math.round(ageMinutes / 60)} h`
     : `${Math.round(ageMinutes / 1440)} days`;
-  const what = `${bar.symbol} ${bar.timeframe}`;
+  const what = `${bar.symbol} ${timeframeLabel(bar.timeframe)}`;
   return ageMinutes <= allowedMinutes
     ? { color: '#0d8050', title: `TradingView: receiving bars (last ${what}, ${age} ago)` }
     : { color: '#d97706', title: `TradingView: no bars for ${age} (last ${what}). Fine while the market is closed; otherwise check the alert.` };

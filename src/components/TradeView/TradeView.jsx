@@ -18,6 +18,7 @@ import { getRealisedPnL } from '../../context/TradeContext';
 import { debounce } from 'lodash';
 import { Oval } from 'react-loader-spinner';
 import { notify } from '../common/Dialogs';
+import { timeframeLabel } from '../../utils/timeframeLabel';
 
 // Remembers the last chart timeframe picked per symbol (scoped by type too,
 // since a symbol string could in principle mean different things for STK vs
@@ -562,7 +563,7 @@ const [dataVersion, setDataVersion] = useState(0);
       }
       if (!Array.isArray(responseData)) {
         console.warn('[TradeView] Received non-array data for chart:', responseData);
-        setError(`Chart data is not yet available or is in an unexpected format for ${timeframe}. Waiting for updates...`);
+        setError(`Chart data is not yet available or is in an unexpected format for ${timeframeLabel(timeframe)}. Waiting for updates...`);
         setChartLoading(false);
         setAwaitingData(false);
         return;
@@ -670,7 +671,7 @@ const [dataVersion, setDataVersion] = useState(0);
       }
     } catch (err) {
       console.error('[TradeView] Error in fetchChartDataLogic:', err);
-      setError(`Refresh failed for ${timeframe}: ${err.message}.`);
+      setError(`Refresh failed for ${timeframeLabel(timeframe)}: ${err.message}.`);
       setChartLoading(false);
       setAwaitingData(false);
     }
@@ -2155,7 +2156,7 @@ useEffect(() => {
                       className={timeframe === tf ? styles.chartSegmentOn : ''}
                       aria-pressed={timeframe === tf}
                     >
-                      {tf}
+                      {timeframeLabel(tf)}
                     </button>
                   ))}
                 </div>
@@ -2197,20 +2198,20 @@ useEffect(() => {
               {chartLoading && awaitingData && (
                 <div className={styles.chartMessageOverlay}>
                   <Oval height="40" width="40" color="#3B82F6" ariaLabel="loading-indicator" secondaryColor="#ccc" strokeWidth={4} strokeWidthSecondary={4} />
-                  <p style={{ marginTop: '10px' }}>Awaiting data for {timeframe}...</p>
+                  <p style={{ marginTop: '10px' }}>Awaiting data for {timeframeLabel(timeframe)}...</p>
                 </div>
               )}
 
               {chartLoading && !awaitingData && (
                 <div className={styles.chartMessageOverlay}>
                   <Oval height="40" width="40" color="#3B82F6" ariaLabel="loading-indicator" />
-                  <p style={{ marginTop: '10px' }}>Loading {timeframe} chart...</p>
+                  <p style={{ marginTop: '10px' }}>Loading {timeframeLabel(timeframe)} chart...</p>
                 </div>
               )}
 
               {!chartLoading && !error && !hasChartDataBars && showChart && (
                 <div className={styles.chartMessageOverlay}>
-                  No data available for {timeframe}.
+                  No data available for {timeframeLabel(timeframe)}.
                   {hasHistoricalDataConfig ? " Population may be in progress or data source is empty." : " Initial data configuration pending."}
                 </div>
               )}
