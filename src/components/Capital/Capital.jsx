@@ -4,6 +4,7 @@ import styles from './Capital.module.css';
 import { formatNumber } from '../../utils/numberFormat';
 import { notify, confirmDialog, promptDialog } from '../common/Dialogs';
 import BrokerActivity from './BrokerActivity';
+import AccountOptions from '../common/AccountOptions';
 
 const apiBaseUrl = process.env.REACT_APP_API_URL || '';
 
@@ -533,9 +534,7 @@ const Capital = () => {
               <label>To account</label>
               <select value={transferForm.to_account_id} onChange={e => setTransferForm(p => ({ ...p, to_account_id: e.target.value }))}>
                 <option value="">Choose account…</option>
-                {accounts.filter(a => String(a.id) !== String(currentAccountId)).map(a => (
-                  <option key={a.id} value={a.id}>{a.name}</option>
-                ))}
+                <AccountOptions accounts={accounts} exclude={currentAccountId} />
               </select>
             </div>
             <div className={styles.formField}>
