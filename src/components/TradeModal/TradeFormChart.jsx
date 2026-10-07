@@ -6,6 +6,7 @@ import styles from './TradeModal.module.css';
 import { resolveDisplayZone } from '../../utils/timezonePreference';
 import { getWebSocketUrl } from '../../utils/getWebSocketUrl';
 import { formatNumber } from '../../utils/numberFormat';
+import { timeframeLabel } from '../../utils/timeframeLabel';
 
 const TIMEFRAMES = ['1W', '1D', '4H', '1H', '15M', '5M', '1M'];
 
@@ -150,7 +151,7 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
       }
 
       if (!Array.isArray(responseData)) {
-        setError(`Chart data is not yet available for ${timeframe}.`);
+        setError(`Chart data is not yet available for ${timeframeLabel(timeframe)}.`);
         setLoading(false);
         setAwaitingData(false);
         return;
@@ -469,7 +470,7 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
             className={timeframe === tf ? styles.chartSegmentOn : ''}
             aria-pressed={timeframe === tf}
           >
-            {tf}
+            {timeframeLabel(tf)}
           </button>
         ))}
       </div>
@@ -488,7 +489,7 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
           <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, background: '#13161F' }}>
             <Oval height="40" width="40" color="#3B82F6" ariaLabel="loading-indicator" secondaryColor="#ccc" strokeWidth={4} strokeWidthSecondary={4} />
             <p style={{ color: '#e0e2e6', fontSize: '0.9em', textAlign: 'center', padding: '0 20px' }}>
-              {awaitingData ? `Fetching ${symbol} (${timeframe}) data for the first time — this can take a bit…` : `Loading ${timeframe} chart…`}
+              {awaitingData ? `Fetching ${symbol} (${timeframeLabel(timeframe)}) data for the first time — this can take a bit…` : `Loading ${timeframeLabel(timeframe)} chart…`}
             </p>
           </div>
         )}

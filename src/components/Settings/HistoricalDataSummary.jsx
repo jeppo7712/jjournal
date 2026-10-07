@@ -4,6 +4,7 @@ import { FaPencilAlt } from 'react-icons/fa';
 import IconButton from '../common/IconButton';
 import { formatNumber } from '../../utils/numberFormat';
 import styles from './HistoricalDataSummary.module.css';
+import { timeframeLabel } from '../../utils/timeframeLabel';
 
 // What's stored for one symbol (Settings → Historical Data): per timeframe,
 // each source's first and last bar drawn as a bar on a shared timeline, so
@@ -148,7 +149,7 @@ export default function HistoricalDataSummary({ summary, type, onEditRollover, o
             disabled={!available.includes(tf)}
             onClick={() => setChosen(tf)}
           >
-            {tf}
+            {timeframeLabel(tf)}
           </button>
         ))}
       </div>
