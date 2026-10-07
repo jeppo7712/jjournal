@@ -230,6 +230,22 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         }
     });
 
+    // PUT /accounts/:id/archived { archived } — moves the account to the
+    // "Archived" group of the account dropdowns, or back. Nothing else.
+    router.put('/:id/archived', async (req, res) => {
+        if (typeof req.body?.archived !== 'boolean') return res.status(400).json({ error: 'archived must be true or false' });
+        try {
+            const { rowCount } = await pool.query(
+                'UPDATE accounts SET archived = $2, updated_at = NOW() WHERE id = $1', [req.params.id, req.body.archived]
+            );
+            if (rowCount === 0) return res.status(404).json({ error: 'Account not found' });
+            res.json({ success: true, archived: req.body.archived });
+        } catch (err) {
+            logger.error('Error archiving account:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     // PUT /accounts/:id/checklists — the account's Entry/Exit checklist
     // items (see the checklists column in modules/database.js). Separate
     // from PUT /accounts/:id so the account form can't overwrite them.
