@@ -199,8 +199,13 @@ List trades across one or all accounts, with computed fields included so you don
     { "type": "BUY", "date_time": "2026-05-12T14:00:00.000Z", "quantity": 2, "price": 21001.25, "fee": 1.24, "exec_id": "0001f4e3.6819.01.01" }
   ],
 
+  "tags": [
+    { "name": "Breakout", "group": "Setup" },
+    { "name": "News day", "group": "Market" }
+  ],
+
   "journal": {
-    "tags": "breakout,news",
+    "tags": "Breakout,News day",
     "notes_html": "<p>Entered on the 5m breakout...</p>",
     "confidence": 4,
     "execution_rating": 3,
@@ -239,6 +244,7 @@ List trades across one or all accounts, with computed fields included so you don
 
 Field notes:
 - `journal` is `null` if the trade has no journal entry at all yet.
+- `tags` lists the trade's tags with the group each belongs to (`group` is `null` for a tag outside any group). `journal.tags` holds the same names comma-separated, for older clients.
 - `attachments[].url` is a relative path — fetch it against the same host as this API (see [GET /attachments/:id](#get-attachmentsid)).
 - `position` is non-null only while `status` is `OPEN` (remaining open quantity). `quantity` is non-null only once closed (the round-trip size).
 - For a still-`OPEN` trade: `return`, `return_percentage`, and `exit_total` are `null` (there's no exit yet to compute them from). `entry_total`, `avg_buy_price`/`avg_sell_price`, and `position` are **not** null — they describe the cost basis and size of what's currently held, and are exactly what you need alongside a live quote to compute unrealised PnL yourself (this API doesn't do that math for you).

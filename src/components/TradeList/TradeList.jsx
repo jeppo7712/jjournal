@@ -4,6 +4,8 @@ import { TradeContext, formatDate, parseActionDate, TRADE_LIST_COLUMNS } from '.
 import { DateTime } from 'luxon';
 import { sanitizeNotesHtml } from '../../utils/sanitizeHtml';
 import styles from './TradeList.module.css';
+import TagChip from '../common/TagChip';
+import { useTags } from '../../context/TagsContext';
 import { formatMoney, currencyMark } from '../../utils/formatMoney';
 import { formatNumber } from '../../utils/numberFormat';
 import { sumByCurrency, formatTotals, toTotalsList } from '../../utils/currencyTotals';
@@ -81,6 +83,7 @@ const HEADER_COLUMNS = [
   { key: 'exitTotal', label: 'Ext Tot', className: 'colExitTotal' },
   { key: 'position', label: 'Pos', className: 'colPosition' },
   { key: 'holdTime', label: 'Hold' },
+  { key: 'tags', label: 'Tags', className: 'colTags' },
   { key: 'return', label: 'Return', sortable: true },
   { key: 'returnPercentage', label: 'Return %', sortable: true },
 ];
@@ -105,6 +108,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
     hiddenColumns,
     toggleColumnVisibility,
   } = useContext(TradeContext);
+  const { tagsOfTrade } = useTags();
 
   // The column picker (the icon at the right end of the header), the one
   // place columns are chosen. Saved per account (account_filters).
@@ -398,6 +402,13 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                     </div>
                   </div>
                 </div>
+                {item.tag_ids?.length > 0 && isColumnVisible('tags') && (
+                  <div className={styles.mobileTags}>
+                    {tagsOfTrade(item.tag_ids).map(({ tag, group }) => (
+                      <TagChip key={tag.id} small name={tag.name} color={group?.color} />
+                    ))}
+                  </div>
+                )}
                 <div className={styles.desktopCells}>
                   {isColumnVisible('openDate') && <div className={styles.cell}>{item.openDate}</div>}
                   {isColumnVisible('symbol') && <div className={`${styles.cell} ${styles.symbol}`}>{item.symbol}</div>}
@@ -457,6 +468,13 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                   {isColumnVisible('holdTime') && (
                     <div className={styles.cell}>
                       <span className={styles.hold}>{item.holdTime || '-'}</span>
+                    </div>
+                  )}
+                  {isColumnVisible('tags') && (
+                    <div className={`${styles.cell} ${styles.colTags}`}>
+                      {tagsOfTrade(item.tag_ids).map(({ tag, group }) => (
+                        <TagChip key={tag.id} small name={tag.name} color={group?.color} title={group ? `${group.name}: ${tag.name}` : tag.name} />
+                      ))}
                     </div>
                   )}
                   {isColumnVisible('return') && (

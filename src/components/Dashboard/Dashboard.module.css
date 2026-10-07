@@ -957,6 +957,12 @@
     display: none;
   }
 
+  /* "All time" is the default: just the icon, like the toggles; a chosen
+     range still shows its name. */
+  .timeFilterButton:not(.active) .timeFilterLabel {
+    display: none;
+  }
+
   .toggleIcon {
     width: 16px;
     height: 16px;

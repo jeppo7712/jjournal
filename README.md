@@ -12,7 +12,8 @@ Everything runs on your own machine/server against your own PostgreSQL database 
 
 ## Features
 
-- Trade log with FIFO PnL/return/R-multiple calculation, per-account column visibility, tags, screenshots
+- Trade log with FIFO PnL/return/R-multiple calculation, per-account column visibility, screenshots
+- Tags in groups (setup, mistake, market…, your own): a tag filter on the Dashboard and win rate and P&L per tag in Stats
 - Daily journal notes (mood, market condition, summary) alongside trades
 - Historical price charts per symbol, timeframe-configurable per instrument, backed by a local Postgres cache
   - Yahoo Finance as a fast/always-available source; IBKR TWS as a higher-quality source that supersedes it where available

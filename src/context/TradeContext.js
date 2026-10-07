@@ -2,6 +2,8 @@ import React, { createContext, useState, useEffect, useCallback, useRef, useMemo
 import { DateTime } from 'luxon';
 import { debounce } from 'lodash';
 import { formatNumber } from '../utils/numberFormat';
+import { useTags } from './TagsContext';
+import { matchesTagFilter } from '../utils/tagFilter';
 
 // The trade list's hideable columns, in display order (TradeList.jsx renders
 // them and its header's column picker toggles them, per account).
@@ -17,6 +19,7 @@ export const TRADE_LIST_COLUMNS = [
   { key: 'exitTotal', label: 'Exit Total' },
   { key: 'position', label: 'Position' },
   { key: 'holdTime', label: 'Hold Time' },
+  { key: 'tags', label: 'Tags' },
   { key: 'return', label: 'Return' },
   { key: 'returnPercentage', label: 'Return %' },
 ];
@@ -748,6 +751,8 @@ export const TradeContext = createContext({
   setCurrentPage: () => { },
   hiddenColumns: [],
   toggleColumnVisibility: () => { },
+  tagFilter: [],
+  setTagFilter: () => { },
 });
 
 export const TradeProvider = ({ children }) => {
@@ -775,6 +780,8 @@ export const TradeProvider = ({ children }) => {
   const [tradesPerPage, setTradesPerPage] = useState(100);
   const [currentPage, setCurrentPage] = useState(1);
   const [hiddenColumns, setHiddenColumns] = useState([]);
+  const [tagFilter, setTagFilter] = useState([]);
+  const { tagsById } = useTags();
 
   const priceCacheRef = useRef(new Map());
   const CACHE_DURATION = 5 * 1000;
@@ -831,6 +838,7 @@ export const TradeProvider = ({ children }) => {
       // actually absent from the response.
       setTradesPerPage(data.trades_per_page === undefined ? 100 : data.trades_per_page);
       setHiddenColumns(Array.isArray(data.hidden_columns) ? data.hidden_columns : []);
+      setTagFilter(Array.isArray(data.tag_filter) ? data.tag_filter : []);
       setCurrentPage(1);
       filtersLoadedForRef.current = accountId;
     } catch (err) {
@@ -874,8 +882,9 @@ export const TradeProvider = ({ children }) => {
         restrict_to_actions_in_range: restrictToActionsInRange,
         trades_per_page: tradesPerPage,
         hidden_columns: hiddenColumns,
+        tag_filter: tagFilter,
     });
-  }, [currentAccountId, filter, timeFilter, customStartDate, customEndDate, symbolFilter, showTrades, showDayNotes, restrictToActionsInRange, tradesPerPage, hiddenColumns, saveFilterSettings]);
+  }, [currentAccountId, filter, timeFilter, customStartDate, customEndDate, symbolFilter, showTrades, showDayNotes, restrictToActionsInRange, tradesPerPage, hiddenColumns, tagFilter, saveFilterSettings]);
 
   // The save above is debounced (1s) so rapid changes don't fire a request
   // per keystroke/click — but that means a discrete, deliberate change (e.g.
@@ -1409,8 +1418,12 @@ export const TradeProvider = ({ children }) => {
     });
   }
 
+  if (tagFilter.length > 0) {
+    combinedItems = combinedItems.filter(item => item.type === 'dayNote' || matchesTagFilter(item.tag_ids, tagFilter, tagsById));
+  }
+
       return sortItems(combinedItems, sortField, sortDirection);
-  }, [timeFilter, customStartDate, customEndDate, restrictToActionsInRange, filter, symbolFilter, sortField, sortDirection]);
+  }, [timeFilter, customStartDate, customEndDate, restrictToActionsInRange, filter, symbolFilter, tagFilter, tagsById, sortField, sortDirection]);
 
   const filteredItems = useMemo(() => applyItemFilters([
     ...(showTrades && Array.isArray(trades) ? trades : []),
@@ -1476,11 +1489,13 @@ export const TradeProvider = ({ children }) => {
         setCurrentPage,
         hiddenColumns,
         toggleColumnVisibility,
+        tagFilter,
+        setTagFilter,
   }), [
         trades, dayNotes, filteredItems, filterTradeItems, stats, toggleFilter, refreshTrades, fetchProcessedTradesForAccount, setSort, sortField, sortDirection,
         timeFilter, filter, customStartDate, customEndDate, accounts, refreshAccounts, holdings, refreshHoldings, currentAccountId, showTrades, showDayNotes,
         toggleShowTrades, toggleShowDayNotes, futuresSettings, refreshFuturesSettings, getAllTradeData,
-        symbolFilter, restrictToActionsInRange, isFetching, tradesPerPage, currentPage, hiddenColumns, toggleColumnVisibility
+        symbolFilter, restrictToActionsInRange, isFetching, tradesPerPage, currentPage, hiddenColumns, toggleColumnVisibility, tagFilter
   ]);
 
   return (

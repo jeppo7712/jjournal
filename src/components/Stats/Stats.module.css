@@ -1019,3 +1019,49 @@
     margin-left: 0;
   }
 }
+
+/* Stats → Tags (TagStats.jsx) */
+.tagStats,
+.tagSection {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  min-width: 0;
+}
+
+.tagStats {
+  gap: 22px;
+}
+
+.tagStatsNote,
+.tagStatsEmpty p {
+  margin: 0;
+  color: var(--ui-muted, #8B93A3);
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.tagStatsEmpty {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  max-width: 640px;
+}
+
+.tagStatsSub {
+  color: var(--ui-muted, #8B93A3);
+  font-size: 12px;
+  font-weight: 400;
+}
+
+.tagTableWrap {
+  overflow-x: auto;
+  border: 1px solid var(--ui-border, #2C3244);
+  border-radius: 14px;
+  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
+}
+
+.tagTableWrap .statsTable td,
+.tagTableWrap .statsTable th {
+  white-space: nowrap;
+}

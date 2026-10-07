@@ -252,7 +252,9 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
             ) AS actions,
             (
                 SELECT row_to_json(j) FROM (
-                    SELECT tags, notes_html, confidence, execution_rating,
+                    SELECT (SELECT string_agg(tg.name, ',' ORDER BY lower(tg.name))
+                            FROM trade_tags tt JOIN tags tg ON tg.id = tt.tag_id WHERE tt.trade_id = t.id) AS tags,
+                           notes_html, confidence, execution_rating,
                            ai_analysis, ai_analysis_source, ai_analysis_updated_at
                     FROM trade_journals WHERE trade_id = t.id LIMIT 1
                 ) j
@@ -262,7 +264,13 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
                     'id', att.id, 'filename', att.filename, 'mime_type', att.mime_type
                 )), '[]'::json)
                 FROM trade_attachments att WHERE att.trade_id = t.id
-            ) AS attachments
+            ) AS attachments,
+            (
+                SELECT COALESCE(json_agg(json_build_object('name', tg.name, 'group', g.name)
+                    ORDER BY g.sort_order NULLS LAST, lower(tg.name)), '[]'::json)
+                FROM trade_tags tt JOIN tags tg ON tg.id = tt.tag_id LEFT JOIN tag_groups g ON g.id = tg.group_id
+                WHERE tt.trade_id = t.id
+            ) AS tags
         FROM trades t
         JOIN accounts acc ON acc.id = t.account_id
     `;
