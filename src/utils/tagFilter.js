@@ -51,27 +51,47 @@ export function cleanTagFilter(tagFilter, tagsById, groupsById) {
     .filter(f => (f.kind === 'group' ? groupsById.has(f.id) : tagsById.has(f.id)));
 }
 
-// Per tag group: each tag's results over the closed trades carrying it,
-// plus the trades with any tag of the group and those with none.
-// `trades` are processed trades of one currency (status, return, tag_ids).
-export function computeTagStats(trades, tags, groups) {
-  const closed = (trades || []).filter(t => t.status && t.status !== 'OPEN');
+// Per tag group: each tag's results over the trades carrying it, plus the
+// trades with any tag of the group and those with none. `trades` are
+// processed trades of one currency. Open positions (e.g. long-term
+// holdings) count too: their realised part and unrealised P&L
+// (currentReturn, null until the live price is in); win rate, average win
+// and loss and P&L per trade are over the closed trades only.
+// realisedOf(trade) gives a trade's realised P&L (TradeContext's
+// getRealisedPnL; a closed trade's `return` by default).
+export function computeTagStats(trades, tags, groups, { realisedOf } = {}) {
+  const all = (trades || []).filter(t => t && t.status);
+  const realised = realisedOf || (t => (t.status === 'OPEN' ? 0 : Number(t.return) || 0));
   const summarize = (list) => {
-    const wins = list.filter(t => t.status === 'WIN');
-    const losses = list.filter(t => t.status === 'LOSS');
-    const sum = arr => arr.reduce((s, t) => s + (Number(t.return) || 0), 0);
+    const closed = list.filter(t => t.status !== 'OPEN');
+    const open = list.filter(t => t.status === 'OPEN');
+    const wins = closed.filter(t => t.status === 'WIN');
+    const losses = closed.filter(t => t.status === 'LOSS');
+    const sum = (arr, f) => arr.reduce((s, t) => s + (Number(f(t)) || 0), 0);
     const decided = wins.length + losses.length;
-    const avgWin = wins.length ? sum(wins) / wins.length : 0;
-    const avgLoss = losses.length ? sum(losses) / losses.length : 0;
+    const realisedPnl = sum(list, realised);
+    const unrealisedPnl = sum(open, t => t.currentReturn);
+    const pricesPending = open.some(t => t.currentReturn === null || t.currentReturn === undefined);
+    // Return on the money put in: stocks only (a future's entry total is
+    // its contract value, not money paid).
+    const cost = sum(list, t => t.entryTotal);
+    const returnPct = list.length && cost > 0 && list.every(t => t.type === 'STK')
+      ? ((realisedPnl + unrealisedPnl) / cost) * 100 : null;
     return {
       trades: list.length,
+      closed: closed.length,
+      open: open.length,
       wins: wins.length,
       losses: losses.length,
       winRate: decided ? (wins.length / decided) * 100 : null,
-      avgWin: wins.length ? avgWin : null,
-      avgLoss: losses.length ? avgLoss : null,
-      expectancy: list.length ? sum(list) / list.length : null,
-      totalPnl: sum(list),
+      avgWin: wins.length ? sum(wins, t => t.return) / wins.length : null,
+      avgLoss: losses.length ? sum(losses, t => t.return) / losses.length : null,
+      expectancy: closed.length ? sum(closed, t => t.return) / closed.length : null,
+      realisedPnl,
+      unrealisedPnl,
+      totalPnl: realisedPnl + unrealisedPnl,
+      returnPct,
+      pricesPending,
     };
   };
   const has = (t, id) => (t.tag_ids || []).map(Number).includes(id);
@@ -82,12 +102,12 @@ export function computeTagStats(trades, tags, groups) {
 
   return sections.map(({ group, tags: groupTags }) => {
     const rows = groupTags
-      .map(tag => ({ tag, ...summarize(closed.filter(t => has(t, tag.id))) }))
+      .map(tag => ({ tag, ...summarize(all.filter(t => has(t, tag.id))) }))
       .filter(row => row.trades > 0)
       .sort((a, b) => b.trades - a.trades || a.tag.name.localeCompare(b.tag.name));
     const anyIds = new Set(groupTags.map(tag => tag.id));
-    const withAny = closed.filter(t => (t.tag_ids || []).some(id => anyIds.has(Number(id))));
-    const withNone = closed.filter(t => !(t.tag_ids || []).some(id => anyIds.has(Number(id))));
+    const withAny = all.filter(t => (t.tag_ids || []).some(id => anyIds.has(Number(id))));
+    const withNone = all.filter(t => !(t.tag_ids || []).some(id => anyIds.has(Number(id))));
     return { group, rows, any: summarize(withAny), none: summarize(withNone) };
   });
 }
