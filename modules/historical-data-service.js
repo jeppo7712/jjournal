@@ -67,6 +67,7 @@ const ibkr = require('./ibkr-conn.js').data;
 const { v4: uuidv4 } = require('uuid');
 const WebSocket = require('ws');
 const { logger } = require('./logger.js');
+const { timeframeLabel } = require('./timeframeLabel.js');
 const path = require('path');
 const { Worker } = require('worker_threads');
 
@@ -274,7 +275,7 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
         throw new Error(`Task ${taskId} cancelled.`); // Propagate to task processor
     }
 
-    broadcastStatus(taskId, `Processing task for ${symbol} (${timeframe}, phase ${fetchPhase})`, 'info');
+    broadcastStatus(taskId, `Processing task for ${symbol} (${timeframeLabel(timeframe)}, phase ${fetchPhase})`, 'info');
     logger.info(`[populate][${taskId}] Executing task for ${symbol} (${timeframe}, type=${type}, contractMonth=${contractMonth || 'N/A'}, phase=${fetchPhase})`);
 
     let client; // Define client here to be accessible in finally if connection fails early
@@ -568,7 +569,7 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
                 }
             } catch (err) {
                 logger.warn(`[populate][${taskId}] Yahoo Finance fetch failed for ${symbol} (${timeframe}): ${err.message}.`);
-                broadcastStatus(taskId, `Yahoo Finance fetch failed for ${symbol} (${timeframe}): ${err.message}`, 'warning');
+                broadcastStatus(taskId, `Yahoo Finance fetch failed for ${symbol} (${timeframeLabel(timeframe)}): ${err.message}`, 'warning');
                 if (cancellationSignal.aborted) throw err;
                 // Continue on to the IBKR block regardless of a Yahoo failure —
                 // the two sources' writes are independent.
@@ -810,7 +811,7 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
         }
 
         logger.debug(`[populate][${taskId}] (phase: ${fetchPhase}) completed and committed for ${symbol} (${timeframe}, contract: ${contractMonth || 'N/A'})`);
-        broadcastStatus(taskId, `Population (phase: ${fetchPhase}) completed for ${symbol} (${timeframe})`, 'success');
+        broadcastStatus(taskId, `Population (phase: ${fetchPhase}) completed for ${symbol} (${timeframeLabel(timeframe)})`, 'success');
 
         notifyHistoricalDataUpdate(wss, symbol, timeframe);
 
@@ -872,7 +873,7 @@ async function fetchHistoricalDataFromIBKR(validatedContract, duration, barSize,
         }
 
         logger.info(`[Historical][${taskId}] Requesting IBKR historical data for conId ${validatedContract.conId}: duration=${duration}, barSize=${barSize}, endDateTime=${endDateTime || "'' (Current Time)"}`);
-        broadcastStatus(taskId, `Requesting historical data from TWS for ${validatedContract.symbol} (${timeframe})`, 'info');
+        broadcastStatus(taskId, `Requesting historical data from TWS for ${validatedContract.symbol} (${timeframeLabel(timeframe)})`, 'info');
 
         // How long to wait for IBKR's answer: a minute plus 2 s per requested
         // day, at most 5 minutes. IBKR normally answers in seconds; when it
@@ -2025,7 +2026,7 @@ async function fetchYahooHistoricalData(symbol, timeframe, requestId, timezone, 
         yahooSymbol = `${yahooSymbol}=F`;
         logger.debug(`[Yahoo] Appending =F for futures: ${yahooSymbol}`);
     }
-    broadcastStatus(requestId, `Fetching historical data from Yahoo Finance for ${yahooSymbol} (${timeframe}, type=${type})`, 'info');
+    broadcastStatus(requestId, `Fetching historical data from Yahoo Finance for ${yahooSymbol} (${timeframeLabel(timeframe)}, type=${type})`, 'info');
     logger.info(`[Yahoo] Fetching historical data for ${yahooSymbol} (${timeframe}, type=${type}) from ${startDate.toISO()} to ${endDate.toISO()}`);
 
     // No '4H' entry: this function is never called with timeframe='4H' (see
@@ -2166,7 +2167,7 @@ async function fetchYahooHistoricalData(symbol, timeframe, requestId, timezone, 
 
 
             logger.info(`[Yahoo] Retrieved ${bars.length} bars (after removing incomplete bars) for ${yahooSymbol} (${timeframe})`);
-            broadcastStatus(requestId, `Retrieved ${bars.length} bars from Yahoo Finance for ${yahooSymbol} (${timeframe})`, 'success');
+            broadcastStatus(requestId, `Retrieved ${bars.length} bars from Yahoo Finance for ${yahooSymbol} (${timeframeLabel(timeframe)})`, 'success');
             return bars;
         } catch (err) {
             if (attempt === retries) {

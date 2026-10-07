@@ -44,6 +44,7 @@ const yahoo = require('../modules/yahoo.js');
 const { getExchangeInfo } = require('../modules/historical-data-service'); // Assuming getExchangeInfo is exported
 const dummyBroadcast = () => { };
 const { logger } = require('../modules/logger.js');
+const { timeframeLabel } = require('../modules/timeframeLabel.js');
 
 module.exports = (db, taskManager, historicalDataService, broadcastStatus, uuidv4, triggerTaskProcessor) => {
 
@@ -159,7 +160,7 @@ module.exports = (db, taskManager, historicalDataService, broadcastStatus, uuidv
             } else {
                 if (!res.headersSent) {
                     logger.debug(`[Historical/DB] No data for ${requestedSymbol} (${requestedTimeframe}) yet, responding 202 as population tasks are queued.`);
-                    broadcastStatus(apiRequestId, `No historical data for ${requestedSymbol} (${requestedTimeframe}), population tasks queued.`, 'info');
+                    broadcastStatus(apiRequestId, `No historical data for ${requestedSymbol} (${timeframeLabel(requestedTimeframe)}), population tasks queued.`, 'info');
                     res.status(202).json({ message: `Data population tasks queued for ${requestedSymbol} (${requestedTimeframe}), check WebSocket for updates.` });
                 }
             }

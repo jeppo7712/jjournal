@@ -13,6 +13,7 @@ import HistoricalDataSummary from './HistoricalDataSummary';
 import FlexGuide from './FlexGuide';
 import { FaSlidersH, FaTerminal, FaWallet, FaTasks, FaTags, FaPlug, FaGlobeAmericas, FaChartLine, FaDatabase, FaPlus, FaSyncAlt, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { notify, confirmDialog } from '../common/Dialogs';
+import { timeframeLabel } from '../../utils/timeframeLabel';
 
 // The sections of the Settings page, in menu order. Without a database only
 // General and Server Logs can be opened.
@@ -2340,7 +2341,7 @@ export default function Settings() {
                     <strong>Fetch queue:</strong>{' '}
                     {queueStatus.currentTask ? (
                       <span>
-                        Processing {queueStatus.currentTask.symbol} {queueStatus.currentTask.timeframe}
+                        Processing {queueStatus.currentTask.symbol} {timeframeLabel(queueStatus.currentTask.timeframe)}
                         {queueStatus.currentTask.contractMonth ? ` (${queueStatus.currentTask.contractMonth})` : ''} — {queueStatus.currentTask.phase}
                       </span>
                     ) : (
@@ -2350,7 +2351,7 @@ export default function Settings() {
                       <ul style={{ paddingLeft: 16, margin: '4px 0 0', fontSize: '0.85rem' }}>
                         {queueStatus.activeChunks.map((c, i) => (
                           <li key={i} style={{ marginBottom: 2 }}>
-                            IBKR: {c.symbol} {c.timeframe}{c.contractMonth ? ` (${c.contractMonth})` : ''} — fetching{' '}
+                            IBKR: {c.symbol} {timeframeLabel(c.timeframe)}{c.contractMonth ? ` (${c.contractMonth})` : ''} — fetching{' '}
                             {DateTime.fromISO(c.chunkStart).toFormat('yyyy-MM-dd')} → {DateTime.fromISO(c.chunkEnd).toFormat('yyyy-MM-dd')}
                           </li>
                         ))}
@@ -2362,7 +2363,7 @@ export default function Settings() {
                         <ul style={{ paddingLeft: 16, margin: '4px 0 0', maxHeight: 140, overflowY: 'auto' }}>
                           {queueStatus.pendingPreview.map((t, i) => (
                             <li key={i} style={{ marginBottom: 2 }}>
-                              {t.symbol} {t.timeframe}{t.contractMonth ? ` (${t.contractMonth})` : ''} — {t.phase}
+                              {t.symbol} {timeframeLabel(t.timeframe)}{t.contractMonth ? ` (${t.contractMonth})` : ''} — {t.phase}
                             </li>
                           ))}
                         </ul>
@@ -2385,7 +2386,7 @@ export default function Settings() {
                         <li key={i} style={{ marginBottom: 4, fontSize: '0.85rem', display: 'flex', gap: 8, alignItems: 'baseline' }}>
                           <span style={{ color, minWidth: 14 }}>{icon}</span>
                           <span>
-                            {o.symbol} {o.timeframe}{o.contractMonth ? ` (${o.contractMonth})` : ''} — {o.phase}
+                            {o.symbol} {timeframeLabel(o.timeframe)}{o.contractMonth ? ` (${o.contractMonth})` : ''} — {o.phase}
                             <span style={{ opacity: 0.6 }}> · {DateTime.fromISO(o.finishedAt).toFormat('HH:mm:ss')}</span>
                             {o.error && <div style={{ color: '#EF4444', opacity: 0.9 }}>{o.error}</div>}
                           </span>
@@ -2654,7 +2655,7 @@ export default function Settings() {
                           onChange={() => handleTimeframeToggle(tf)}
                         />
                       </td>
-                      <td style={{ padding: '4px 8px' }}>{tf}</td>
+                      <td style={{ padding: '4px 8px' }}>{timeframeLabel(tf)}</td>
                       <td style={{ padding: '4px 8px', fontSize: '0.8rem', opacity: 0.8 }}>
                         {entry.enabled ? (limitsInfo || 'No limit discovered yet') : '—'}
                       </td>
