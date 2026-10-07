@@ -76,7 +76,9 @@ function SegmentedRadio({ name, value, onChange, options }) {
 }
 
 export default function DayNote({ note, onClose }) {
-  const { refreshTrades, currentAccountId, trades } = useContext(TradeContext);
+  const { refreshTrades, currentAccountId, scopedTrades: trades } = useContext(TradeContext);
+  // A sub-account's note (listed under its parent) saves to its own account.
+  const noteAccountId = note?.account_id ?? currentAccountId;
   const [mood, setMood] = useState(note && note.mood !== undefined ? note.mood : 1);
   const [marketCondition, setMarketCondition] = useState(note && note.market_condition !== undefined ? note.market_condition : 1);
   const [marketVolatility, setMarketVolatility] = useState(note && note.market_volume !== undefined ? note.market_volume : 1);
@@ -196,7 +198,7 @@ export default function DayNote({ note, onClose }) {
           try {
             const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/attachments`, {
               method: 'POST',
-              headers: { 'X-Account-ID': currentAccountId },
+              headers: { 'X-Account-ID': noteAccountId },
               body: formData
             });
             if (!resp.ok) throw new Error('Attachment upload failed');
@@ -226,7 +228,7 @@ export default function DayNote({ note, onClose }) {
           method: 'POST',
           headers: {
             'Content-Type': 'application/json',
-            'X-Account-ID': currentAccountId,
+            'X-Account-ID': noteAccountId,
           },
           body: JSON.stringify(payload)
         });
@@ -254,7 +256,7 @@ export default function DayNote({ note, onClose }) {
     try {
       const resp = await fetch(`${process.env.REACT_APP_API_URL}/api/daynotes/${note.id}`, {
         method: 'DELETE',
-        headers: { 'X-Account-ID': currentAccountId },
+        headers: { 'X-Account-ID': noteAccountId },
       });
 
       if (resp.ok) {

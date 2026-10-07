@@ -73,7 +73,7 @@ const NAV_PAGES = [
 ];
 
 const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
-  const { stats, accounts, currentAccountId, setCurrentAccountId, trades, fetchProcessedTradesForAccount, holdings } = useContext(TradeContext);
+  const { stats, accounts, currentAccountId, setCurrentAccountId, trades, scopedTrades, fetchProcessedTradesForAccount, holdings } = useContext(TradeContext);
   const { statusLogs } = useStatus();
   const [isDatabaseConnected, setIsDatabaseConnected] = useState(false);
   const [showLogoPopup, setShowLogoPopup] = useState(false);
@@ -150,13 +150,11 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
 
   // Total Portfolio's STK market value / FUT unrealized P&L roll up across
   // descendant accounts too — same real broker account, shared cash, see
-  // docs/CAPITAL_TRACKING_DESIGN.md. Total P&L / Market Value above stay
-  // scoped to exactly the selected account on purpose (confirmed with the
-  // user): that per-instrument-type separation is the reason these are
-  // split into accounts in the first place — you don't want your stocks
-  // dashboard's P&L polluted by futures trades, or vice versa. Only what
-  // the account is *actually worth* (Total Portfolio) should reflect the
-  // combined real number, matching what IBKR itself would show.
+  // docs/CAPITAL_TRACKING_DESIGN.md. Total P&L / Market Value follow the
+  // Dashboard's Sub-accounts toggle instead (switch it off to see only this
+  // account's own trades); what the account is *actually worth* (Total
+  // Portfolio) always reflects the combined real number, matching what IBKR
+  // itself would show.
   useEffect(() => {
     const descendantIds = descendantAccountIds(accounts, currentAccountId);
     if (descendantIds.length === 0) { setDescendantTrades([]); return; }
@@ -281,8 +279,11 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   // one would produce a number that looks precise and means nothing. An
   // account holding a single currency yields a single entry and renders
   // exactly as it did before.
+  // Both follow the Dashboard's Sub-accounts toggle (scopedTrades), like the
+  // trade list: a parent like "IB Main" with no trades of its own shows its
+  // sub-accounts' P&L and positions.
   const totalMarketValueByCurrency = sumByCurrency(
-    (Array.isArray(trades) ? trades : []).filter(trade =>
+    (Array.isArray(scopedTrades) ? scopedTrades : []).filter(trade =>
       trade.status === 'OPEN' &&
       (trade.type === 'STK' || trade.type === 'FUT') &&
       typeof trade.position === 'number' &&
@@ -298,7 +299,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   // unrealised (open trades' live mark-to-market) so this actually is a total,
   // matching Dashboard's R P&L + U P&L combined rather than realised P&L alone.
   const totalPnlByCurrency = sumByCurrency(
-    (Array.isArray(trades) ? trades : []).filter(trade =>
+    (Array.isArray(scopedTrades) ? scopedTrades : []).filter(trade =>
       trade.status === 'WIN' || trade.status === 'LOSS' || trade.status === 'WASH' ||
       (trade.status === 'OPEN' && (trade.type === 'STK' || trade.type === 'FUT'))
     ),
@@ -318,8 +319,8 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   // position's price*multiplier is notional exposure, not money possessed
   // (margin isn't tracked as a cash event here), so only its unrealised PnL
   // counts toward what the account is actually worth. Combines this
-  // account's own trades with descendants' (see the effect above) — unlike
-  // totalPnlByCurrency/totalMarketValueByCurrency, which stay scoped to this account.
+  // account's own trades with descendants' (see the effect above), whatever
+  // the Sub-accounts toggle says.
   const openTrades = [...(Array.isArray(trades) ? trades : []), ...descendantTrades]
     .filter(t => t.status === 'OPEN' && (t.type === 'STK' || t.type === 'FUT'));
   const stkMarketValueByCurrency = sumByCurrency(

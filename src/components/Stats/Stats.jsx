@@ -50,7 +50,6 @@ import {
   COLORS, CATEGORICAL, HOLD_TICKS, rgba, polarityStroke, polarityFill, areaFill, endDot, lineStyle,
   crosshairPlugin, scaleX, scaleY, baseOptions, signed, percentTick, moneyTick, dateTick, dateTitle, formatHold,
 } from './chartTheme';
-import { descendantAccountIds } from '../../utils/accountTree';
 import { Line, Bar, Doughnut, Scatter } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, LogarithmicScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { DateTime } from 'luxon';
@@ -128,33 +127,12 @@ const TAB_GROUPS = [
 const CAPITAL_FLOW_TYPES = new Set(['DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT', 'EXCHANGE_IN', 'EXCHANGE_OUT']);
 
 const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilterWeek }) => {
-  const { filteredItems: accountFilteredItems, filter, timeFilter, symbolFilter, restrictToActionsInRange, trades: allTrades, accounts, currentAccountId, fetchProcessedTradesForAccount, filterTradeItems, tagFilter = [], setTagFilter } = React.useContext(TradeContext) || { filteredItems: [], filter: [], timeFilter: null, symbolFilter: '', restrictToActionsInRange: false, trades: [] };
-
-  // A parent account's stats include its sub-accounts' trades (switchable):
-  // a parent like a broker's main account often holds no trades itself,
-  // they're booked in sub-accounts per instrument type or strategy.
-  const subAccountIds = useMemo(
-    () => descendantAccountIds(accounts, currentAccountId),
-    [accounts, currentAccountId]
-  );
-  const [includeSubAccounts, setIncludeSubAccounts] = useState(true);
-  const [subAccountTrades, setSubAccountTrades] = useState([]);
-  useEffect(() => {
-    if (subAccountIds.length === 0 || !fetchProcessedTradesForAccount) { setSubAccountTrades([]); return; }
-    let cancelled = false;
-    Promise.all(subAccountIds.map(id => fetchProcessedTradesForAccount(id)))
-      .then(results => { if (!cancelled) setSubAccountTrades(results.flat()); })
-      .catch(() => { if (!cancelled) setSubAccountTrades([]); });
-    return () => { cancelled = true; };
-  }, [subAccountIds, fetchProcessedTradesForAccount]);
-  const withSubAccounts = includeSubAccounts && subAccountIds.length > 0;
-  // Own and sub-account trades through the same Dashboard filters.
-  const filteredItems = useMemo(
-    () => (withSubAccounts && filterTradeItems
-      ? filterTradeItems([...(allTrades || []), ...subAccountTrades])
-      : accountFilteredItems),
-    [withSubAccounts, filterTradeItems, allTrades, subAccountTrades, accountFilteredItems]
-  );
+  const { filteredItems, filter, timeFilter, symbolFilter, restrictToActionsInRange, accounts, currentAccountId, tagFilter = [], setTagFilter, subAccountIds = [], withSubAccounts = false } = React.useContext(TradeContext) || { filteredItems: [], filter: [], timeFilter: null, symbolFilter: '', restrictToActionsInRange: false };
+  // A parent account's sub-accounts are in (or not) as on the Dashboard: its
+  // Sub-accounts toggle decides for both.
+  const subAccountNames = subAccountIds
+    .map(id => (accounts || []).find(a => String(a.id) === String(id))?.name)
+    .filter(Boolean);
   const [currentTab, setCurrentTab] = useState('general');
   const [historicalDataMap, setHistoricalDataMap] = useState({});
   const [isFetching, setIsFetching] = useState(false);
@@ -800,17 +778,6 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                       </select>
                     </label>
                   )}
-                  {subAccountIds.length > 0 && (
-                    <button
-                      type="button"
-                      className={`${styles.scopeChip} ${includeSubAccounts ? styles.scopeChipOn : ''}`}
-                      onClick={() => setIncludeSubAccounts(!includeSubAccounts)}
-                      aria-pressed={includeSubAccounts}
-                      title="Include the trades of this account's sub-accounts"
-                    >
-                      Sub-accounts
-                    </button>
-                  )}
                   <div className={styles.scopeField} title="Applies to hour-of-day and calendar-day views (Hourly Analysis, the activity heatmap, Calendar). Trades span many symbols here, so times use this one zone rather than each instrument's own exchange.">
                     <span>Timezone</span>
                     <TimezonePicker value={displayTimezone} onChange={setDisplayTimezone} options={STATS_TIMEZONE_OPTIONS} />
@@ -823,6 +790,11 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                   <span><strong>Filtered.</strong> These stats only cover the trades matching the Dashboard's current filters.</span>
                 </div>
               )}
+              {withSubAccounts && subAccountNames.length > 0 && (
+                <p className={styles.scopeNote}>
+                  Including the sub-accounts {subAccountNames.join(', ')}. Switch them off with Sub-accounts on the Dashboard.
+                </p>
+              )}
             </div>
         <div className={styles.tabContent}>
           {currentTab === 'calendar' && (
@@ -833,7 +805,6 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 currentMonth={calendarMonth}
                 setCurrentMonth={setCalendarMonth}
                 zone={displayTimezone}
-                items={withSubAccounts ? [...(allTrades || []), ...subAccountTrades] : undefined}
               />
             </div>
           )}

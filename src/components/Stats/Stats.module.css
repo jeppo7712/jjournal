@@ -169,28 +169,11 @@
   font-weight: 600;
 }
 
-.scopeChip {
-  height: 34px;
-  padding: 0 14px;
-  border: 1px solid var(--ui-border, #2C3244);
-  border-radius: 999px;
-  background: var(--ui-input, #141822);
+/* Which sub-accounts are in (the Dashboard's Sub-accounts toggle). */
+.scopeNote {
+  margin: 0;
   color: var(--ui-muted, #8B93A3);
   font-size: 12.5px;
-  font-weight: 600;
-  transition: background 0.15s, border-color 0.15s, color 0.15s;
-}
-
-.scopeChipOn {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: rgba(59, 130, 246, 0.55);
-  color: #DBEAFE;
-}
-
-.scopeChipOn::before {
-  content: '✓';
-  margin-right: 6px;
-  color: #60A5FA;
 }
 
 .filterWarning {

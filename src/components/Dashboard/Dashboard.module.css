@@ -927,10 +927,19 @@
     letter-spacing: 0.04em;
   }
 
+  .statLabel {
+    flex: none;
+  }
+
+  /* May be narrower than its figure, so FitValue (Dashboard.jsx) sees the
+     overflow and shrinks the figure instead of it running out of the tile. */
   .statValue {
     font-size: 13.5px;
     padding-right: 0;
     text-align: right;
+    flex: 1 1 auto;
+    min-width: 0;
+    overflow: hidden;
   }
 
   /* Label left, figure(s) right, as on every other phone tile */
@@ -938,7 +947,8 @@
     text-align: right;
   }
 
-  .tilePnl .statValueStacked {
+  .tilePnl .statValueStacked,
+  .statValueStacked {
     align-items: flex-end;
   }
 
