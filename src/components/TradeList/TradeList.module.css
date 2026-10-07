@@ -20,7 +20,8 @@
 .header {
   display: flex;
   align-items: center;
-  padding: 0 52px 0 18px;
+  /* Plus the rows' scrollbar, so the columns line up (TradeList.jsx). */
+  padding: 0 calc(52px + var(--rows-scrollbar, 0px)) 0 18px;
   height: 42px;
   background: rgba(255, 255, 255, 0.015);
   border-bottom: 1px solid var(--ui-border, #2C3244);
@@ -287,16 +288,17 @@
 }
 
 /* A trade's tags; the ones that don't fit are cut off (the trade view
-   shows them all). */
-.colTags {
-  flex: 1.6;
+   shows them all). Widths: COLUMN_FLEX in TradeList.jsx. */
+.cell.colTags {
+  display: flex;
+  align-items: center;
   gap: 4px;
   overflow: hidden;
   mask-image: linear-gradient(90deg, #000 85%, transparent);
   -webkit-mask-image: linear-gradient(90deg, #000 85%, transparent);
 }
 
-.colTags > * {
+.cell.colTags > * {
   flex-shrink: 0;
 }
 
@@ -308,10 +310,12 @@
 
 .cell {
   flex: 1;
-  display: flex;
-  align-items: center;
+  /* A block, not flex: only then does a figure too wide end in "…". */
+  display: block;
   min-width: 0;
-  padding-right: 8px;
+  /* The gap to the next column as a border, not padding: overflow is cut
+     off inside the border, so a long figure never touches the next one. */
+  border-right: 8px solid transparent;
   box-sizing: border-box;
   color: var(--ui-text-2, #C7CDD8);
   font-variant-numeric: tabular-nums;
@@ -378,12 +382,33 @@
   letter-spacing: 0.02em;
 }
 
-.positive,
+/* Size: what's held over "of" what was opened, once part of an open trade
+   is closed; cut off with … rather than running into the next column. */
+.sizeStack {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  line-height: 1.25;
+}
+
+.sizeText,
+.sizeOf {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.sizeOf {
+  font-size: 11px;
+  color: var(--ui-muted, #8B93A3);
+}
+
 /* An open trade's size: still held, in italics like its open return. */
 .sizeOpen {
   font-style: italic;
 }
 
+.positive,
 .positiveItalic {
   color: #4ADE80;
   font-weight: 600;
