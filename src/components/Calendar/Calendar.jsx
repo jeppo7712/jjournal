@@ -25,7 +25,7 @@ function renderSignedTotals(totals, { abs = true } = {}) {
 // `items`: the trades to show; this account's own when not given (Stats
 // passes its sub-accounts' trades too).
 const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurrentMonth, zone = 'local', items }) => {
-  const { trades: accountTrades, setTimeFilter, setCustomStartDate, setCustomEndDate, setRestrictToActionsInRange } = useContext(TradeContext);
+  const { scopedTrades: accountTrades, setTimeFilter, setCustomStartDate, setCustomEndDate, setRestrictToActionsInRange } = useContext(TradeContext);
   const trades = items || accountTrades;
 
   const monthStart = startOfMonth(currentMonth);

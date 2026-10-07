@@ -153,6 +153,9 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     logger.debug('account_filters.hidden_columns ready');
     // The Dashboard's tag filter (src/utils/tagFilter.js).
     await client.query(`ALTER TABLE account_filters ADD COLUMN IF NOT EXISTS tag_filter JSONB NOT NULL DEFAULT '[]'::jsonb`);
+    // The Dashboard (and so Stats) also lists the sub-accounts' trades and
+    // notes; only matters for an account that has sub-accounts.
+    await client.query(`ALTER TABLE account_filters ADD COLUMN IF NOT EXISTS include_sub_accounts BOOLEAN NOT NULL DEFAULT true`);
 
     // Create trades table with symbol_type
     logger.debug('Creating trades table...');

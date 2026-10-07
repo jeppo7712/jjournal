@@ -137,7 +137,15 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
     setCurrentPage,
     hiddenColumns,
     toggleColumnVisibility,
+    scopedTrades,
+    accounts,
+    currentAccountId,
   } = useContext(TradeContext);
+  // The sub-account an item is in, when it isn't the selected account's own
+  // (the list includes sub-accounts).
+  const accountNameOf = (item) => (item.account_id != null && String(item.account_id) !== String(currentAccountId)
+    ? (accounts || []).find(a => String(a.id) === String(item.account_id))?.name || null
+    : null);
   const { tagsOfTrade } = useTags();
 
   // The column picker (the icon at the right end of the header), the one
@@ -225,7 +233,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
   const getDailyStats = (noteDate) => {
     if (!(noteDate instanceof DateTime) || !noteDate.isValid) return { dailyPnLByCurrency: {}, wins: 0, losses: 0 };
 
-    const sameDayTrades = trades.filter((trade) => {
+    const sameDayTrades = (scopedTrades || trades).filter((trade) => {
       if ((trade.type !== 'STK' && trade.type !== 'FUT') || trade.status === 'OPEN') return false;
       const lastActionDate = parseActionDate(trade.lastActionDate);
       if (!lastActionDate.isValid) return false;
@@ -444,16 +452,26 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                     </div>
                   </div>
                 </div>
-                {item.tag_ids?.length > 0 && isColumnVisible('tags') && (
+                {((item.tag_ids?.length > 0 && isColumnVisible('tags')) || accountNameOf(item)) && (
                   <div className={styles.mobileTags}>
-                    {tagsOfTrade(item.tag_ids).map(({ tag, group }) => (
+                    {accountNameOf(item) && <span className={styles.accountLabel}>{accountNameOf(item)}</span>}
+                    {isColumnVisible('tags') && tagsOfTrade(item.tag_ids).map(({ tag, group }) => (
                       <TagChip key={tag.id} small name={tag.name} color={group?.color} />
                     ))}
                   </div>
                 )}
                 <div className={styles.desktopCells}>
                   {isColumnVisible('openDate') && <div style={colFlex('openDate')} className={styles.cell}>{item.openDate}</div>}
-                  {isColumnVisible('symbol') && <div style={colFlex('symbol')} className={`${styles.cell} ${styles.symbol}`}>{item.symbol}</div>}
+                  {isColumnVisible('symbol') && (
+                    <div style={colFlex('symbol')} className={`${styles.cell} ${styles.symbol}`}>
+                      {accountNameOf(item) ? (
+                        <div className={styles.stack}>
+                          <span className={styles.stackMain}>{item.symbol}</span>
+                          <span className={`${styles.stackSub} ${styles.accountLabel}`}>{accountNameOf(item)}</span>
+                        </div>
+                      ) : item.symbol}
+                    </div>
+                  )}
                   {isColumnVisible('status') && (
                     <div style={colFlex('status')} className={styles.cell}>
                       <span className={
@@ -481,9 +499,9 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                     const size = tradeSize(item);
                     return (
                       <div style={colFlex('size')} className={styles.cell} title={size.title}>
-                        <div className={styles.sizeStack}>
-                          <span className={`${styles.sizeText} ${size.open ? styles.sizeOpen : ''}`}>{size.held}</span>
-                          {size.of && <span className={styles.sizeOf}>of {size.of}</span>}
+                        <div className={styles.stack}>
+                          <span className={`${styles.stackMain} ${size.open ? styles.sizeOpen : ''}`}>{size.held}</span>
+                          {size.of && <span className={styles.stackSub}>of {size.of}</span>}
                         </div>
                       </div>
                     );
@@ -593,6 +611,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                       <span className={styles.noteDate}>
                         {formatDate(item.date)}
                       </span>
+                      {accountNameOf(item) && <span className={`${styles.accountLabel} ${styles.noteAccount}`}>{accountNameOf(item)}</span>}
                     </div>
                     <div className={styles.noteIcons}>
                       <span className={styles.noteIcon}>
@@ -638,6 +657,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                   </div>
                   <div className={styles.noteDate}>
                     {formatDate(item.date)}
+                    {accountNameOf(item) && <span className={`${styles.accountLabel} ${styles.noteAccount}`}>{accountNameOf(item)}</span>}
                   </div>
                   <div className={styles.noteIcons}>
                     <span className={styles.noteIcon}>

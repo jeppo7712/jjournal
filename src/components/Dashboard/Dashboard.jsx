@@ -37,7 +37,10 @@ function FitValue({ maxPx = 20, minPx = 9, className, style, children }) {
       el.style.fontSize = `${size}px`;
       const padding = (parseFloat(cs.paddingLeft) || 0) + (parseFloat(cs.paddingRight) || 0);
       const available = el.clientWidth - padding;
-      const needed = el.scrollWidth - padding;
+      // Lines aligned right overflow to the left, which scrollWidth doesn't
+      // count: measure the widest line too.
+      const widestLine = Math.max(0, ...[...el.children].map(child => child.scrollWidth));
+      const needed = Math.max(el.scrollWidth - padding, widestLine);
       if (needed > available && needed > 0 && available > 0) {
         size = Math.max(minPx, Math.floor((size * available / needed) * 10) / 10);
         el.style.fontSize = `${size}px`;
@@ -100,7 +103,15 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
     clearSymbolFilter,
     setRestrictToActionsInRange,
     restrictToActionsInRange,
+    includeSubAccounts,
+    setIncludeSubAccounts,
+    subAccountIds = [],
+    accounts,
   } = useContext(TradeContext);
+  const subAccountNames = subAccountIds
+    .map(id => (accounts || []).find(a => String(a.id) === String(id))?.name)
+    .filter(Boolean)
+    .join(', ');
   const [showDatePicker, setShowDatePicker] = useState(false);
   const [showTimeFilterMenu, setShowTimeFilterMenu] = useState(false);
   const [showOpenTrades, setShowOpenTrades] = useState(false);
@@ -986,6 +997,20 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
                 <svg className={styles.toggleIcon} viewBox="0 0 20 20" fill="currentColor"><path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm1-12a1 1 0 10-2 0v4a1 1 0 00.293.707l2.828 2.829a1 1 0 101.415-1.415L11 9.586V6z" clipRule="evenodd" /></svg>
                 <span className={styles.toggleText}>Open</span>
               </button>
+              {subAccountIds.length > 0 && (
+                <button
+                  type="button"
+                  className={`${styles.toggleButton} ${includeSubAccounts ? styles.active : styles.excluded}`}
+                  onClick={() => setIncludeSubAccounts(on => !on)}
+                  aria-pressed={includeSubAccounts}
+                  title={includeSubAccounts
+                    ? `Including the sub-accounts (${subAccountNames}); click for this account's own trades only`
+                    : `Only this account's own trades; click to include the sub-accounts (${subAccountNames})`}
+                >
+                  <svg className={styles.toggleIcon} viewBox="0 0 20 20" fill="currentColor"><path d="M7 3a1 1 0 000 2h6a1 1 0 100-2H7zM4 7a1 1 0 011-1h10a1 1 0 110 2H5a1 1 0 01-1-1zM2 11a2 2 0 012-2h12a2 2 0 012 2v4a2 2 0 01-2 2H4a2 2 0 01-2-2v-4z" /></svg>
+                  <span className={styles.toggleText}>Sub-accounts</span>
+                </button>
+              )}
             </div>
             <div className={styles.timeFilterContainer}>
               <div className={styles.timeFilterButtonContainer}>
