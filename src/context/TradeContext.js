@@ -4,6 +4,7 @@ import { debounce } from 'lodash';
 import { formatNumber } from '../utils/numberFormat';
 import { useTags } from './TagsContext';
 import { matchesTagFilter } from '../utils/tagFilter';
+import { descendantAccountIds } from '../utils/accountTree';
 
 // The trade list's hideable columns, in display order (TradeList.jsx renders
 // them and its header's column picker toggles them, per account).
@@ -481,6 +482,14 @@ async function fetchCurrentPrice(symbol, type) {
   }
 }
 
+// Day notes from the API, ready for the list (dates local, type 'dayNote').
+function processDayNotes(data) {
+  return Array.isArray(data) ? data.map(note => {
+    const date = DateTime.fromISO(note.date, { zone: 'utc' }).toLocal();
+    return { ...note, date, type: 'dayNote', openDate: formatDate(date), firstActionDate: date };
+  }) : [];
+}
+
 // Qty and Pos became one Size column: hidden only if both were.
 function migrateHiddenColumns(list) {
   const hidden = Array.isArray(list) ? list : [];
@@ -792,6 +801,12 @@ export const TradeProvider = ({ children }) => {
   const [currentPage, setCurrentPage] = useState(1);
   const [hiddenColumns, setHiddenColumns] = useState([]);
   const [tagFilter, setTagFilter] = useState([]);
+  // List the sub-accounts' trades and notes too (Dashboard toggle, saved per
+  // account; Stats and the sidebar's P&L follow it).
+  const [includeSubAccounts, setIncludeSubAccounts] = useState(true);
+  const [subTrades, setSubTrades] = useState([]);
+  const [subDayNotes, setSubDayNotes] = useState([]);
+  const refreshSubAccountItemsRef = useRef(() => {});
   const { tagsById } = useTags();
 
   const priceCacheRef = useRef(new Map());
@@ -850,6 +865,7 @@ export const TradeProvider = ({ children }) => {
       setTradesPerPage(data.trades_per_page === undefined ? 100 : data.trades_per_page);
       setHiddenColumns(migrateHiddenColumns(data.hidden_columns));
       setTagFilter(Array.isArray(data.tag_filter) ? data.tag_filter : []);
+      setIncludeSubAccounts(data.include_sub_accounts !== false);
       setCurrentPage(1);
       filtersLoadedForRef.current = accountId;
     } catch (err) {
@@ -894,8 +910,9 @@ export const TradeProvider = ({ children }) => {
         trades_per_page: tradesPerPage,
         hidden_columns: hiddenColumns,
         tag_filter: tagFilter,
+        include_sub_accounts: includeSubAccounts,
     });
-  }, [currentAccountId, filter, timeFilter, customStartDate, customEndDate, symbolFilter, showTrades, showDayNotes, restrictToActionsInRange, tradesPerPage, hiddenColumns, tagFilter, saveFilterSettings]);
+  }, [currentAccountId, filter, timeFilter, customStartDate, customEndDate, symbolFilter, showTrades, showDayNotes, restrictToActionsInRange, tradesPerPage, hiddenColumns, tagFilter, includeSubAccounts, saveFilterSettings]);
 
   // The save above is debounced (1s) so rapid changes don't fire a request
   // per keystroke/click — but that means a discrete, deliberate change (e.g.
@@ -1193,13 +1210,7 @@ export const TradeProvider = ({ children }) => {
 
       const processedTrades = await processRawTradesArray(tradesData, futuresSettings);
 
-      const finalDayNotes = Array.isArray(dayNotesData) ? dayNotesData.map(note => ({
-        ...note,
-        date: DateTime.fromISO(note.date, { zone: 'utc' }).toLocal(),
-        type: 'dayNote',
-        openDate: formatDate(DateTime.fromISO(note.date, { zone: 'utc' }).toLocal()),
-        firstActionDate: DateTime.fromISO(note.date, { zone: 'utc' }).toLocal(),
-      })) : [];
+      const finalDayNotes = processDayNotes(dayNotesData);
 
       if (requestSeq !== refreshSeqRef.current) return;
 
@@ -1207,6 +1218,8 @@ export const TradeProvider = ({ children }) => {
       setTrades(processedTrades);
       setDayNotes(finalDayNotes);
       setIsFetching(false); // UI is now responsive
+      // A saved or moved trade may be a sub-account's.
+      refreshSubAccountItemsRef.current();
 
       // A saved/edited/deleted trade auto-settles cash server-side (see
       // routes/trades.js), so whenever trades refresh, cash balances may
@@ -1279,7 +1292,10 @@ export const TradeProvider = ({ children }) => {
     const due = () => Date.now() - lastPriceRefreshRef.current >= LIVE_PRICE_REFRESH_MS;
     const tick = () => {
       // Not while the tab is in the background; catch up when it's back.
-      if (document.visibilityState === 'visible' && due()) refreshOpenTradePrices();
+      if (document.visibilityState === 'visible' && due()) {
+        refreshOpenTradePrices();
+        refreshSubAccountItemsRef.current();
+      }
     };
     const timer = setInterval(tick, 30 * 1000);
     document.addEventListener('visibilitychange', tick);
@@ -1316,6 +1332,77 @@ export const TradeProvider = ({ children }) => {
       return [];
     }
   }, [futuresSettings, updateTradePriceData]);
+
+  // The sub-accounts' trades (live prices included) and day notes, for when
+  // the list includes them. Each item keeps its own account_id, so opening,
+  // editing or deleting it goes to its own account.
+  const subAccountIds = useMemo(() => descendantAccountIds(accounts, currentAccountId), [accounts, currentAccountId]);
+  const subAccountKey = subAccountIds.join(',');
+  const subSeqRef = useRef(0);
+  const refreshSubAccountItems = useCallback(async () => {
+    const seq = ++subSeqRef.current;
+    const ids = subAccountKey ? subAccountKey.split(',') : [];
+    if (!includeSubAccounts || ids.length === 0) { setSubTrades([]); setSubDayNotes([]); return; }
+    if (!futuresSettings) return;
+    try {
+      const results = await Promise.all(ids.map(async (id) => {
+        const [subTradesOfAccount, notes] = await Promise.all([
+          fetchProcessedTradesForAccount(id),
+          fetch(`${process.env.REACT_APP_API_URL}/api/daynotes`, { headers: { 'X-Account-ID': id } })
+            .then(res => (res.ok ? res.json() : []))
+            .catch(() => []),
+        ]);
+        return { trades: subTradesOfAccount, notes: processDayNotes(notes) };
+      }));
+      if (seq !== subSeqRef.current) return;
+      const allTrades = results.flatMap(r => r.trades);
+      const allNotes = results.flatMap(r => r.notes);
+      setSubTrades(allTrades);
+      setSubDayNotes(allNotes);
+      // Their screenshots, from each item's own account.
+      const withAttachments = [
+        ...allTrades.filter(t => t.attachments?.length).map(t => ({ kind: 'trade', item: t, url: `/api/trades/${t.id}` })),
+        ...allNotes.filter(n => n.attachments?.length).map(n => ({ kind: 'note', item: n, url: `/api/daynotes/${n.id}` })),
+      ];
+      if (withAttachments.length === 0) return;
+      const details = await Promise.allSettled(withAttachments.map(({ item, url }) =>
+        fetch(`${process.env.REACT_APP_API_URL}${url}`, { headers: { 'X-Account-ID': item.account_id } }).then(res => res.json())
+      ));
+      if (seq !== subSeqRef.current) return;
+      const attachmentsOf = { trade: new Map(), note: new Map() };
+      details.forEach((d, i) => {
+        if (d.status === 'fulfilled' && Array.isArray(d.value?.attachments)) {
+          attachmentsOf[withAttachments[i].kind].set(withAttachments[i].item.id, d.value.attachments);
+        }
+      });
+      setSubTrades(prev => prev.map(t => (attachmentsOf.trade.has(t.id) ? { ...t, attachments: attachmentsOf.trade.get(t.id) } : t)));
+      setSubDayNotes(prev => prev.map(n => (attachmentsOf.note.has(n.id) ? { ...n, attachments: attachmentsOf.note.get(n.id) } : n)));
+    } catch (err) {
+      console.error('Failed to load the sub-accounts\' trades:', err);
+    }
+  }, [includeSubAccounts, subAccountKey, futuresSettings, fetchProcessedTradesForAccount]);
+  refreshSubAccountItemsRef.current = refreshSubAccountItems;
+
+  // Another account's sub-accounts must not show under this one meanwhile.
+  useEffect(() => {
+    subSeqRef.current += 1;
+    setSubTrades([]);
+    setSubDayNotes([]);
+  }, [currentAccountId]);
+
+  useEffect(() => { refreshSubAccountItems(); }, [refreshSubAccountItems]);
+
+  const withSubAccounts = includeSubAccounts && subAccountIds.length > 0;
+  // This account's trades and notes plus, when the toggle is on, its
+  // sub-accounts'. What the Dashboard, Stats and the sidebar's P&L show.
+  const scopedTrades = useMemo(
+    () => (withSubAccounts && subTrades.length ? [...trades, ...subTrades] : trades),
+    [withSubAccounts, trades, subTrades]
+  );
+  const scopedDayNotes = useMemo(
+    () => (withSubAccounts && subDayNotes.length ? [...dayNotes, ...subDayNotes] : dayNotes),
+    [withSubAccounts, dayNotes, subDayNotes]
+  );
 
   const refreshFuturesSettings = useCallback(async () => {
     try {
@@ -1437,16 +1524,10 @@ export const TradeProvider = ({ children }) => {
   }, [timeFilter, customStartDate, customEndDate, restrictToActionsInRange, filter, symbolFilter, tagFilter, tagsById, sortField, sortDirection]);
 
   const filteredItems = useMemo(() => applyItemFilters([
-    ...(showTrades && Array.isArray(trades) ? trades : []),
-    ...(showDayNotes && Array.isArray(dayNotes) ? dayNotes : []),
-  ]), [applyItemFilters, trades, dayNotes, showTrades, showDayNotes]);
+    ...(showTrades && Array.isArray(scopedTrades) ? scopedTrades : []),
+    ...(showDayNotes && Array.isArray(scopedDayNotes) ? scopedDayNotes : []),
+  ]), [applyItemFilters, scopedTrades, scopedDayNotes, showTrades, showDayNotes]);
 
-  // Trades from other accounts (sub-accounts, for Stats) filtered and sorted
-  // the way this account's own are, honouring the trades/notes toggle.
-  const filterTradeItems = useCallback(
-    (items) => applyItemFilters(showTrades && Array.isArray(items) ? items : []),
-    [applyItemFilters, showTrades]
-  );
 
   const stats = useMemo(() => {
     return computeStats(filteredItems.filter(item => item.type === 'FUT' || item.type === 'STK'), futuresSettings);
@@ -1457,7 +1538,6 @@ export const TradeProvider = ({ children }) => {
         trades,
         dayNotes,
         filteredItems,
-        filterTradeItems,
         setTrades,
         stats,
         toggleFilter,
@@ -1502,11 +1582,18 @@ export const TradeProvider = ({ children }) => {
         toggleColumnVisibility,
         tagFilter,
         setTagFilter,
+        includeSubAccounts,
+        setIncludeSubAccounts,
+        subAccountIds,
+        withSubAccounts,
+        scopedTrades,
+        scopedDayNotes,
   }), [
-        trades, dayNotes, filteredItems, filterTradeItems, stats, toggleFilter, refreshTrades, fetchProcessedTradesForAccount, setSort, sortField, sortDirection,
+        trades, dayNotes, filteredItems, stats, toggleFilter, refreshTrades, fetchProcessedTradesForAccount, setSort, sortField, sortDirection,
         timeFilter, filter, customStartDate, customEndDate, accounts, refreshAccounts, holdings, refreshHoldings, currentAccountId, showTrades, showDayNotes,
         toggleShowTrades, toggleShowDayNotes, futuresSettings, refreshFuturesSettings, getAllTradeData,
-        symbolFilter, restrictToActionsInRange, isFetching, tradesPerPage, currentPage, hiddenColumns, toggleColumnVisibility, tagFilter
+        symbolFilter, restrictToActionsInRange, isFetching, tradesPerPage, currentPage, hiddenColumns, toggleColumnVisibility, tagFilter,
+        includeSubAccounts, subAccountIds, withSubAccounts, scopedTrades, scopedDayNotes
   ]);
 
   return (

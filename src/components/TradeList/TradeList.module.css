@@ -382,23 +382,24 @@
   letter-spacing: 0.02em;
 }
 
-/* Size: what's held over "of" what was opened, once part of an open trade
-   is closed; cut off with … rather than running into the next column. */
-.sizeStack {
+/* Two lines in one cell: Size (held, then "of" what was opened) and Symbol
+   (then the sub-account it's in); cut off with … rather than running into
+   the next column. */
+.stack {
   display: flex;
   flex-direction: column;
   min-width: 0;
   line-height: 1.25;
 }
 
-.sizeText,
-.sizeOf {
+.stackMain,
+.stackSub {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.sizeOf {
+.stackSub {
   font-size: 11px;
   color: var(--ui-muted, #8B93A3);
 }
@@ -686,6 +687,7 @@
 
   .mobileTags {
     display: flex;
+    align-items: center;
     flex-wrap: wrap;
     gap: 4px;
     width: 100%;
@@ -815,4 +817,16 @@
     height: 34px;
     padding: 0 12px;
   }
+}
+
+/* The sub-account an item is in, when the list includes sub-accounts. */
+.accountLabel {
+  color: var(--ui-muted, #8B93A3);
+  font-size: 11px;
+  font-weight: 500;
+  white-space: nowrap;
+}
+
+.noteAccount {
+  margin-left: 8px;
 }
