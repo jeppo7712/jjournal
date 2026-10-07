@@ -379,6 +379,11 @@
 }
 
 .positive,
+/* An open trade's size: still held, in italics like its open return. */
+.sizeOpen {
+  font-style: italic;
+}
+
 .positiveItalic {
   color: #4ADE80;
   font-weight: 600;
@@ -579,12 +584,11 @@
   white-space: nowrap;
 }
 
-/* Hide Entry Total, Exit Total and Pos at 992px or below. Targets per-column
+/* Hide Entry Total and Exit Total at 992px or below. Targets per-column
    classes, since a hidden column is left out of the DOM entirely. */
 @media (max-width: 992px) {
   .colEntryTotal,
-  .colExitTotal,
-  .colPosition {
+  .colExitTotal {
     display: none;
   }
 

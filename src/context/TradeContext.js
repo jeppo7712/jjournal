@@ -12,12 +12,11 @@ export const TRADE_LIST_COLUMNS = [
   { key: 'symbol', label: 'Symbol' },
   { key: 'status', label: 'Status' },
   { key: 'side', label: 'Side' },
-  { key: 'quantity', label: 'Qty' },
+  { key: 'size', label: 'Size' },
   { key: 'entry', label: 'Entry' },
   { key: 'exit', label: 'Exit' },
   { key: 'entryTotal', label: 'Entry Total' },
   { key: 'exitTotal', label: 'Exit Total' },
-  { key: 'position', label: 'Position' },
   { key: 'holdTime', label: 'Hold Time' },
   { key: 'tags', label: 'Tags' },
   { key: 'return', label: 'Return' },
@@ -482,6 +481,14 @@ async function fetchCurrentPrice(symbol, type) {
   }
 }
 
+// Qty and Pos became one Size column: hidden only if both were.
+function migrateHiddenColumns(list) {
+  const hidden = Array.isArray(list) ? list : [];
+  if (!hidden.includes('quantity') && !hidden.includes('position')) return hidden;
+  const rest = hidden.filter(k => k !== 'quantity' && k !== 'position');
+  return hidden.includes('quantity') && hidden.includes('position') && !rest.includes('size') ? [...rest, 'size'] : rest;
+}
+
 function sortItems(items, field, direction) {
   if (!Array.isArray(items)) return [];
   return [...items].sort((a, b) => {
@@ -493,6 +500,10 @@ function sortItems(items, field, direction) {
       // For open trades, use currentReturn; for closed trades, use return
       aField = a.status === 'OPEN' ? a.currentReturn : a.return;
       bField = b.status === 'OPEN' ? b.currentReturn : b.return;
+    } else if (field === 'size') {
+      // What's held of an open trade, the round trip of a closed one.
+      aField = a.status === 'OPEN' ? a.position : a.quantity;
+      bField = b.status === 'OPEN' ? b.position : b.quantity;
     } else if (field === 'returnPercentage') {
       // For open trades, use currentReturnPercentage; for closed trades, use returnPercentage
       aField = a.status === 'OPEN' ? a.currentReturnPercentage : a.returnPercentage;
@@ -837,7 +848,7 @@ export const TradeProvider = ({ children }) => {
       // refresh, account switch). Only fall back to 100 if the key is
       // actually absent from the response.
       setTradesPerPage(data.trades_per_page === undefined ? 100 : data.trades_per_page);
-      setHiddenColumns(Array.isArray(data.hidden_columns) ? data.hidden_columns : []);
+      setHiddenColumns(migrateHiddenColumns(data.hidden_columns));
       setTagFilter(Array.isArray(data.tag_filter) ? data.tag_filter : []);
       setCurrentPage(1);
       filtersLoadedForRef.current = accountId;
