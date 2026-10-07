@@ -22,7 +22,7 @@ Everything runs on your own machine/server against your own PostgreSQL database 
 - Stats dashboard: win rate, expectancy, Sharpe/Sortino, streaks, hourly/day-of-week breakdowns, return distribution
 - IBKR Flex Web Service import for reconciling trade activity/executions
 - A [read/write external API](EXTERNAL_API.md) for feeding your data into another tool (e.g. an LLM-based trade analyzer) — no auth by design, see that doc before exposing it beyond localhost
-- USD support only
+- Multi-currency: each symbol has its own currency, and money is shown per currency, never blended
 
 ## Screenshots
 
