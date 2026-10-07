@@ -465,6 +465,9 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     // and holdings on a crypto account). Only hidden: their data still
     // counts in the balance.
     await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS hidden_capital_sections TEXT[] NOT NULL DEFAULT '{}'`);
+    // An account no longer in use (e.g. last year's paper account): listed
+    // last, under "Archived", in the account dropdowns. Nothing else changes.
+    await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS archived BOOLEAN NOT NULL DEFAULT false`);
     await client.query(`ALTER TABLE accounts DROP CONSTRAINT IF EXISTS check_broker_sync_mode`);
     await client.query(`ALTER TABLE accounts ADD CONSTRAINT check_broker_sync_mode CHECK (broker_sync_mode IN ('OFF', 'SUGGEST', 'AUTO'))`);
 

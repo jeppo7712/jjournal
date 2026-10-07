@@ -569,6 +569,20 @@ export default function Settings() {
     }
   };
 
+  const toggleArchived = async (acc) => {
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/accounts/${acc.id}/archived`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
+        body: JSON.stringify({ archived: !acc.archived }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error || `HTTP ${res.status}`);
+      await refreshAccountsList();
+    } catch (err) {
+      notify('Error archiving account: ' + err.message);
+    }
+  };
+
   const handleDeleteAccount = async (id) => {
     if (accounts.length <= 1) {
       notify('Cannot delete the last account.');
@@ -1689,8 +1703,8 @@ export default function Settings() {
                   </tr>
                 </thead>
                 <tbody>
-                  {[...accounts].sort((a, b) => a.name.localeCompare(b.name)).map((acc, index) => (
-                    <tr key={acc.id}>
+                  {[...accounts].sort((a, b) => Number(!!a.archived) - Number(!!b.archived) || a.name.localeCompare(b.name)).map((acc, index) => (
+                    <tr key={acc.id} className={acc.archived ? styles.archivedRow : undefined}>
                       <td className={styles.primaryCell}>{acc.name}</td>
                       <td>
                         {acc.parent_account_id ? (accounts.find(a => a.id === acc.parent_account_id)?.name || '—') : '—'}
@@ -1704,10 +1718,19 @@ export default function Settings() {
                         {acc.custodian_is_us === false && <span className={`${styles.badge} ${styles.badgeSubtle}`}>non-US</span>}
                         {(acc.custodian_is_us === null || acc.custodian_is_us === undefined) && <span className={styles.muted}> unclassified</span>}
                       </td>
-                      <td>{acc.id === parseInt(currentAccountId) && <span className={`${styles.badge} ${styles.badgeBlue}`}>Current</span>}</td>
+                      <td>
+                        {acc.id === parseInt(currentAccountId) && <span className={`${styles.badge} ${styles.badgeBlue}`}>Current</span>}
+                        {acc.archived && <span className={`${styles.badge} ${styles.badgeSubtle}`}>Archived</span>}
+                      </td>
                       <td className={styles.actionsCell}>
                         <span className={styles.rowActions}>
                           <IconButton size="small" icon="pencil" label={`Edit ${acc.name}`} onClick={() => openAccountModal(acc)} />
+                          <IconButton
+                            size="small"
+                            icon={acc.archived ? 'unarchive' : 'archive'}
+                            label={acc.archived ? `Unarchive ${acc.name}` : `Archive ${acc.name}: list it last, under "Archived"`}
+                            onClick={() => toggleArchived(acc)}
+                          />
                           <IconButton size="small" icon="trash" label={`Delete ${acc.name}`} onClick={() => handleDeleteAccount(acc.id)} />
                         </span>
                       </td>
