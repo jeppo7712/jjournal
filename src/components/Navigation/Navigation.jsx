@@ -5,6 +5,7 @@ import styles from './Navigation.module.css';
 import { formatMoney } from '../../utils/formatMoney';
 import { setNumberFormat } from '../../utils/numberFormat';
 import { descendantAccountIds } from '../../utils/accountTree';
+import AccountOptions from '../common/AccountOptions';
 import { sumByCurrency, mergeTotals, toTotalsList } from '../../utils/currencyTotals';
 
 // The TradingView light: green while alerts keep delivering bars, amber once
@@ -386,11 +387,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
             onClick={e => e.stopPropagation()} //
             className={styles.accountSelector}
           >
-            {safeAccounts.map(acc => (
-              <option key={acc.id} value={acc.id}>
-                {acc.name}
-              </option>
-            ))}
+            <AccountOptions accounts={safeAccounts} />
             {safeAccounts.length === 0 && (
               <option value="" disabled>
                 No accounts available

@@ -1,6 +1,7 @@
 import React, { useContext, useEffect, useState } from 'react';
 import { TradeContext } from '../../context/TradeContext';
 import IconButton from '../common/IconButton';
+import AccountOptions from '../common/AccountOptions';
 
 // Settings → Checklists: each account's Entry and Exit checklist. Every
 // trade's Journal tab shows these as tick boxes (see TradeChecklist), so the
@@ -104,18 +105,18 @@ function ChecklistSettings({ styles, apiBaseUrl }) {
         <div className={styles.formField}>
           <label htmlFor="checklistAccount">Account</label>
           <select id="checklistAccount" className={styles.inputBubble} value={accountId} onChange={e => setAccountId(e.target.value)}>
-            {accounts.map(a => <option key={a.id} value={String(a.id)}>{a.name}</option>)}
+            <AccountOptions accounts={accounts} />
           </select>
         </div>
         <div className={styles.formField}>
           <label htmlFor="checklistCopy">Copy lists from</label>
           <select id="checklistCopy" className={styles.inputBubble} value="" onChange={e => copyFrom(e.target.value)}>
             <option value="">Choose an account…</option>
-            {accounts.filter(a => String(a.id) !== accountId).map(a => (
-              <option key={a.id} value={String(a.id)}>
-                {a.name} ({(a.checklists?.entry?.length || 0) + (a.checklists?.exit?.length || 0)} items)
-              </option>
-            ))}
+            <AccountOptions
+              accounts={accounts}
+              exclude={accountId}
+              label={a => `${a.name} (${(a.checklists?.entry?.length || 0) + (a.checklists?.exit?.length || 0)} items)`}
+            />
           </select>
         </div>
       </div>
