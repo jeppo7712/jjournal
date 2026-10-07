@@ -69,6 +69,27 @@ function renderDailyPnL(totals, styles) {
   ));
 }
 
+// A trade's size, one figure: the round trip once closed; while open, what's
+// held, as "held / opened" once part of it was sold (bought back if short).
+const fmtQty = q => formatNumber(q, 8, true);
+function tradeSize(item) {
+  if (item.status !== 'OPEN') {
+    return item.quantity !== undefined && item.quantity !== null ? { text: fmtQty(item.quantity) } : { text: '-' };
+  }
+  const held = Number(item.position);
+  if (!Number.isFinite(held)) return { text: '-' };
+  const opened = Number(item.side === 'SHORT' ? item.sellQty : item.buyQty) || held;
+  const closed = opened - held;
+  if (closed > 0) {
+    return {
+      text: `${fmtQty(held)} / ${fmtQty(opened)}`,
+      open: true,
+      title: `${fmtQty(held)} still open, ${fmtQty(closed)} ${item.side === 'SHORT' ? 'bought back' : 'sold'}`,
+    };
+  }
+  return { text: fmtQty(held), open: true, title: `${fmtQty(held)} open` };
+}
+
 // The header, in TRADE_LIST_COLUMNS order. `className` keeps a column's
 // width rules (hidden on narrower screens) in step with its cells.
 const HEADER_COLUMNS = [
@@ -76,12 +97,11 @@ const HEADER_COLUMNS = [
   { key: 'symbol', label: 'Symbol', sortable: true },
   { key: 'status', label: 'Status', sortable: true },
   { key: 'side', label: 'Side', sortable: true },
-  { key: 'quantity', label: 'Qty' },
+  { key: 'size', label: 'Size', sortable: true },
   { key: 'entry', label: 'Entry' },
   { key: 'exit', label: 'Exit' },
   { key: 'entryTotal', label: 'Ent Tot', className: 'colEntryTotal' },
   { key: 'exitTotal', label: 'Ext Tot', className: 'colExitTotal' },
-  { key: 'position', label: 'Pos', className: 'colPosition' },
   { key: 'holdTime', label: 'Hold' },
   { key: 'tags', label: 'Tags', className: 'colTags' },
   { key: 'return', label: 'Return', sortable: true },
@@ -341,12 +361,8 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                         {item.side === 'LONG' ? LongArrowSvg : item.side === 'SHORT' ? ShortArrowSvg : '-'}
                       </span>
                     </div>
-                    <div className={styles.cellBottom}>
-                      {item.status === 'OPEN' ? (
-                        item.position !== undefined && item.position !== null ? `${item.position} PCS` : '- PCS'
-                      ) : (
-                        item.quantity !== undefined && item.quantity !== null ? `${formatNumber(item.quantity, 8, true)} PCS` : '- PCS'
-                      )}
+                    <div className={styles.cellBottom} title={tradeSize(item).title}>
+                      {tradeSize(item).text} PCS
                     </div>
                   </div>
                   <div className={styles.cellColumn}>
@@ -435,11 +451,14 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                       </span>
                     </div>
                   )}
-                  {isColumnVisible('quantity') && (
-                    <div className={styles.cell}>
-                      {item.quantity !== undefined && item.quantity !== null ? formatNumber(item.quantity, 8, true) : '-'}
-                    </div>
-                  )}
+                  {isColumnVisible('size') && (() => {
+                    const size = tradeSize(item);
+                    return (
+                      <div className={styles.cell} title={size.title}>
+                        <span className={size.open ? styles.sizeOpen : undefined}>{size.text}</span>
+                      </div>
+                    );
+                  })()}
                   {isColumnVisible('entry') && (
                     <div className={styles.cell}>
                       {item.entry !== undefined && item.entry !== null ? formatMoney(item.entry, item.currency, item.pricePrecision || 2) : '-'}
@@ -458,11 +477,6 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                   {isColumnVisible('exitTotal') && (
                     <div className={`${styles.cell} ${styles.colExitTotal}`}>
                       {item.exitTotal !== undefined && item.exitTotal !== null ? formatMoney(item.exitTotal, item.currency) : '-'}
-                    </div>
-                  )}
-                  {isColumnVisible('position') && (
-                    <div className={`${styles.cell} ${styles.colPosition}`}>
-                      {item.position !== undefined && item.position !== null ? item.position : '-'}
                     </div>
                   )}
                   {isColumnVisible('holdTime') && (
