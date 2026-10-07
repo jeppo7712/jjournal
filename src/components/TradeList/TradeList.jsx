@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect, useRef } from 'react';
+import React, { useContext, useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { TradeContext, formatDate, parseActionDate, TRADE_LIST_COLUMNS } from '../../context/TradeContext';
 import { DateTime } from 'luxon';
@@ -69,26 +69,36 @@ function renderDailyPnL(totals, styles) {
   ));
 }
 
-// A trade's size, one figure: the round trip once closed; while open, what's
-// held, as "held / opened" once part of it was sold (bought back if short).
+// A trade's size: the round trip once closed; while open, what's held,
+// and once part of it was sold (bought back if short) also what was opened
+// ("20 / 125" on phones, two lines in the table).
 const fmtQty = q => formatNumber(q, 8, true);
 function tradeSize(item) {
   if (item.status !== 'OPEN') {
-    return item.quantity !== undefined && item.quantity !== null ? { text: fmtQty(item.quantity) } : { text: '-' };
+    const q = item.quantity !== undefined && item.quantity !== null ? fmtQty(item.quantity) : '-';
+    return { text: q, held: q, title: q !== '-' ? q : undefined };
   }
   const held = Number(item.position);
-  if (!Number.isFinite(held)) return { text: '-' };
+  if (!Number.isFinite(held)) return { text: '-', held: '-' };
   const opened = Number(item.side === 'SHORT' ? item.sellQty : item.buyQty) || held;
   const closed = opened - held;
   if (closed > 0) {
     return {
       text: `${fmtQty(held)} / ${fmtQty(opened)}`,
+      held: fmtQty(held),
+      of: fmtQty(opened),
       open: true,
-      title: `${fmtQty(held)} still open, ${fmtQty(closed)} ${item.side === 'SHORT' ? 'bought back' : 'sold'}`,
+      title: `${fmtQty(held)} still open of ${fmtQty(opened)}, ${fmtQty(closed)} ${item.side === 'SHORT' ? 'bought back' : 'sold'}`,
     };
   }
-  return { text: fmtQty(held), open: true, title: `${fmtQty(held)} open` };
+  return { text: fmtQty(held), held: fmtQty(held), open: true, title: `${fmtQty(held)} open` };
 }
+
+// How much of the row each column gets (flex-grow; 1 by default), the
+// same for the header and the rows so they line up: narrow for the short
+// ones, wider for the money totals and the tags.
+const COLUMN_FLEX = { openDate: 1.1, status: 0.85, side: 0.6, holdTime: 0.85, entryTotal: 1.25, exitTotal: 1.25, tags: 1.6 };
+const colFlex = key => ({ flex: `${COLUMN_FLEX[key] ?? 1} 1 0%` });
 
 // The header, in TRADE_LIST_COLUMNS order. `className` keeps a column's
 // width rules (hidden on narrower screens) in step with its cells.
@@ -147,6 +157,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
       document.removeEventListener('keydown', onKey);
     };
   }, [showColumnMenu]);
+
 
   const isColumnVisible = (key) => !hiddenColumns.includes(key);
   const safeFilteredItems = Array.isArray(filteredItems) ? filteredItems : [];
@@ -273,13 +284,28 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
   const endIndex = tradesPerPage === null ? totalTrades : Math.min(startIndex + tradesPerPage, totalTrades);
   const paginatedItems = tradesPerPage === null ? safeFilteredItems : safeFilteredItems.slice(startIndex, endIndex);
 
+  // A long list scrolls and its scrollbar narrows the rows but not the
+  // header: the header gets the same room on its right (--rows-scrollbar).
+  const rowsRef = useRef(null);
+  const [rowsScrollbar, setRowsScrollbar] = useState(0);
+  useLayoutEffect(() => {
+    const el = rowsRef.current;
+    if (!el || typeof ResizeObserver === 'undefined') return undefined;
+    const measure = () => setRowsScrollbar(Math.max(0, el.offsetWidth - el.clientWidth));
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, [paginatedItems.length]);
+
 
   return (
     <div className={styles.tradeList} onMouseMove={handleMouseMove}>
-      <div className={styles.header}>
+      <div className={styles.header} style={{ '--rows-scrollbar': `${rowsScrollbar}px` }}>
         {HEADER_COLUMNS.filter(col => isColumnVisible(col.key)).map(col => (
           <div
             key={col.key}
+            style={colFlex(col.key)}
             className={`${styles.headerCell} ${col.className ? styles[col.className] : ''} ${col.sortable ? styles.sortable : ''} ${sortField === col.key ? styles.sorted : ''}`}
             onClick={col.sortable ? () => handleSort(col.key) : undefined}
             title={col.sortable ? `Sort by ${col.label.toLowerCase()}` : undefined}
@@ -334,7 +360,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
           )}
         </div>
       </div>
-      <div className={styles.tradeRows}>
+      <div className={styles.tradeRows} ref={rowsRef}>
         {paginatedItems.map(item => {
           if (item.type === 'FUT' || item.type === 'STK') {
             const lastActionDate = item.lastActionDate;
@@ -426,10 +452,10 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                   </div>
                 )}
                 <div className={styles.desktopCells}>
-                  {isColumnVisible('openDate') && <div className={styles.cell}>{item.openDate}</div>}
-                  {isColumnVisible('symbol') && <div className={`${styles.cell} ${styles.symbol}`}>{item.symbol}</div>}
+                  {isColumnVisible('openDate') && <div style={colFlex('openDate')} className={styles.cell}>{item.openDate}</div>}
+                  {isColumnVisible('symbol') && <div style={colFlex('symbol')} className={`${styles.cell} ${styles.symbol}`}>{item.symbol}</div>}
                   {isColumnVisible('status') && (
-                    <div className={styles.cell}>
+                    <div style={colFlex('status')} className={styles.cell}>
                       <span className={
                         `${styles.status} ` +
                         (item.status === 'WIN'
@@ -445,7 +471,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                     </div>
                   )}
                   {isColumnVisible('side') && (
-                    <div className={styles.cell}>
+                    <div style={colFlex('side')} className={styles.cell}>
                       <span className={`${styles.direction} ${item.side === 'LONG' ? styles.long : item.side === 'SHORT' ? styles.short : ''}`}>
                         {item.side === 'LONG' ? LongArrowSvg : item.side === 'SHORT' ? ShortArrowSvg : '-'}
                       </span>
@@ -454,45 +480,48 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                   {isColumnVisible('size') && (() => {
                     const size = tradeSize(item);
                     return (
-                      <div className={styles.cell} title={size.title}>
-                        <span className={size.open ? styles.sizeOpen : undefined}>{size.text}</span>
+                      <div style={colFlex('size')} className={styles.cell} title={size.title}>
+                        <div className={styles.sizeStack}>
+                          <span className={`${styles.sizeText} ${size.open ? styles.sizeOpen : ''}`}>{size.held}</span>
+                          {size.of && <span className={styles.sizeOf}>of {size.of}</span>}
+                        </div>
                       </div>
                     );
                   })()}
                   {isColumnVisible('entry') && (
-                    <div className={styles.cell}>
+                    <div style={colFlex('entry')} className={styles.cell}>
                       {item.entry !== undefined && item.entry !== null ? formatMoney(item.entry, item.currency, item.pricePrecision || 2) : '-'}
                     </div>
                   )}
                   {isColumnVisible('exit') && (
-                    <div className={styles.cell}>
+                    <div style={colFlex('exit')} className={styles.cell}>
                       {item.exit !== undefined && item.exit !== null ? formatMoney(item.exit, item.currency, item.pricePrecision || 2) : '-'}
                     </div>
                   )}
                   {isColumnVisible('entryTotal') && (
-                    <div className={`${styles.cell} ${styles.colEntryTotal}`}>
+                    <div style={colFlex('entryTotal')} className={`${styles.cell} ${styles.colEntryTotal}`}>
                       {item.entryTotal !== undefined && item.entryTotal !== null ? formatMoney(item.entryTotal, item.currency) : '-'}
                     </div>
                   )}
                   {isColumnVisible('exitTotal') && (
-                    <div className={`${styles.cell} ${styles.colExitTotal}`}>
+                    <div style={colFlex('exitTotal')} className={`${styles.cell} ${styles.colExitTotal}`}>
                       {item.exitTotal !== undefined && item.exitTotal !== null ? formatMoney(item.exitTotal, item.currency) : '-'}
                     </div>
                   )}
                   {isColumnVisible('holdTime') && (
-                    <div className={styles.cell}>
+                    <div style={colFlex('holdTime')} className={styles.cell}>
                       <span className={styles.hold}>{item.holdTime || '-'}</span>
                     </div>
                   )}
                   {isColumnVisible('tags') && (
-                    <div className={`${styles.cell} ${styles.colTags}`}>
+                    <div style={colFlex('tags')} className={`${styles.cell} ${styles.colTags}`}>
                       {tagsOfTrade(item.tag_ids).map(({ tag, group }) => (
                         <TagChip key={tag.id} small name={tag.name} color={group?.color} title={group ? `${group.name}: ${tag.name}` : tag.name} />
                       ))}
                     </div>
                   )}
                   {isColumnVisible('return') && (
-                    <div className={styles.cell}>
+                    <div style={colFlex('return')} className={styles.cell}>
                       {item.status === 'OPEN' ? (
                         item.currentReturn !== undefined && item.currentReturn !== null ? (
                           <span className={item.currentReturn >= 0 ? styles.positiveItalic : styles.negativeItalic}>
@@ -513,7 +542,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                     </div>
                   )}
                   {isColumnVisible('returnPercentage') && (
-                    <div className={styles.cell}>
+                    <div style={colFlex('returnPercentage')} className={styles.cell}>
                       {item.status === 'OPEN' ? (
                         item.currentReturnPercentage !== undefined && item.currentReturnPercentage !== null ? (
                           <span className={item.currentReturnPercentage >= 0 ? styles.positiveItalic : styles.negativeItalic}>
