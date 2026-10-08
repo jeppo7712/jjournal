@@ -1380,6 +1380,12 @@
   font-variant-numeric: tabular-nums;
 }
 
+/* The unrealised figure is at a stored price, not a live one. */
+.tvStoredPrice {
+  font-size: 11px;
+  color: var(--ui-faint, #6B7280);
+}
+
 .tvSplitDot {
   width: 7px;
   height: 7px;

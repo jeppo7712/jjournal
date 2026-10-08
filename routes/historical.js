@@ -45,6 +45,14 @@ const { getExchangeInfo } = require('../modules/historical-data-service'); // As
 const dummyBroadcast = () => { };
 const { logger } = require('../modules/logger.js');
 const { timeframeLabel } = require('../modules/timeframeLabel.js');
+const { latestStoredPrice } = require('../modules/storedPrice.js');
+
+// A live quote that hasn't come from Yahoo by then is taken from the stored
+// bars instead; after such a timeout Yahoo is skipped for a while, so that
+// every open position doesn't wait out the same timeout again.
+const YAHOO_QUOTE_TIMEOUT_MS = 6000;
+const YAHOO_SKIP_AFTER_TIMEOUT_MS = 2 * 60 * 1000;
+let yahooSkipUntil = 0;
 
 module.exports = (db, taskManager, historicalDataService, broadcastStatus, uuidv4, triggerTaskProcessor) => {
 
@@ -339,7 +347,77 @@ module.exports = (db, taskManager, historicalDataService, broadcastStatus, uuidv
     });
 
 
-    // GET /yahoo-finance/:symbol
+    // Yahoo's quote for a symbol: { symbol, price, priceSource, marketState,
+    // lastUpdated }. Throws when Yahoo has no usable price.
+    async function yahooLivePrice(symbol, requestId) {
+        let data;
+        try {
+            data = await yahoo.quote(symbol);
+        } catch (quoteError) {
+            logger.warn(`[YahooFinance] Quote for ${symbol} failed: ${quoteError.message}. Attempting quoteSummary.`);
+            broadcastStatus(requestId, `Quote for ${symbol} failed, trying alternative fetch.`, 'warn');
+            try {
+                const quoteSummaryResult = await yahoo._internal.yfClient.quoteSummary(symbol, {
+                    modules: ['price', 'summaryDetail']
+                });
+                if (quoteSummaryResult && quoteSummaryResult.price) {
+                    data = quoteSummaryResult.price;
+                    if (quoteSummaryResult.summaryDetail && quoteSummaryResult.summaryDetail.marketState) {
+                        data.marketState = quoteSummaryResult.summaryDetail.marketState;
+                    }
+                } else {
+                    throw new Error(`No price data found in quoteSummary for ${symbol}`);
+                }
+            } catch (quoteSummaryError) {
+                throw new Error(`Failed to fetch data using quote or quoteSummary for ${symbol}: ${quoteSummaryError.message}`);
+            }
+        }
+        if (!data) throw new Error('No data returned');
+
+        let latestPrice = null;
+        let priceSource = null;
+        if (typeof data.regularMarketPrice === 'number') {
+            latestPrice = data.regularMarketPrice;
+            priceSource = 'regularMarketPrice';
+        } else if (typeof data.postMarketPrice === 'number' && data.marketState === 'POST') {
+            latestPrice = data.postMarketPrice;
+            priceSource = 'postMarketPrice';
+        } else if (typeof data.preMarketPrice === 'number' && data.marketState === 'PRE') {
+            latestPrice = data.preMarketPrice;
+            priceSource = 'preMarketPrice';
+        } else if (typeof data.bid === 'number') {
+            latestPrice = data.bid;
+            priceSource = 'bid';
+        } else if (typeof data.ask === 'number') {
+            latestPrice = data.ask;
+            priceSource = 'ask';
+        }
+        if (latestPrice === null) {
+            logger.warn(`[YahooFinance] No valid price found for ${symbol}: ${JSON.stringify(data)}`);
+            throw new Error('No valid price available');
+        }
+
+        return {
+            symbol: data.symbol || symbol,
+            price: latestPrice,
+            priceSource,
+            marketState: data.marketState || 'UNKNOWN',
+            // See routes/external.js's /quote/:symbol for why this checks
+            // instanceof Date first — modules/yahoo.js's client-library path
+            // returns regularMarketTime as an already-parsed Date, and
+            // multiplying that by 1000 (assuming raw epoch seconds) produces a
+            // garbage far-future timestamp.
+            lastUpdated: data.regularMarketTime
+                ? (data.regularMarketTime instanceof Date
+                    ? data.regularMarketTime.toISOString()
+                    : new Date(data.regularMarketTime * 1000).toISOString())
+                : new Date().toISOString()
+        };
+    }
+
+    // GET /yahoo-finance/:symbol — the live price of an open position, from
+    // Yahoo; when Yahoo fails or is too slow, the last stored bar's close,
+    // marked stale: true with the bar's time.
     router.get('/yahoo-finance/:symbol', async (req, res) => {
         const { symbol } = req.params;
         const requestId = uuidv4();
@@ -349,92 +427,54 @@ module.exports = (db, taskManager, historicalDataService, broadcastStatus, uuidv
             return res.status(400).json({ error: 'Invalid symbol format' });
         }
 
-        broadcastStatus(requestId, `Fetching Yahoo Finance data for ${symbol}`, 'info');
-
-        try {
-            let data;
-
+        let yahooError;
+        if (Date.now() < yahooSkipUntil) {
+            yahooError = new Error('Yahoo timed out recently');
+        } else {
+            broadcastStatus(requestId, `Fetching Yahoo Finance data for ${symbol}`, 'info');
+            let timer;
             try {
-                data = await yahoo.quote(symbol);
-            } catch (quoteError) {
-                logger.warn(`[YahooFinance] Quote for ${symbol} failed: ${quoteError.message}. Attempting quoteSummary.`);
-                broadcastStatus(requestId, `Quote for ${symbol} failed, trying alternative fetch.`, 'warn');
-
-                try {
-                    const quoteSummaryResult = await yahoo._internal.yfClient.quoteSummary(symbol, {
-                        modules: ['price', 'summaryDetail']
-                    });
-
-                    if (quoteSummaryResult && quoteSummaryResult.price) {
-                        data = quoteSummaryResult.price;
-                        if (quoteSummaryResult.summaryDetail && quoteSummaryResult.summaryDetail.marketState) {
-                            data.marketState = quoteSummaryResult.summaryDetail.marketState;
-                        }
-                    } else {
-                        throw new Error(`No price data found in quoteSummary for ${symbol}`);
-                    }
-                } catch (quoteSummaryError) {
-                    logger.error(`[YahooFinance] quoteSummary for ${symbol} also failed: ${quoteSummaryError.message}`);
-                    throw new Error(`Failed to fetch data using quote or quoteSummary for ${symbol}: ${quoteSummaryError.message}`);
-                }
+                const response = await Promise.race([
+                    yahooLivePrice(symbol, requestId),
+                    new Promise((_, reject) => {
+                        timer = setTimeout(() => reject(Object.assign(new Error(`no answer within ${YAHOO_QUOTE_TIMEOUT_MS / 1000}s`), { timedOut: true })), YAHOO_QUOTE_TIMEOUT_MS);
+                    }),
+                ]);
+                logger.debug(`[YahooFinance] Retrieved price for ${symbol}: ${response.price} (${response.priceSource}, marketState: ${response.marketState})`);
+                broadcastStatus(requestId, `Retrieved price ${response.price} for ${symbol} from Yahoo Finance`, 'success');
+                return res.json(response);
+            } catch (error) {
+                yahooError = error;
+                if (error.timedOut) yahooSkipUntil = Date.now() + YAHOO_SKIP_AFTER_TIMEOUT_MS;
+                logger.warn(`[YahooFinance] Failed to fetch data for ${symbol}: ${error.message}`);
+            } finally {
+                clearTimeout(timer);
             }
-
-
-            if (!data) {
-                broadcastStatus(requestId, `No data returned for ${symbol} from Yahoo Finance`, 'error');
-                return res.status(404).json({ error: 'No data found for symbol' });
-            }
-
-            let latestPrice = null;
-            let priceSource = null;
-
-            if (typeof data.regularMarketPrice === 'number') {
-                latestPrice = data.regularMarketPrice;
-                priceSource = 'regularMarketPrice';
-            } else if (typeof data.postMarketPrice === 'number' && data.marketState === 'POST') {
-                latestPrice = data.postMarketPrice;
-                priceSource = 'postMarketPrice';
-            } else if (typeof data.preMarketPrice === 'number' && data.marketState === 'PRE') {
-                latestPrice = data.preMarketPrice;
-                priceSource = 'preMarketPrice';
-            } else if (typeof data.bid === 'number') {
-                latestPrice = data.bid;
-                priceSource = 'bid';
-            } else if (typeof data.ask === 'number') {
-                latestPrice = data.ask;
-            }
-
-            if (latestPrice === null) {
-                logger.warn(`[YahooFinance] No valid price found for ${symbol}: ${JSON.stringify(data)}`);
-                broadcastStatus(requestId, `No valid price available for ${symbol}`, 'error');
-                return res.status(404).json({ error: 'No valid price available for symbol' });
-            }
-
-            const response = {
-                symbol: data.symbol || symbol,
-                price: latestPrice,
-                priceSource,
-                marketState: data.marketState || 'UNKNOWN',
-                // See routes/external.js's /quote/:symbol for why this checks
-                // instanceof Date first — modules/yahoo.js's client-library path
-                // returns regularMarketTime as an already-parsed Date, and
-                // multiplying that by 1000 (assuming raw epoch seconds) produces a
-                // garbage far-future timestamp.
-                lastUpdated: data.regularMarketTime
-                    ? (data.regularMarketTime instanceof Date
-                        ? data.regularMarketTime.toISOString()
-                        : new Date(data.regularMarketTime * 1000).toISOString())
-                    : new Date().toISOString()
-            };
-
-            logger.debug(`[YahooFinance] Retrieved price for ${symbol}: ${latestPrice} (${priceSource}, marketState: ${data.marketState || 'N/A'})`);
-            broadcastStatus(requestId, `Retrieved price ${latestPrice} for ${symbol} from Yahoo Finance`, 'success');
-            res.json(response);
-        } catch (error) {
-            logger.error(`[YahooFinance] Failed to fetch data for ${symbol}: ${error.message}`);
-            broadcastStatus(requestId, `Failed to fetch Yahoo Finance data for ${symbol}: ${error.message}`, 'error');
-            res.status(500).json({ error: `Failed to fetch stock price: ${error.message}` });
         }
+
+        // Yahoo's futures symbol is the journal's plus "=F".
+        const isFuture = symbol.endsWith('=F');
+        const journalSymbol = isFuture ? symbol.slice(0, -2) : symbol;
+        try {
+            const stored = await latestStoredPrice(journalSymbol, isFuture ? 'FUT' : 'STK');
+            if (stored) {
+                logger.info(`[YahooFinance] Using the stored price for ${symbol}: ${stored.price} (${stored.source} ${stored.timeframe} bar of ${stored.time}); Yahoo: ${yahooError.message}`);
+                return res.json({
+                    symbol,
+                    price: stored.price,
+                    priceSource: 'storedBar',
+                    stale: true,
+                    marketState: 'UNKNOWN',
+                    lastUpdated: stored.time,
+                    storedSource: stored.source,
+                    storedTimeframe: stored.timeframe,
+                });
+            }
+        } catch (err) {
+            logger.error(`[YahooFinance] Stored price lookup for ${symbol} failed: ${err.message}`);
+        }
+        broadcastStatus(requestId, `Failed to fetch Yahoo Finance data for ${symbol}: ${yahooError.message}`, 'error');
+        res.status(502).json({ error: `No live price for ${symbol} (${yahooError.message}) and no stored price` });
     });
 
     router.post('/historical/rollover-override', async (req, res) => {

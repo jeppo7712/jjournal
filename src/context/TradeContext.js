@@ -459,6 +459,8 @@ async function processRawTradesArray(tradesData, futuresSettings) {
   }));
 }
 
+// { price, asOf }: asOf is null for a live price, or the time of the stored
+// bar the server fell back to when Yahoo had none (routes/historical.js).
 async function fetchCurrentPrice(symbol, type) {
   // Declared outside the try: the catch below logs it, and a const inside
   // the try made that log throw a ReferenceError instead of returning null.
@@ -471,7 +473,7 @@ async function fetchCurrentPrice(symbol, type) {
     const data = await response.json();
     const currentPrice = data.price;
     if (currentPrice && typeof currentPrice === 'number') {
-      return currentPrice;
+      return { price: currentPrice, asOf: data.stale ? data.lastUpdated : null };
     } else {
       console.warn(`[TradeContext] Invalid current price for symbol ${yahooSymbol}: ${JSON.stringify(data)}`);
       return null;
@@ -980,8 +982,9 @@ export const TradeProvider = ({ children }) => {
   const updateTradePriceData = useCallback(async (trade, futuresSettings) => {
     if (trade.status !== 'OPEN' || !['STK', 'FUT'].includes(trade.type) || !trade.symbol) return null;
 
-    const currentPrice = await getCachedPrice(trade.symbol, trade.type);
-    if (currentPrice === null) return null;
+    const quote = await getCachedPrice(trade.symbol, trade.type);
+    if (quote === null) return null;
+    const currentPrice = quote.price;
 
     const tickMultiplier = getTickMultiplier(trade);
     const { openLots } = matchLotsFIFO(trade, tickMultiplier);
@@ -1014,7 +1017,7 @@ export const TradeProvider = ({ children }) => {
         currentReturnPercentage = entryTotal ? ((unrealisedPnL / tickMultiplier) / entryTotal) * 100 : null;
     }
 
-    return { currentReturn: unrealisedPnL, currentReturnPercentage, currentPrice };
+    return { currentReturn: unrealisedPnL, currentReturnPercentage, currentPrice, priceAsOf: quote.asOf };
   }, [getCachedPrice]);
 
       const getAllTradeData = useCallback((options = {}) => {

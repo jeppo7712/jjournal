@@ -10,6 +10,12 @@ import { formatMoney, currencyMark } from '../../utils/formatMoney';
 import { formatNumber } from '../../utils/numberFormat';
 import { sumByCurrency, formatTotals, toTotalsList } from '../../utils/currencyTotals';
 
+// An open position valued at a stored price (Yahoo had none): its return is
+// marked, with the price's time on hover.
+const storedPriceTitle = (item) => item.priceAsOf
+  ? `No live price: valued at the last stored price, from ${DateTime.fromISO(item.priceAsOf).toFormat('dd/MM HH:mm')}`
+  : undefined;
+
 // SVG Icons for Mood, Market Condition, and Market Volume (existing)
 const moodSvgs = [
   // Sad
@@ -415,7 +421,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                     <div className={styles.cellTop}>
                       {item.status === 'OPEN' ? (
                         item.currentReturn !== undefined && item.currentReturn !== null ? (
-                          <span className={item.currentReturn >= 0 ? styles.positiveItalic : styles.negativeItalic}>
+                          <span className={`${item.currentReturn >= 0 ? styles.positiveItalic : styles.negativeItalic} ${item.priceAsOf ? styles.storedPrice : ''}`} title={storedPriceTitle(item)}>
                             ({currencyMark(item.currency)}{formatNumber(Math.abs(item.currentReturn), 2)})
                           </span>
                         ) : (
@@ -434,7 +440,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                     <div className={styles.cellBottom}>
                       {item.status === 'OPEN' ? (
                         item.currentReturnPercentage !== undefined && item.currentReturnPercentage !== null ? (
-                          <span className={item.currentReturnPercentage >= 0 ? styles.positiveItalic : styles.negativeItalic}>
+                          <span className={`${item.currentReturnPercentage >= 0 ? styles.positiveItalic : styles.negativeItalic} ${item.priceAsOf ? styles.storedPrice : ''}`} title={storedPriceTitle(item)}>
                             ({item.currentReturnPercentage >= 0 ? '' : ''}{formatNumber(Math.abs(item.currentReturnPercentage), 2)}%)
                           </span>
                         ) : (
@@ -542,7 +548,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                     <div style={colFlex('return')} className={styles.cell}>
                       {item.status === 'OPEN' ? (
                         item.currentReturn !== undefined && item.currentReturn !== null ? (
-                          <span className={item.currentReturn >= 0 ? styles.positiveItalic : styles.negativeItalic}>
+                          <span className={`${item.currentReturn >= 0 ? styles.positiveItalic : styles.negativeItalic} ${item.priceAsOf ? styles.storedPrice : ''}`} title={storedPriceTitle(item)}>
                             ({currencyMark(item.currency)}{formatNumber(Math.abs(item.currentReturn), 2)})
                           </span>
                         ) : (
@@ -563,7 +569,7 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                     <div style={colFlex('returnPercentage')} className={styles.cell}>
                       {item.status === 'OPEN' ? (
                         item.currentReturnPercentage !== undefined && item.currentReturnPercentage !== null ? (
-                          <span className={item.currentReturnPercentage >= 0 ? styles.positiveItalic : styles.negativeItalic}>
+                          <span className={`${item.currentReturnPercentage >= 0 ? styles.positiveItalic : styles.negativeItalic} ${item.priceAsOf ? styles.storedPrice : ''}`} title={storedPriceTitle(item)}>
                             ({item.currentReturnPercentage >= 0 ? '' : ''}{formatNumber(Math.abs(item.currentReturnPercentage), 2)}%)
                           </span>
                         ) : (
