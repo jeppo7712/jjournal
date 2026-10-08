@@ -451,7 +451,7 @@ curl "http://localhost:3999/api/external/v1/quote/MNQ?type=FUT"
 
 ### If Yahoo's live quote is unavailable
 
-Yahoo's quote endpoint occasionally fails server-side (e.g. crumb/auth issues on Yahoo's end, or rate-limiting) — independent of anything wrong with this app. Rather than a bare error, this endpoint degrades to the most recent bar already stored for that symbol (any timeframe, whichever source last updated it — commonly the live TradingView feed for actively-traded symbols, which stays close to real-time regardless of Yahoo's status):
+Yahoo's quote endpoint occasionally fails server-side (e.g. crumb/auth issues on Yahoo's end, or rate-limiting) — independent of anything wrong with this app. Rather than a bare error, this endpoint degrades to the most recent bar already stored for that symbol (any timeframe, whichever source last updated it — commonly the live TradingView feed for actively-traded symbols, which stays close to real-time regardless of Yahoo's status). For futures only the front-month series counts, never a later contract month's bars:
 
 ```json
 {

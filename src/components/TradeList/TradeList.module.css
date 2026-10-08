@@ -830,3 +830,19 @@
 .noteAccount {
   margin-left: 8px;
 }
+
+/* Valued at a stored price, not a live one (see storedPriceTitle). */
+.storedPrice {
+  cursor: help;
+}
+
+.storedPrice::after {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  margin-left: 4px;
+  border-radius: 50%;
+  background: #F59E0B;
+  vertical-align: super;
+}

@@ -1800,11 +1800,19 @@ useEffect(() => {
                     <span className={styles.tvSplitDot} style={{ background: '#60A5FA' }} />
                     Realised <strong className={pnlTone(realisedPnL)}>{signedMoney(realisedPnL, trade.currency)}</strong>
                   </span>
-                  <span className={styles.tvSplitItem} title="Open position at the last price">
+                  <span
+                    className={styles.tvSplitItem}
+                    title={trade.priceAsOf
+                      ? `No live price: valued at the last stored price, from ${DateTime.fromISO(trade.priceAsOf).toFormat('dd/MM HH:mm')}`
+                      : 'Open position at the last price'}
+                  >
                     <span className={styles.tvSplitDot} style={{ background: '#F59E0B' }} />
                     Unrealised <strong className={unrealisedPnL === null ? '' : pnlTone(unrealisedPnL)}>
                       {unrealisedPnL === null ? (trade.priceUnavailable ? 'no live price' : '…') : signedMoney(unrealisedPnL, trade.currency)}
                     </strong>
+                    {unrealisedPnL !== null && trade.priceAsOf && (
+                      <span className={styles.tvStoredPrice}>stored price {DateTime.fromISO(trade.priceAsOf).toFormat('dd/MM HH:mm')}</span>
+                    )}
                   </span>
                 </div>
               )}
