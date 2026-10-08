@@ -17,7 +17,7 @@ import { createChart, LineType } from 'lightweight-charts';
 import { getRealisedPnL } from '../../context/TradeContext';
 import { debounce } from 'lodash';
 import { Oval } from 'react-loader-spinner';
-import { notify } from '../common/Dialogs';
+import { notify, confirmDialog } from '../common/Dialogs';
 import { timeframeLabel } from '../../utils/timeframeLabel';
 
 // Remembers the last chart timeframe picked per symbol (scoped by type too,
@@ -256,6 +256,32 @@ export default function TradeView({ trade, onClose, onEdit }) {
       setIsMoving(false);
     }
   }, [moveTargetId, trade?.id, trade?.account_id, currentAccountId, refreshTrades, refreshAccounts, onClose]);
+
+  // The AI analysis an external tool wrote can be deleted here; hidden at
+  // once, the trade list catches up with refreshTrades.
+  const [aiRemoved, setAiRemoved] = useState(false);
+  const [removingAi, setRemovingAi] = useState(false);
+  useEffect(() => { setAiRemoved(false); }, [trade?.id]);
+  const handleRemoveAi = useCallback(async () => {
+    if (!trade?.id) return;
+    if (!(await confirmDialog('Delete this AI analysis? Your own notes stay.'))) return;
+    setRemovingAi(true);
+    try {
+      const res = await fetch(`${process.env.REACT_APP_API_URL}/api/trades/${trade.id}/ai-analysis`, {
+        method: 'DELETE',
+        headers: { 'X-Account-ID': trade.account_id ?? currentAccountId },
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) throw new Error(data.error || 'Failed to delete the AI analysis');
+      setAiRemoved(true);
+      refreshTrades();
+    } catch (err) {
+      notify(err.message);
+    } finally {
+      setRemovingAi(false);
+    }
+  }, [trade?.id, trade?.account_id, currentAccountId, refreshTrades]);
+  const aiAnalysis = aiRemoved ? null : trade?.journal?.ai_analysis;
 
   useEffect(() => {
     if (!showMoveMenu) return;
@@ -1936,7 +1962,7 @@ useEffect(() => {
               {/* AI analysis written by an external tool via the external API
                   (PATCH /api/external/v1/trades/:id/ai-analysis) — plain text,
                   kept separate from the user's own notes_html above. */}
-              {trade.journal?.ai_analysis && (
+              {aiAnalysis && (
                 <div
                   style={{
                     marginTop: '12px',
@@ -1946,20 +1972,23 @@ useEffect(() => {
                     border: '1px solid rgba(59, 130, 246, 0.3)',
                   }}
                 >
-                  <div style={{ fontSize: '0.75em', color: '#8FB6FF', fontWeight: 600, marginBottom: '6px', textTransform: 'uppercase', letterSpacing: '0.03em' }}>
-                    AI Analysis{trade.journal.ai_analysis_source ? ` — ${trade.journal.ai_analysis_source}` : ''}
-                    {trade.journal.ai_analysis_updated_at && (
-                      <span style={{ opacity: 0.7, textTransform: 'none', fontWeight: 400 }}>
-                        {' '}({DateTime.fromISO(trade.journal.ai_analysis_updated_at).toFormat('dd/MM/yyyy, HH:mm')})
-                      </span>
-                    )}
+                  <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '6px' }}>
+                    <div style={{ flex: 1, minWidth: 0, fontSize: '0.75em', color: '#8FB6FF', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                      AI Analysis{trade.journal.ai_analysis_source ? ` — ${trade.journal.ai_analysis_source}` : ''}
+                      {trade.journal.ai_analysis_updated_at && (
+                        <span style={{ opacity: 0.7, textTransform: 'none', fontWeight: 400 }}>
+                          {' '}({DateTime.fromISO(trade.journal.ai_analysis_updated_at).toFormat('dd/MM/yyyy, HH:mm')})
+                        </span>
+                      )}
+                    </div>
+                    <IconButton icon="trash" size="small" label="Delete this AI analysis" busy={removingAi} onClick={handleRemoveAi} />
                   </div>
                   <div style={{ whiteSpace: 'pre-wrap', color: '#e0e2e6', fontSize: '0.9em' }}>
-                    {trade.journal.ai_analysis}
+                    {aiAnalysis}
                   </div>
                 </div>
               )}
-              {!trade.journal?.notes_html && processedAttachments.length === 0 && !trade.journal?.ai_analysis && (
+              {!trade.journal?.notes_html && processedAttachments.length === 0 && !aiAnalysis && (
                 <p className={styles.tvEmpty}>No notes yet — use Edit to add your thoughts on this trade.</p>
               )}
             </div>
