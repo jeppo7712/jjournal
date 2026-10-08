@@ -393,6 +393,22 @@
   color: var(--ui-faint, #6B7280);
 }
 
+.chartOption {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  align-self: flex-start;
+  font-size: 12.5px;
+  color: var(--ui-muted, #8B93A3);
+  cursor: pointer;
+  user-select: none;
+}
+
+.chartOption input {
+  accent-color: var(--ui-accent, #3B82F6);
+  margin: 0;
+}
+
 .chartEmpty {
   margin: 0;
   padding: 48px 0;
