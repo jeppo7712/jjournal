@@ -24,13 +24,28 @@ async function openingCoversBefore(db, accountId) {
     return rows[0]?.cutoff || null;
 }
 
-// The calendar day of a fill where it traded: the broker's statement (and
-// so an opening balance taken from it) closes the day in the market's own
-// time. In UTC a New York evening fill would already be the next day.
+// The trade date of a fill, as the broker's statement (and so an opening
+// balance taken from it) dates it: the day on the exchange, in the
+// market's own time. In UTC a New York evening fill would already be the
+// next day.
+//
+// Futures traded in Chicago (CME Globex, CBOE Futures) follow the session
+// instead: it opens at 17:00 Chicago time and belongs to the next trading
+// day, so a Sunday 18:00 fill is Monday's and a Tuesday 19:00 fill is
+// Wednesday's.
 const DEFAULT_TIMEZONE = 'America/New_York';
-function fillDay(dateTime, timezone) {
-    const dt = DateTime.fromJSDate(new Date(dateTime), { zone: timezone || DEFAULT_TIMEZONE });
-    return (dt.isValid ? dt : DateTime.fromJSDate(new Date(dateTime), { zone: DEFAULT_TIMEZONE })).toISODate();
+const SESSION_ROLL_HOUR = { 'America/Chicago': 17 };
+
+function fillDay(dateTime, timezone, type = 'STK') {
+    let zone = timezone || DEFAULT_TIMEZONE;
+    let dt = DateTime.fromJSDate(new Date(dateTime), { zone });
+    if (!dt.isValid) {
+        zone = DEFAULT_TIMEZONE;
+        dt = DateTime.fromJSDate(new Date(dateTime), { zone });
+    }
+    const rollHour = type === 'FUT' ? SESSION_ROLL_HOUR[zone] : undefined;
+    if (rollHour !== undefined && dt.hour >= rollHour) dt = dt.plus({ days: 1 });
+    return dt.toISODate();
 }
 
 // The timezone of the exchange the symbol's setting names, if any.
@@ -57,7 +72,7 @@ async function settleTrade(db, { tradeId, accountId, type, symbol, actions, tick
     const cutoff = await openingCoversBefore(db, accountId);
     const timezone = cutoff ? await exchangeTimezone(db, symbol, type, allSettings) : null;
     for (const entry of settlementEntries(type, actions, tickSize, tickValue)) {
-        if (cutoff && fillDay(entry.dateTime, timezone) < cutoff) continue; // in the opening balance
+        if (cutoff && fillDay(entry.dateTime, timezone, type) < cutoff) continue; // in the opening balance
         await db.query(
             `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, linked_trade_id, note)
              VALUES ($1, $2, 'TRADE_SETTLEMENT', $3, $4, $5, $6)`,

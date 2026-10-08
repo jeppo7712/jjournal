@@ -616,6 +616,30 @@ export const computePortfolioValueSeries = (trades, historicalDataMap) => {
   return { labels, series, realizedSeries, positionValueSeries };
 };
 
+// The Cumulative P&L series with income added: dividends (after tax
+// withheld), interest and broker fees, as [{ date: ISO date, amount }].
+// Income is cash already received or paid, so it adds to both the total
+// and the realised line; income from before the first day is in from the
+// start.
+export const addIncomeToPortfolioSeries = (portfolio, income = []) => {
+  if (!income.length || !portfolio.labels.length) return portfolio;
+  const dates = portfolio.labels.map(label => DateTime.fromFormat(label, 'dd/MM/yyyy').toISODate());
+  const byDate = new Map();
+  let soFar = 0;
+  income.forEach(({ date, amount }) => {
+    const value = Number(amount);
+    if (!date || !Number.isFinite(value)) return;
+    if (date < dates[0]) soFar += value;
+    else byDate.set(date, (byDate.get(date) || 0) + value);
+  });
+  const running = dates.map(date => (soFar += byDate.get(date) || 0));
+  return {
+    ...portfolio,
+    series: portfolio.series.map((v, i) => v + running[i]),
+    realizedSeries: portfolio.realizedSeries.map((v, i) => v + running[i]),
+  };
+};
+
 // Time-weighted return of the capital recorded on the Capital page.
 // Each day's P&L (the same marked-to-market P&L as the Cumulative P&L
 // chart, so a future counts only its price moves, never its contract value)
