@@ -27,6 +27,7 @@ import {
   computeFeesPnlSeries,
   computeReturnVsHoldTime,
   computeReturnPercentageSeries,
+  addIncomeToPortfolioSeries,
   computeExpectancy,
   computeRiskRewardRatio,
   computeRecoveryFactor,
@@ -227,7 +228,8 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
   const cashFlows = useMemo(() => ledgerRows(CAPITAL_FLOW_TYPES),
     [cashTransactions, currentAccountId, withSubAccounts, subAccountIds, activeCurrency]);
 
-  // Dividends, interest and broker fees in "Return over time": off unless
+  // Dividends, interest and broker fees in "Return over time" and
+  // "Cumulative P&L" (one switch for both, shown on each): off unless
   // switched on (remembered in this browser).
   const [returnIncludesIncome, setReturnIncludesIncome] = useState(() => {
     try { return localStorage.getItem(INCOME_PREF_KEY) === 'true'; } catch { return false; }
@@ -358,7 +360,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         feeAnalysis: computeFeeAnalysis(trades),
         holdings: computeHoldings(trades),
         bestPerformingAssets: computeBestPerformingAssets(trades),
-        portfolioValueSeries: computePortfolioValueSeries(trades, historicalDataMap),
+        portfolioValueSeries: addIncomeToPortfolioSeries(computePortfolioValueSeries(trades, historicalDataMap), incomeFlows),
         returnDistribution: computeReturnDistribution(trades),
         winRateSeries: computeWinRateSeries(trades),
         tradingActivityHeatmap: computeTradingActivityHeatmap(trades, displayTimezone),
@@ -1020,8 +1022,12 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 value={latestTotalPnl !== null && !isFetching ? `${latestTotalPnl < 0 ? '-' : latestTotalPnl > 0 ? '+' : ''}${mark}${absAmount(latestTotalPnl)}` : null}
                 tone={toneOf(latestTotalPnl)}
                 caption="Total incl. open"
-                explanation={`Cumulative P&L per day, from the first trade on. The blue line is realised P&L (closed trades and partial sells, on the day they happened) plus the unrealised P&L of positions open at that day’s close, valued at the symbol’s daily close. The grey line is realised P&L alone. Fees are included in both.`}
+                explanation={`Cumulative P&L per day, from the first trade on. The blue line is realised P&L (closed trades and partial sells, on the day they happened) plus the unrealised P&L of positions open at that day’s close, valued at the symbol’s daily close. The grey line is realised P&L alone. Fees are included in both. With the switch on, dividends (after tax withheld), interest and broker fees from the Capital page are added on their day, to both lines.`}
               >
+                <label className={styles.chartOption}>
+                  <input id="cumulativeIncludesIncome" type="checkbox" checked={returnIncludesIncome} onChange={toggleReturnIncome} />
+                  Include dividends, interest and fees
+                </label>
                 {isFetching ? (
                   <p className={styles.chartEmpty}>Loading historical data…</p>
                 ) : computedStats.portfolioValueSeries.labels.length > 0 && computedStats.portfolioValueSeries.series.every(v => !isNaN(v)) ? (
