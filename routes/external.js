@@ -18,6 +18,7 @@
 const express = require('express');
 const router = express.Router();
 const { logger } = require('../modules/logger.js');
+const { latestStoredPrice } = require('../modules/storedPrice.js');
 const { computeTradeDerived, resolveTradeCurrency } = require('../modules/tradeCalculations.js');
 
 const API_VERSION = 'v1';
@@ -546,32 +547,15 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
         }
     });
 
-    // Falls back to the most recent bar already in our own DB (across any
-    // timeframe — TradingView/IBKR/Yahoo, whichever is freshest) when a live
-    // Yahoo quote can't be obtained. Yahoo's quote endpoint occasionally goes
-    // down server-side entirely (e.g. their crumb-issuing page changes shape
-    // and breaks extraction, or they rate-limit/block this server outright)
-    // — independent of anything wrong on our end, and not something we can
-    // fix by retrying harder. Rather than surface a bare error to an external
+    // Falls back to the most recent bar already in our own DB (front month
+    // only for futures, see modules/storedPrice.js) when a live Yahoo quote
+    // can't be obtained. Yahoo's quote endpoint occasionally goes down
+    // server-side entirely (e.g. their crumb-issuing page changes shape and
+    // breaks extraction, or they rate-limit/block this server outright) —
+    // independent of anything wrong on our end, and not something we can fix
+    // by retrying harder. Rather than surface a bare error to an external
     // caller, degrade to the last known price so a consumer at least gets a
     // usable (if possibly slightly stale) answer, clearly labeled as such.
-    async function fetchLatestBarFallback(baseSymbol, type) {
-        const { rows: settingRows } = await db.getPool().query(
-            'SELECT id FROM futures_settings WHERE symbol = $1 AND type = $2',
-            [baseSymbol, type]
-        );
-        if (settingRows.length === 0) return null;
-
-        const { rows } = await db.getPool().query(
-            `SELECT close, time, source, timeframe FROM historical_data
-             WHERE futures_setting_id = $1
-             ORDER BY time DESC LIMIT 1`,
-            [settingRows[0].id]
-        );
-        if (rows.length === 0) return null;
-        return rows[0];
-    }
-
     router.get('/quote/:symbol', async (req, res) => {
         const { type } = req.query;
         const baseSymbol = req.params.symbol.toUpperCase();
@@ -612,13 +596,13 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
         } catch (err) {
             logger.warn(`[External API] Live quote failed for ${baseSymbol} (${err.message}), falling back to latest stored bar.`);
             try {
-                const fallback = await fetchLatestBarFallback(baseSymbol, upperType);
+                const fallback = await latestStoredPrice(baseSymbol, upperType);
                 if (!fallback) {
                     return res.status(502).json({ error: `Live quote unavailable (${err.message}) and no stored historical data to fall back to for ${baseSymbol}` });
                 }
                 res.json({
                     symbol: baseSymbol,
-                    price: parseFloat(fallback.close),
+                    price: fallback.price,
                     price_source: `historical_bar_fallback (${fallback.source}, ${fallback.timeframe})`,
                     market_state: 'UNKNOWN',
                     last_updated: new Date(fallback.time).toISOString(),
