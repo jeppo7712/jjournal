@@ -533,8 +533,9 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     // fill: selling a position moved the purchase's cash to the sale day.
     // Settlement is one row per fill now (settlementEntries); split the old
     // net rows the same way. Same total per trade, so no balance changes —
-    // only the dates. Old rows are recognisable by their note (every new
-    // one has a "·" in it); idempotent.
+    // only the dates. Old rows are recognisable by their note, which always
+    // read "<symbol> trade settlement" (a new per-fill note without a fee
+    // has no "·", so that can't be the test); idempotent.
     await splitNetTradeSettlements(client);
 
     logger.debug('Creating futures_settings table...');
@@ -978,7 +979,7 @@ async function splitNetTradeSettlements(client) {
                 MIN(ct.account_id) AS account_id, MIN(ct.currency) AS currency, SUM(ct.amount) AS total
          FROM trades t JOIN cash_transactions ct ON ct.linked_trade_id = t.id AND ct.type = 'TRADE_SETTLEMENT'
          GROUP BY t.id
-         HAVING bool_or(ct.note LIKE '% trade settlement' OR ct.note NOT LIKE '%·%')`
+         HAVING bool_or(ct.note LIKE '% trade settlement')`
     );
     let split = 0;
     for (const trade of trades) {

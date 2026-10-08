@@ -631,19 +631,36 @@ export const computePortfolioValueSeries = (trades, historicalDataMap) => {
 // never less than the positions held the evening before, as money moved
 // in and out before tracking started is unknown. Without any recorded
 // capital there is no return.
-export const computeReturnPercentageSeries = (trades, historicalDataMap, cashFlows = []) => {
+//
+// income (optional): [{ date, amount }] — dividends (net of tax withheld),
+// interest and broker fees. They count as a gain or loss on their day,
+// like a trade's P&L; ones from before the first trade join the starting
+// capital.
+export const computeReturnPercentageSeries = (trades, historicalDataMap, cashFlows = [], income = []) => {
   if (!trades.length || !cashFlows.length) return [];
-  const { labels, series: cumulative, positionValueSeries } = computePortfolioValueSeries(trades, historicalDataMap);
+  const { labels, series: tradeCumulative, positionValueSeries } = computePortfolioValueSeries(trades, historicalDataMap);
   if (!labels.length) return [];
 
   const dates = labels.map(label => DateTime.fromFormat(label, 'dd/MM/yyyy').toISODate());
-  const flowsByDate = new Map();
-  cashFlows.forEach(({ date, amount }) => {
-    const value = Number(amount);
-    if (!date || !Number.isFinite(value)) return;
-    flowsByDate.set(date, (flowsByDate.get(date) || 0) + value);
-  });
+  const byDate = list => {
+    const map = new Map();
+    list.forEach(({ date, amount }) => {
+      const value = Number(amount);
+      if (!date || !Number.isFinite(value)) return;
+      map.set(date, (map.get(date) || 0) + value);
+    });
+    return map;
+  };
+  const flowsByDate = byDate(cashFlows);
   const flowOn = i => flowsByDate.get(dates[i]) || 0;
+
+  // Trading P&L plus income, cumulative from the first day.
+  const incomeByDate = byDate(income);
+  let incomeSoFar = 0;
+  const cumulative = tradeCumulative.map((value, i) => {
+    incomeSoFar += incomeByDate.get(dates[i]) || 0;
+    return value + incomeSoFar;
+  });
 
   // The series starts on the first trade's day, so its first value is
   // that day's own P&L.
@@ -656,6 +673,7 @@ export const computeReturnPercentageSeries = (trades, historicalDataMap, cashFlo
   // it, when the trades are older than the recorded capital.
   let capital = 0;
   flowsByDate.forEach((amount, date) => { if (date < dates[0]) capital += amount; });
+  incomeByDate.forEach((amount, date) => { if (date < dates[0]) capital += amount; });
   let opening = -1;
   let openingCapital = 0;
   if (capital <= 0) {
