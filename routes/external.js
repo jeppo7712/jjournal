@@ -40,6 +40,7 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
                 'GET    /api/external/v1/trades',
                 'GET    /api/external/v1/trades/:id',
                 'PATCH  /api/external/v1/trades/:id/ai-analysis',
+                'DELETE /api/external/v1/trades/:id/ai-analysis',
                 'GET    /api/external/v1/daynotes',
                 'GET    /api/external/v1/attachments/:id',
                 'GET    /api/external/v1/symbols',
@@ -376,6 +377,25 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
             res.json({ success: true });
         } catch (err) {
             logger.error('[External API] Error saving AI analysis:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
+    // Removes the analysis again (the user's own notes stay).
+    router.delete('/trades/:id/ai-analysis', async (req, res) => {
+        const { id } = req.params;
+        try {
+            const { rows: tradeRows } = await db.getPool().query('SELECT id FROM trades WHERE id = $1', [id]);
+            if (tradeRows.length === 0) return res.status(404).json({ error: 'Trade not found' });
+            const { rowCount } = await db.getPool().query(
+                `UPDATE trade_journals SET ai_analysis = NULL, ai_analysis_source = NULL, ai_analysis_updated_at = NULL
+                 WHERE trade_id = $1 AND ai_analysis IS NOT NULL`,
+                [id]
+            );
+            if (rowCount > 0) broadcastStatus(uuidv4(), `AI analysis removed from trade ${id}`, 'info');
+            res.json({ success: true, removed: rowCount > 0 });
+        } catch (err) {
+            logger.error('[External API] Error removing AI analysis:', err);
             res.status(500).json({ error: err.message });
         }
     });

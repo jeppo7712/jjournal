@@ -289,6 +289,20 @@ Upserts: if the trade has no journal row yet, one is created; if `ai_analysis` w
 
 ---
 
+## DELETE /trades/:id/ai-analysis
+
+Removes the trade's AI analysis (text, source and timestamp). The user's own notes are not touched. The user can also delete it from the trade's view in the app.
+
+### Response
+
+```json
+{ "success": true, "removed": true }
+```
+
+`removed` is `false` when the trade had no analysis. `404` if the trade doesn't exist.
+
+---
+
 ## GET /daynotes
 
 List day notes (journal entries per calendar day, independent of any specific trade).

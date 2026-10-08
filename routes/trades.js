@@ -403,6 +403,23 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
         }
     });
 
+    // DELETE /trades/:id/ai-analysis — removes the analysis an external tool
+    // wrote (PATCH /api/external/v1/trades/:id/ai-analysis); the notes stay.
+    router.delete('/trades/:id/ai-analysis', async (req, res) => {
+        try {
+            const { rows } = await pool.query('SELECT id FROM trades WHERE id=$1 AND account_id=$2', [req.params.id, req.accountId]);
+            if (rows.length === 0) return res.status(404).json({ error: 'Trade not found' });
+            await pool.query(
+                `UPDATE trade_journals SET ai_analysis = NULL, ai_analysis_source = NULL, ai_analysis_updated_at = NULL WHERE trade_id = $1`,
+                [req.params.id]
+            );
+            res.json({ success: true });
+        } catch (err) {
+            logger.error('Error removing AI analysis:', err);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     // POST /trades/:id/move — reassigns a trade (and everything attached to
     // it) to a different account. For when a trade was logged under the
     // wrong account, or an account's purpose is being reorganized after the
