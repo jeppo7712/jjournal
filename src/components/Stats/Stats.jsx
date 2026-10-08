@@ -125,6 +125,9 @@ const TAB_GROUPS = [
 // Cash movements that change the capital (not trade settlements, interest
 // or other income, which are results).
 const CAPITAL_FLOW_TYPES = new Set(['DEPOSIT', 'WITHDRAWAL', 'TRANSFER_IN', 'TRANSFER_OUT', 'EXCHANGE_IN', 'EXCHANGE_OUT']);
+// Earned or paid on the money itself, not traded: optionally part of the return.
+const INCOME_TYPES = new Set(['DIVIDEND', 'WITHHOLDING_TAX', 'INTEREST', 'FEE']);
+const INCOME_PREF_KEY = 'jj.stats.returnIncludesIncome';
 
 const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilterWeek }) => {
   const { filteredItems, filter, timeFilter, symbolFilter, restrictToActionsInRange, accounts, currentAccountId, tagFilter = [], setTagFilter, subAccountIds = [], withSubAccounts = false } = React.useContext(TradeContext) || { filteredItems: [], filter: [], timeFilter: null, symbolFilter: '', restrictToActionsInRange: false };
@@ -213,14 +216,28 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
       .catch(() => { if (!cancelled) setCashTransactions([]); });
     return () => { cancelled = true; };
   }, [currentAccountId]);
-  const cashFlows = useMemo(() => {
+  const ledgerRows = types => {
     const included = new Set([String(currentAccountId), ...(withSubAccounts ? subAccountIds.map(String) : [])]);
     return cashTransactions
-      .filter(row => CAPITAL_FLOW_TYPES.has(row.type)
+      .filter(row => types.has(row.type)
         && included.has(String(row.account_id))
         && String(row.currency || 'USD').toUpperCase() === activeCurrency)
       .map(row => ({ date: DateTime.fromISO(row.date_time).toISODate(), amount: Number(row.amount) }));
-  }, [cashTransactions, currentAccountId, withSubAccounts, subAccountIds, activeCurrency]);
+  };
+  const cashFlows = useMemo(() => ledgerRows(CAPITAL_FLOW_TYPES),
+    [cashTransactions, currentAccountId, withSubAccounts, subAccountIds, activeCurrency]);
+
+  // Dividends, interest and broker fees in "Return over time": off unless
+  // switched on (remembered in this browser).
+  const [returnIncludesIncome, setReturnIncludesIncome] = useState(() => {
+    try { return localStorage.getItem(INCOME_PREF_KEY) === 'true'; } catch { return false; }
+  });
+  const toggleReturnIncome = () => setReturnIncludesIncome(prev => {
+    try { localStorage.setItem(INCOME_PREF_KEY, String(!prev)); } catch { /* storage unavailable */ }
+    return !prev;
+  });
+  const incomeFlows = useMemo(() => (returnIncludesIncome ? ledgerRows(INCOME_TYPES) : []),
+    [returnIncludesIncome, cashTransactions, currentAccountId, withSubAccounts, subAccountIds, activeCurrency]);
 
   const tradesWithJournal = useMemo(() => {
     return trades.filter(t => t.journal && (t.journal.notes_html || t.journal.confidence || t.journal.execution_rating));
@@ -349,7 +366,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         topTrades: computeTopTrades(trades),
         feesPnlSeries: computeFeesPnlSeries(trades),
         returnVsHoldTime: computeReturnVsHoldTime(trades),
-        returnPercentageSeries: computeReturnPercentageSeries(trades, historicalDataMap, cashFlows),
+        returnPercentageSeries: computeReturnPercentageSeries(trades, historicalDataMap, cashFlows, incomeFlows),
         // New professional metrics
         expectancy: computeExpectancy(trades),
         riskRewardRatio: computeRiskRewardRatio(trades),
@@ -398,7 +415,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
         avgWinLoss: { avgWin: '0.00', avgLoss: '0.00' },
       };
     }
-  }, [trades, historicalDataMap, displayTimezone, cashFlows]);
+  }, [trades, historicalDataMap, displayTimezone, cashFlows, incomeFlows]);
 
   const handleNotesSort = (key) => {
     setNotesSort(prevSort => {
@@ -977,8 +994,12 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 value={latestReturn !== undefined && latestReturn !== null && !isFetching ? `${signed(latestReturn)}%` : null}
                 tone={toneOf(latestReturn)}
                 caption="Latest"
-                explanation={`Time-weighted return on the capital recorded on the Capital page (deposits, withdrawals, transfers and currency exchanges in this currency), from the first trade on. Each day's P&L, including open positions at the day's close (futures by their price moves, not their contract value), is divided by the capital at the start of that day, and the days are compounded, so money moved in or out is not counted as a gain or loss. If the first trades are older than the first recorded deposit (your opening balance), the capital before it is that opening cash plus the positions then held, less the P&L made in between — and at least the value of the positions held.`}
+                explanation={`Time-weighted return on the capital recorded on the Capital page (deposits, withdrawals, transfers and currency exchanges in this currency), from the first trade on. Each day's P&L, including open positions at the day's close (futures by their price moves, not their contract value), is divided by the capital at the start of that day, and the days are compounded, so money moved in or out is not counted as a gain or loss. If the first trades are older than the first recorded deposit (your opening balance), the capital before it is that opening cash plus the positions then held, less the P&L made in between — and at least the value of the positions held. Optionally, dividends (after tax withheld), interest and broker fees from the Capital page count as gains or losses on their day.`}
               >
+                <label className={styles.chartOption}>
+                  <input id="returnIncludesIncome" type="checkbox" checked={returnIncludesIncome} onChange={toggleReturnIncome} />
+                  Include dividends, interest and fees
+                </label>
                 {isFetching ? (
                   <p className={styles.chartEmpty}>Loading historical data…</p>
                 ) : computedStats.returnPercentageSeries.length > 0 && computedStats.returnPercentageSeries.every(d => !isNaN(d.returnPercentage)) ? (
