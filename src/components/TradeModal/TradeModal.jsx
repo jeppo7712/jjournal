@@ -950,7 +950,18 @@ export default function TradeModal({ trade, onClose }) {
       [{ 'list': 'ordered'}, { 'list': 'bullet' }],
       ['link', 'image'],
       ['clean']
-    ]
+    ],
+    // Without this, loading notes adds an empty line before each list
+    // (Quill 1 guesses spacing from the margins), and saving keeps it.
+    clipboard: { matchVisual: false },
+  };
+
+  // Quill rewrites stored HTML a little on load (a trailing space, list
+  // markup); what it first shows is the baseline, or the notes would
+  // always look changed.
+  const handleNotesChange = (value, _delta, source) => {
+    if (source !== 'user' && initialState.current) initialState.current.notes = value;
+    setNotes(value);
   };
 
   useEffect(() => {
@@ -1315,7 +1326,7 @@ export default function TradeModal({ trade, onClose }) {
                   <ReactQuill
                     theme="snow"
                     value={notes}
-                    onChange={setNotes}
+                    onChange={handleNotesChange}
                     className={styles.richText}
                     placeholder="Write your notes here..."
                     modules={quillModules}

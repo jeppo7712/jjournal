@@ -96,6 +96,14 @@ export default function DayNote({ note, onClose }) {
   const daySymbols = [...new Set(dayTrades.map(t => t.symbol))];
   const [summary, setSummary] = useState(note ? note.summary || '' : '');
   const [notes, setNotes] = useState(note ? note.notes_html || '' : '');
+  // The notes as the editor first shows them. Quill rewrites stored HTML a
+  // little on load (a trailing space, list markup), so the stored text
+  // itself would always look changed.
+  const loadedNotes = useRef(note ? note.notes_html || '' : '');
+  const handleNotesChange = (value, _delta, source) => {
+    if (source !== 'user') loadedNotes.current = value;
+    setNotes(value);
+  };
   const [attachments, setAttachments] = useState(note && note.attachments ? note.attachments.map(att => ({
     attachment_id: att.id,
     preview: att.image_base64 ? `data:${att.mime_type};base64,${att.image_base64}` : null,
@@ -141,7 +149,7 @@ export default function DayNote({ note, onClose }) {
     const initialMarketVolatility = note && note.market_volume !== undefined ? note.market_volume : 1;
     const initialDate = note ? formatDateForInput(new Date(note.date)) : getCurrentDate();
     const initialSummary = note ? note.summary || '' : '';
-    const initialNotes = note ? note.notes_html || '' : '';
+    const initialNotes = loadedNotes.current;
     const initialAttachments = note && note.attachments ? note.attachments.map(att => att.id) : [];
 
     const currentAttachments = attachments.map(att => att.attachment_id).filter(id => id);
@@ -280,7 +288,10 @@ export default function DayNote({ note, onClose }) {
       [{ 'list': 'ordered'}, { 'list': 'bullet' }],
       ['link'],
       ['clean']
-    ]
+    ],
+    // Without this, loading a note adds an empty line before each list
+    // (Quill 1 guesses spacing from the margins), and saving keeps it.
+    clipboard: { matchVisual: false },
   };
 
   useEffect(() => {
@@ -447,7 +458,7 @@ export default function DayNote({ note, onClose }) {
                   id="daynote-notes"
                   theme="snow"
                   value={notes}
-                  onChange={setNotes}
+                  onChange={handleNotesChange}
                   className={styles.richText}
                   placeholder="Write your notes here..."
                   modules={quillModules}
