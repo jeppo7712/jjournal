@@ -79,14 +79,27 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
 
     // GET /broker-activity/pending — items waiting for the user, over all
     // accounts with sync on (the menu's badge next to Capital).
+    // GET /broker-activity/pending — what needs the user on the Capital
+    // page, over all synced accounts: items waiting in the inbox, and
+    // currencies whose cash differs from IBKR's beyond what's waiting.
     router.get('/broker-activity/pending', async (req, res) => {
         try {
-            const { rows } = await pool.query(
-                `SELECT a.id, a.name, COUNT(*)::int AS count FROM broker_cash_items b JOIN accounts a ON a.id = b.account_id
-                 WHERE b.status = 'PENDING' AND a.broker_sync_mode <> 'OFF'
-                 GROUP BY a.id, a.name ORDER BY a.name`
+            const { rows: synced } = await pool.query(
+                `SELECT id, name FROM accounts
+                 WHERE parent_account_id IS NULL AND broker_sync_mode <> 'OFF' AND NOT is_virtual ORDER BY name`
             );
-            res.json({ total: rows.reduce((sum, r) => sum + r.count, 0), accounts: rows });
+            const { rows: waiting } = await pool.query(
+                `SELECT account_id, COUNT(*)::int AS count FROM broker_cash_items
+                 WHERE status = 'PENDING' AND account_id = ANY($1) GROUP BY account_id`,
+                [synced.map(a => a.id)]
+            );
+            const accounts = [];
+            for (const a of synced) {
+                const count = waiting.find(w => w.account_id === a.id)?.count || 0;
+                const offBalance = (await brokerCash.balanceCheck(pool, a.id)).filter(b => !b.inLine).map(b => b.currency);
+                if (count > 0 || offBalance.length > 0) accounts.push({ id: a.id, name: a.name, count, offBalance });
+            }
+            res.json({ total: accounts.reduce((sum, a) => sum + a.count + a.offBalance.length, 0), accounts });
         } catch (err) {
             logger.error('Error counting pending broker items:', err);
             res.status(500).json({ error: err.message });

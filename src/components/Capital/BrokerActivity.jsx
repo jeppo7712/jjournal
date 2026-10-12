@@ -56,7 +56,8 @@ const BrokerActivity = ({ accountId, accounts, onLedgerChange }) => {
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to load IBKR activity');
       const next = await res.json();
       setData(next);
-      // The menu's badge next to Capital counts what's waiting.
+      // The menu's badge next to Capital counts what's waiting and cash
+      // that differs from IBKR's.
       window.dispatchEvent(new Event('broker-activity-changed'));
       setFromDate(next.account.broker_sync_from || next.suggestedFrom || '');
     } catch (err) {
@@ -225,6 +226,15 @@ const BrokerActivity = ({ accountId, accounts, onLedgerChange }) => {
                           Since then {b.sinceStatement > 0 ? '+' : ''}{formatNumber(b.sinceStatement, 2)} in the journal, which IBKR's next statement should show too.
                         </span>
                       )}
+                      {/* Types IBKR counts but the Flex query doesn't list:
+                          they can't come into the inbox (brokerCash.unlistedCashTypes). */}
+                      {(b.unlisted || []).map(u => (
+                        <span key={u.field} className={styles.unlisted}>
+                          IBKR's statement has {u.name}
+                          {' '}({Math.abs(u.monthToDate) >= 0.005 ? `${formatNumber(u.monthToDate, 2)} this month` : `${formatNumber(u.reported, 2)} over the statement`})
+                          {' '}that the Flex query's Cash Transactions don't list, so it can't come in here. Tick {u.label} in the query's Cash Transactions (Settings → IBKR API has the query check), then sync.
+                        </span>
+                      ))}
                     </span>
                     <span className={styles.balanceStatus}>
                       {b.inLine ? (

@@ -141,6 +141,12 @@
   font-size: 0.78rem;
 }
 
+.unlisted {
+  flex-basis: 100%;
+  color: #FBBF24;
+  font-size: 0.78rem;
+}
+
 .figureLabel {
   margin-right: 6px;
   color: #6B7280;
