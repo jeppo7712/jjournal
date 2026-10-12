@@ -110,6 +110,9 @@ function baseCurrencyOf(statement) {
     return row ? String(row.currency).toUpperCase() : null;
 }
 
+// Differences under this are rounding: IBKR reports cash to many decimals.
+const BALANCE_TOLERANCE = 0.05;
+
 /**
  * IBKR's ending cash per account and currency (the Cash Report section),
  * as of the statement's last day. The BASE_SUMMARY row (everything
@@ -129,20 +132,66 @@ function parseCashReport(statements) {
             const asOf = flexDate(row.toDate || statement.toDate);
             if (!Number.isFinite(endingCash) || !asOf) continue;
             const account = String(row.accountId || brokerAccountId).toUpperCase();
-            if (currency === 'BASE_SUMMARY') summary = { brokerAccountId: account, asOf, endingCash };
-            else if (/^[A-Z]{3}$/.test(currency)) own.push({ brokerAccountId: account, currency, asOf, endingCash });
+            if (currency === 'BASE_SUMMARY') summary = { brokerAccountId: account, asOf, endingCash, row };
+            else if (/^[A-Z]{3}$/.test(currency)) own.push({ brokerAccountId: account, currency, asOf, endingCash, row });
         }
         if (own.length === 0 && summary) {
             const base = baseCurrencyOf(statement);
             if (base) own.push({ ...summary, currency: base });
         }
-        rows.push(...own);
+        for (const { row, ...report } of own) {
+            rows.push({ ...report, unlisted: unlistedCashTypes(statement, row, report.currency) });
+        }
     }
     return rows;
 }
 
-// Differences under this are rounding: IBKR reports cash to many decimals.
-const BALANCE_TOLERANCE = 0.05;
+// Cash Report categories that are cash transactions, with the Cash
+// Transactions types that make them up. The Flex query chooses which types
+// its Cash Transactions list; a type left out never reaches the inbox, and
+// the journal's cash drifts from IBKR's by exactly that.
+const CASH_REPORT_TYPES = [
+    { field: 'depositWithdrawals', name: 'deposits and withdrawals', label: 'Deposits & Withdrawals', types: ['deposits/withdrawals', 'deposits & withdrawals'] },
+    { field: 'brokerInterest', name: 'broker interest', label: 'Broker Interest Received and Paid', types: ['broker interest received', 'broker interest paid'] },
+    { field: 'bondInterest', name: 'bond interest', label: 'Bond Interest Received and Paid', types: ['bond interest received', 'bond interest paid'] },
+    { field: 'dividends', name: 'dividends', label: 'Dividends', types: ['dividends'] },
+    { field: 'withholdingTax', name: 'withholding tax', label: 'Withholding Tax', types: ['withholding tax'] },
+    { field: 'otherFees', name: 'other fees', label: 'Other Fees', types: ['other fees'] },
+];
+
+/**
+ * Which cash transaction types the Cash Report row counts (over the
+ * statement's period) but the statement's Cash Transactions don't list,
+ * in one currency. Pure.
+ *
+ * @returns {{ field, name, label, reported, listed, monthToDate }[]}
+ *   name: what it is, in a sentence; label: the type(s) to tick in the query
+ */
+function unlistedCashTypes(statement, reportRow, currency) {
+    // Detail rows only: a query can list Summary rows of the same payments too.
+    const cashRows = rowsOf(statement, 'CashTransactions', 'CashTransaction')
+        .filter(r => !r.levelOfDetail || String(r.levelOfDetail).toUpperCase() === 'DETAIL')
+        .filter(r => String(r.currency || '').toUpperCase() === currency);
+    const unlisted = [];
+    for (const { field, name, label, types } of CASH_REPORT_TYPES) {
+        const reported = Number(reportRow?.[field]);
+        if (!Number.isFinite(reported) || Math.abs(reported) < BALANCE_TOLERANCE) continue;
+        const listed = cashRows
+            .filter(r => types.includes(String(r.type || '').trim().toLowerCase()))
+            .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+        if (Math.abs(reported - listed) < BALANCE_TOLERANCE) continue;
+        const mtd = Number(reportRow[`${field}MTD`]);
+        unlisted.push({
+            field,
+            name,
+            label,
+            reported: Math.round(reported * 100) / 100,
+            listed: Math.round(listed * 100) / 100,
+            monthToDate: Number.isFinite(mtd) ? Math.round(mtd * 100) / 100 : null,
+        });
+    }
+    return unlisted;
+}
 
 /**
  * The journal's cash against IBKR's, per currency, as of IBKR's statement
@@ -324,7 +373,7 @@ async function defaultSyncFrom(db, rootId) {
 // Journal cash and waiting inbox items, as of each stored report's day.
 async function balanceCheck(db, rootId) {
     const { rows: reports } = await db.query(
-        `SELECT currency, as_of::text AS as_of, ending_cash FROM broker_cash_reports WHERE account_id = $1 ORDER BY currency`,
+        `SELECT currency, as_of::text AS as_of, ending_cash, unlisted FROM broker_cash_reports WHERE account_id = $1 ORDER BY currency`,
         [rootId]
     );
     if (reports.length === 0) return [];
@@ -357,7 +406,11 @@ async function balanceCheck(db, rootId) {
         reports.map(r => ({ currency: r.currency, asOf: r.as_of, endingCash: Number(r.ending_cash) })),
         journal,
         pending
-    ).map(b => ({ ...b, sinceStatement: since[b.currency] || 0 }));
+    ).map(b => ({
+        ...b,
+        sinceStatement: since[b.currency] || 0,
+        unlisted: reports.find(r => r.currency === b.currency)?.unlisted || [],
+    }));
 }
 
 /**
@@ -595,8 +648,8 @@ async function syncBrokerCash(pool, statements) {
                 await client.query(`DELETE FROM broker_cash_reports WHERE account_id = $1`, [account.id]);
                 for (const r of ownReports) {
                     await client.query(
-                        `INSERT INTO broker_cash_reports (account_id, currency, as_of, ending_cash) VALUES ($1, $2, $3, $4)`,
-                        [account.id, r.currency, r.asOf, r.endingCash]
+                        `INSERT INTO broker_cash_reports (account_id, currency, as_of, ending_cash, unlisted) VALUES ($1, $2, $3, $4, $5)`,
+                        [account.id, r.currency, r.asOf, r.endingCash, JSON.stringify(r.unlisted || [])]
                     );
                 }
             }
@@ -628,6 +681,7 @@ module.exports = {
     classifyCashType,
     parseCashItems,
     parseCashReport,
+    unlistedCashTypes,
     compareBalances,
     balanceCheck,
     alignBalance,

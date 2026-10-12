@@ -539,3 +539,15 @@ still waiting in the inbox. Under 0.05 is rounding. **Align** books only
 the rest, on request, as an `ADJUSTMENT` ledger row on the top-level
 account, dated on the statement day — visible, labelled, deletable. It
 is neither a capital flow nor P&L in Stats' return.
+
+A difference can come from the Flex query itself: its Cash Transactions
+list only the types ticked in the query, while the Cash Report counts
+every type. Each sync compares the Cash Report's categories (deposits and
+withdrawals, broker and bond interest, dividends, withholding tax, other
+fees) with the Detail rows listed for them over the statement's period,
+per currency, and stores the types that fall short
+(`broker_cash_reports.unlisted`). The balance row names them, so the fix
+is ticking the type and syncing again rather than an Align that hides
+what the money was; the Settings query check warns about them too. A
+currency that isn't in line also counts toward the badge next to Capital
+in the menu, along with the items waiting in the inbox.

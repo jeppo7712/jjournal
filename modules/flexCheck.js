@@ -3,7 +3,7 @@
 // check says what's wrong and what to tick. Pure: takes the parsed
 // statements, returns the checks.
 
-const { flexDate } = require('./brokerCash.js');
+const { flexDate, parseCashReport } = require('./brokerCash.js');
 
 // What the journal reads, per query type. need: 'required' (the import
 // doesn't work without it), 'recommended' (a feature needs it) or
@@ -204,11 +204,20 @@ function checkFlexQuery(result, purpose, { kind, accounts = [] }) {
             });
             continue;
         }
-        if (sec.section === 'CashTransactions' && rows.some(r => r.levelOfDetail && String(r.levelOfDetail).toUpperCase() !== 'DETAIL')) {
+        const isDetail = r => !r.levelOfDetail || String(r.levelOfDetail).toUpperCase() === 'DETAIL';
+        if (sec.section === 'CashTransactions' && !rows.some(isDetail)) {
             checks.push({
                 status: 'missing', label: sec.label,
                 detail: 'Set to Summary: totals carry no transaction IDs, so single payments can\'t be told apart.',
                 fix: 'In the "Cash Transactions" section options, choose Detail instead of Summary.',
+            });
+            continue;
+        }
+        if (sec.section === 'CashTransactions' && !rows.every(isDetail)) {
+            checks.push({
+                status: 'warn', label: sec.label,
+                detail: 'Lists each payment twice, as Detail and as Summary; only the Detail rows are read.',
+                fix: 'In the "Cash Transactions" section options, untick Summary.',
             });
             continue;
         }
@@ -221,6 +230,22 @@ function checkFlexQuery(result, purpose, { kind, accounts = [] }) {
             continue;
         }
         checks.push({ status: 'ok', label: sec.label, detail: `${rows.length} row${rows.length !== 1 ? 's' : ''}, all fields present.` });
+    }
+
+    // Cash transaction types the query leaves out: IBKR's Cash Report
+    // counts them, its Cash Transactions don't list them, so they never
+    // reach the inbox and the journal's cash drifts from IBKR's.
+    if (purpose === 'activity' && kind === 'real') {
+        for (const report of parseCashReport(statements)) {
+            for (const u of report.unlisted) {
+                const amount = Math.abs(u.monthToDate) >= 0.005 ? `${u.monthToDate.toFixed(2)} this month` : `${u.reported.toFixed(2)} in this period`;
+                checks.push({
+                    status: 'warn', label: `${u.label} (${report.brokerAccountId}, ${report.currency})`,
+                    detail: `IBKR's Cash Report counts ${amount} that Cash Transactions don't list${Math.abs(u.listed) >= 0.005 ? ` in full (${u.listed.toFixed(2)} listed of ${u.reported.toFixed(2)})` : ''}, so it can't come into the journal.`,
+                    fix: `In the "Cash Transactions" section options, tick ${u.label} (or all types).`,
+                });
+            }
+        }
     }
     return checks;
 }
