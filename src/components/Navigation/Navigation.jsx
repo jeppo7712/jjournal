@@ -32,20 +32,35 @@ function describeTradingViewLight(status) {
 // The HIS light: whether IBKR answers historical-data requests. Green when
 // the latest request got an answer, amber after one failure (can be a
 // one-off), red once several in a row failed (e.g. the gateway stopped
-// answering), grey before any request since the server started. Hidden when
-// no IBKR data connection is set up and IBKR never answered.
+// answering) or it hasn't accepted a connection for 10 minutes (logged out),
+// grey before any request since the server started. Hidden when no IBKR data
+// connection is set up and IBKR never answered.
 function describeIbkrDataLight(status) {
   if (!status || (!status.configured && !status.lastSuccessAt)) return null;
   const at = iso => (iso ? new Date(iso).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : null);
   const lastOk = status.lastSuccessAt ? `last answer ${at(status.lastSuccessAt)}` : 'no answer yet';
+  if (status.connectFailingSince) {
+    // Without a data address of its own the data connection uses TWS.
+    const app = status.configured ? 'IB Gateway' : 'TWS';
+    if (status.loggedOut) {
+      const fix = status.configured
+        ? 'It needs a fresh login, e.g. a restart of its container'
+        : 'Check that TWS is running and logged in';
+      return { color: '#b32424', title: `${app} logged out: no API connection since ${at(status.connectFailingSince)} (${lastOk}). ${fix}; trying again once a minute. Last error: ${status.connectError}` };
+    }
+    return { color: '#d97706', title: `IBKR historical data: can't connect to ${app} since ${at(status.connectFailingSince)} (${lastOk}); normal for a minute or two while it restarts. Last error: ${status.connectError}` };
+  }
   if (status.consecutiveFailures >= 2) {
     const r = status.lastReconnect;
     const rs = status.lastRestart;
-    const reconnect = rs && (!r || rs.at >= r.at)
-      ? ` Restarted IB Gateway at ${at(rs.at)} (${rs.ok ? 'accepted' : `failed: ${rs.reply}`}); it logs in again within a minute or two.`
-      : r
-        ? ` Asked IB Gateway to reconnect at ${at(r.at)} (${r.ok ? 'accepted' : `failed: ${r.reply}`}); if that doesn't help within 5 minutes it gets restarted.`
-        : ' Restarting IB Gateway usually fixes this.';
+    const held = status.restartHeld;
+    const reconnect = held && (!r || held.at >= r.at) && (!rs || held.at >= rs.at)
+      ? ` Not restarting IB Gateway now: ${held.reason}.`
+      : rs && (!r || rs.at >= r.at)
+        ? ` Restarted IB Gateway at ${at(rs.at)} (${rs.ok ? 'accepted' : `failed: ${rs.reply}`}); it normally logs in again within a minute or two.`
+        : r
+          ? ` Asked IB Gateway to reconnect at ${at(r.at)} (${r.ok ? 'accepted' : `failed: ${r.reply}`}); if that doesn't help within 5 minutes it gets restarted.`
+          : ' Restarting IB Gateway usually fixes this.';
     return { color: '#b32424', title: `IBKR historical data: ${status.consecutiveFailures} requests in a row failed (${lastOk}). Last error: ${status.lastError}.${reconnect}` };
   }
   if (status.consecutiveFailures === 1) {

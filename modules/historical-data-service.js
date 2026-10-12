@@ -590,10 +590,16 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
                 ibkrSuccessfullyInitialized = true;
                 logger.debug(`[populate][${taskId}] initializeIBKR call completed. Assumed successful or existing connection is usable.`);
             } catch (initError) { // Catches error from initializeIBKR
-                const errorMsg = `Error during IBKR operations for task ${taskId} (${fetchPhase}): ${initError.message}.`;
-                logger.error(`[populate][${taskId}] ${errorMsg}`);
-                broadcastStatus(taskId, errorMsg, 'error');
-                logger.warn(`[populate][${taskId}] IBKR initialization failed. Skipping IBKR data fetches for this task.`);
+                if (initError.code === 'IBKR_CONNECT_BACKOFF') {
+                    // Connects keep failing and the HIS light says so; one
+                    // line per skipped task would only flood the log.
+                    logger.debug(`[populate][${taskId}] ${initError.message} Skipping IBKR data fetches for this task.`);
+                } else {
+                    const errorMsg = `Error during IBKR operations for task ${taskId} (${fetchPhase}): ${initError.message}.`;
+                    logger.error(`[populate][${taskId}] ${errorMsg}`);
+                    broadcastStatus(taskId, errorMsg, 'error');
+                    logger.warn(`[populate][${taskId}] IBKR initialization failed. Skipping IBKR data fetches for this task.`);
+                }
                 // ibkrSuccessfullyInitialized remains false, so the following blocks won't run IBKR fetches.
             }
 
