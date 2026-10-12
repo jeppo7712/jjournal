@@ -1,6 +1,7 @@
 const net = require('net');
 const path = require('path');
 const fs = require('fs').promises;
+const { DateTime } = require('luxon');
 const { logger } = require('./logger.js');
 
 // Sends commands to IBC's command server inside IB Gateway (IBC's
@@ -45,6 +46,25 @@ function sendCommand({ host, port }, command, timeoutMs = 10000) {
 const RESTART_AFTER_MS = 5 * 60 * 1000;
 const RESTART_INTERVAL_MS = 60 * 60 * 1000;
 let lastRestart = null; // { at, ok, reply }
+let restartHeld = null; // { at, reason }: the latest RESTART not sent
+let restartHeldLogged = null; // { at }: logged at most once an hour
+
+/**
+ * Why a RESTART shouldn't be sent at `when`, or null. A RESTART is an
+ * auto-restart: the gateway logs in again with its saved session, and IBKR
+ * requires a full login once a week, after Sunday 01:00 US/Eastern. Until
+ * that full login (e.g. IBC's ColdRestartTime on Sunday) an auto-restart
+ * ends at the login screen with "Session expired", and nothing the journal
+ * can send brings it back. The markets are closed until Sunday 18:00 ET,
+ * so on Sunday it waits until then.
+ */
+function restartHoldReason(when = new Date()) {
+  const et = DateTime.fromJSDate(when).setZone('America/New_York');
+  if (et.weekday === 7 && et.hour >= 1 && et.hour < 18) {
+    return 'after IBKR\'s weekly cut-off (Sunday 01:00 ET) a restart can end logged out until a full login; waiting until Sunday 18:00 ET';
+  }
+  return null;
+}
 
 async function send(address, command) {
   try {
@@ -64,12 +84,15 @@ const since = (entry) => (entry ? Date.now() - new Date(entry.at).getTime() : In
  * Called while historical requests keep failing. First asks the gateway to
  * reconnect its data connections (RECONNECTDATA, at most every 15 minutes).
  * If requests still fail 5 minutes after that, restarts the gateway
- * application (RESTART, at most once an hour): IBC logs in again by itself,
- * like the nightly auto-restart. Needed because after IBKR's daily server
- * reset the gateway can report its historical-data farms as broken
- * (e.g. "HMDS data farm connection is broken: ushmds") and RECONNECTDATA
- * doesn't bring them back, while a fresh login does. Does nothing when no
- * command address is configured.
+ * application (RESTART, at most once an hour, not on Sunday daytime; see
+ * restartHoldReason): IBC logs in again by itself with the saved session,
+ * like the nightly auto-restart, as long as the weekly session is still
+ * valid. If it isn't, the gateway stays logged out and ibkr-data-status.js
+ * reports that once connects keep failing. Needed because after IBKR's
+ * daily server reset the gateway can report its historical-data farms as
+ * broken (e.g. "HMDS data farm connection is broken: ushmds") and
+ * RECONNECTDATA doesn't bring them back, while a fresh login does. Does
+ * nothing when no command address is configured.
  */
 async function requestDataReconnect(reason) {
   if (reconnectInFlight) return;
@@ -85,6 +108,15 @@ async function requestDataReconnect(reason) {
       logger.warn(`[IBKR gateway] Historical data not answering (${reason}); sending RECONNECTDATA to ${address.host}:${address.port}.`);
       lastReconnect = await send(address, 'RECONNECTDATA');
     } else if (since(lastReconnect) >= RESTART_AFTER_MS && since(lastRestart) >= RESTART_INTERVAL_MS) {
+      const holdReason = restartHoldReason();
+      if (holdReason) {
+        if (since(restartHeldLogged) >= RESTART_INTERVAL_MS) {
+          logger.warn(`[IBKR gateway] Still no historical data (${reason}); not sending RESTART: ${holdReason}.`);
+          restartHeldLogged = { at: new Date().toISOString() };
+        }
+        restartHeld = { at: new Date().toISOString(), reason: holdReason };
+        return;
+      }
       logger.warn(`[IBKR gateway] Still no historical data ${Math.round(since(lastReconnect) / 60000)} min after RECONNECTDATA (${reason}); sending RESTART to ${address.host}:${address.port}.`);
       lastRestart = await send(address, 'RESTART');
     }
@@ -101,4 +133,8 @@ function getLastRestart() {
   return lastRestart;
 }
 
-module.exports = { requestDataReconnect, getLastReconnect, getLastRestart, sendCommand };
+function getRestartHeld() {
+  return restartHeld;
+}
+
+module.exports = { requestDataReconnect, getLastReconnect, getLastRestart, getRestartHeld, restartHoldReason, sendCommand };

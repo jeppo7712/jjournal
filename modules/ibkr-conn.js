@@ -2,6 +2,7 @@ const { IBApi, EventName } = require('@stoqey/ib');
 const path = require('path');
 const fs = require('fs').promises;
 const { logger } = require('./logger.js');
+const ibkrDataStatus = require('./ibkr-data-status.js');
 
 // Two independent TWS/IB Gateway connections:
 //
@@ -38,7 +39,10 @@ async function loadConfig() {
 
 const usable = (addresses) => (Array.isArray(addresses) ? addresses.filter(a => a && a.host && a.port) : []);
 
-function createConnection({ name, clientId, resolveAddresses }) {
+// `health` (optional) is told how connects end and can hold one back:
+// { connectWaitMs(), isLoggedOut(), recordConnectFailure(message),
+//   recordConnectSuccess() } (modules/ibkr-data-status.js).
+function createConnection({ name, clientId, resolveAddresses, health = null }) {
   const tag = `[IBKR:${name}]`;
   let ibApi = null;
   let connectionCount = 0;
@@ -114,6 +118,15 @@ function createConnection({ name, clientId, resolveAddresses }) {
       }
     }
 
+    // Connects keep failing (e.g. the gateway is logged out): don't ask
+    // again every few seconds.
+    const waitMs = health ? health.connectWaitMs() : 0;
+    if (waitMs > 0) {
+      const err = new Error(`Not connecting to IBKR (${name}) for another ${Math.ceil(waitMs / 1000)} s: the last connects failed${health.isLoggedOut() ? ' for over 10 minutes (IB Gateway logged out?)' : ''}.`);
+      err.code = 'IBKR_CONNECT_BACKOFF';
+      throw err;
+    }
+
     connectionLock = (async () => {
       logger.info(`${tag} initializeIBKR: Attempting new connection (lock acquired).`);
       broadcastStatus(requestId, `Attempting new IBKR connection.`, 'info');
@@ -138,12 +151,27 @@ function createConnection({ name, clientId, resolveAddresses }) {
             const connectionTimeout = setTimeout(() => {
               currentAttemptIbApi.removeAllListeners(EventName.connected);
               currentAttemptIbApi.removeAllListeners(EventName.error);
+              currentAttemptIbApi.off(EventName.disconnected, onEarlyClose);
               rejectPromise(new Error(`Connection attempt to ${host}:${port} timed out after 15 seconds.`));
             }, 15000);
 
             const onConnectError = (err, code) => {
               clearTimeout(connectionTimeout);
+              currentAttemptIbApi.off(EventName.disconnected, onEarlyClose);
               const errorMsg = `Failed to connect to TWS at ${host}:${port}: ${err.message} (Code: ${code})`;
+              broadcastStatus(requestId, errorMsg, 'error');
+              logger.error(`${tag} ${errorMsg}`);
+              rejectPromise(new Error(errorMsg));
+            };
+
+            // Closed before the API handshake, with no error: what a port
+            // forwarder in front of a gateway that isn't logged in does (it
+            // accepts, then can't reach the gateway's own API port).
+            // Without this the attempt waits for the 15-second timeout.
+            const onEarlyClose = () => {
+              clearTimeout(connectionTimeout);
+              currentAttemptIbApi.off(EventName.error, onConnectError);
+              const errorMsg = `${host}:${port} closed the connection before the API handshake (IB Gateway not logged in?)`;
               broadcastStatus(requestId, errorMsg, 'error');
               logger.error(`${tag} ${errorMsg}`);
               rejectPromise(new Error(errorMsg));
@@ -155,6 +183,8 @@ function createConnection({ name, clientId, resolveAddresses }) {
               // left attached, this one would report the first request error
               // (e.g. a missing futures month) as a failed connection.
               currentAttemptIbApi.off(EventName.error, onConnectError);
+              currentAttemptIbApi.off(EventName.disconnected, onEarlyClose);
+              if (health) health.recordConnectSuccess();
               broadcastStatus(requestId, `Connected to Interactive Brokers API at ${host}:${port}`, 'success');
               logger.info(`✅ ${tag} Connected to Interactive Brokers API at ${host}:${port}`);
               ibApi = currentAttemptIbApi;
@@ -209,6 +239,7 @@ function createConnection({ name, clientId, resolveAddresses }) {
             });
 
             currentAttemptIbApi.once(EventName.error, onConnectError);
+            currentAttemptIbApi.once(EventName.disconnected, onEarlyClose);
             currentAttemptIbApi.connect(clientId);
           });
           return;
@@ -224,6 +255,7 @@ function createConnection({ name, clientId, resolveAddresses }) {
         }
       }
       logger.error(`${tag} initializeIBKR: All connection attempts failed.`);
+      if (health) health.recordConnectFailure(lastError ? lastError.message : 'All connection attempts failed.');
       broadcastStatus(requestId, 'All IBKR connection attempts failed.', 'error');
       ibApi = null;
       throw lastError || new Error('All IBKR connection attempts failed and no specific error was caught.');
@@ -299,6 +331,7 @@ const data = createConnection({
     const list = usable(config.ibkrDataAddresses);
     return list.length > 0 ? list : accountAddresses(config);
   },
+  health: ibkrDataStatus,
 });
 
 // The account connection is the module's default export shape (what
