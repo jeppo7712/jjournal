@@ -527,6 +527,9 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
         PRIMARY KEY (account_id, currency)
       );
     `);
+    // Cash transaction types the Cash Report counts but the Flex query's
+    // Cash Transactions leave out (brokerCash.unlistedCashTypes).
+    await client.query(`ALTER TABLE broker_cash_reports ADD COLUMN IF NOT EXISTS unlisted JSONB NOT NULL DEFAULT '[]'`);
     logger.debug('Broker cash sync tables ready');
 
     // Trade settlement used to book one net row per trade, dated on its last

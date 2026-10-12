@@ -163,8 +163,8 @@ test('cash report: one row per held currency, the base-currency summary left out
     { accountId: 'U1000001', currency: 'USD', endingCash: '784.18164', toDate: '20261002' },
   ] } }]);
   assert.deepEqual(rows, [
-    { brokerAccountId: 'U1000001', currency: 'EUR', asOf: '2026-10-02', endingCash: 17575.228 },
-    { brokerAccountId: 'U1000001', currency: 'USD', asOf: '2026-10-02', endingCash: 784.18164 },
+    { brokerAccountId: 'U1000001', currency: 'EUR', asOf: '2026-10-02', endingCash: 17575.228, unlisted: [] },
+    { brokerAccountId: 'U1000001', currency: 'USD', asOf: '2026-10-02', endingCash: 784.18164, unlisted: [] },
   ]);
 });
 
@@ -174,9 +174,45 @@ test('cash report: an account holding only its base currency reports just the su
     CashTransactions: { CashTransaction: [{ currency: 'USD', fxRateToBase: '1', amount: '-10' }] },
     CashReport: { CashReportCurrency: { accountId: 'U1000002', currency: 'BASE_SUMMARY', endingCash: '7002.84', toDate: '20261002' } },
   }]);
-  assert.deepEqual(rows, [{ brokerAccountId: 'U1000002', currency: 'USD', asOf: '2026-10-02', endingCash: 7002.84 }]);
+  assert.deepEqual(rows, [{ brokerAccountId: 'U1000002', currency: 'USD', asOf: '2026-10-02', endingCash: 7002.84, unlisted: [] }]);
   // Without a way to tell the base currency, nothing is guessed.
   assert.deepEqual(parseCashReport([{ accountId: 'U1000002', CashReport: { CashReportCurrency: { currency: 'BASE_SUMMARY', endingCash: '1', toDate: '20261002' } } }]), []);
+});
+
+// A statement whose Cash Report counts interest its Cash Transactions don't
+// list (the query leaves the type out), and fees listed at both levels.
+const interestLeftOut = () => statement([
+  cashRow({ transactionID: '11', amount: '-10', type: 'Other Fees' }),
+  cashRow({ transactionID: '12', amount: '-10', type: 'Other Fees' }),
+  cashRow({ transactionID: '', amount: '-20', type: 'Other Fees', levelOfDetail: 'SUMMARY' }),
+  cashRow({ transactionID: '13', amount: '500', type: 'Deposits/Withdrawals' }),
+], {
+  CashReport: { CashReportCurrency: {
+    accountId: 'U1000001', currency: 'USD', toDate: '20261009', endingCash: '600.5',
+    depositWithdrawals: '500', otherFees: '-20', brokerInterest: '120.5', brokerInterestMTD: '20.5',
+  } },
+});
+
+test('cash report: types IBKR counts but Cash Transactions leave out', () => {
+  const [usd] = parseCashReport([interestLeftOut()]);
+  // Fees and deposits are listed in full (Summary rows aren't counted twice).
+  assert.deepEqual(usd.unlisted, [
+    { field: 'brokerInterest', name: 'broker interest', label: 'Broker Interest Received and Paid', reported: 120.5, listed: 0, monthToDate: 20.5 },
+  ]);
+});
+
+test('query check: left-out cash types and Summary rows next to Detail ones', () => {
+  const checks = checkFlexQuery({ type: 'AF', statements: [interestLeftOut()] }, 'activity', { kind: 'real' });
+  const interest = checks.find(c => c.label.startsWith('Broker Interest'));
+  assert.equal(interest.status, 'warn');
+  assert.match(interest.detail, /20\.50 this month/);
+  assert.match(interest.fix, /tick Broker Interest Received and Paid/);
+  const cash = checks.find(c => c.label === 'Cash Transactions');
+  assert.equal(cash.status, 'warn');
+  assert.match(cash.fix, /untick Summary/);
+  // Paper cash is simulated: nothing to compare.
+  assert.equal(checkFlexQuery({ type: 'AF', statements: [interestLeftOut()] }, 'activity', { kind: 'paper' })
+    .some(c => c.label.startsWith('Broker Interest')), false);
 });
 
 test('balance check: rounding is in line, items waiting in the inbox explain their part', () => {

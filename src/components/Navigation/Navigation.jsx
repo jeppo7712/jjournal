@@ -110,10 +110,11 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   const statusBoxTriggerRef = useRef(null); // Renamed for clarity, ref for the status trigger area //
   const [tradingViewStatus, setTradingViewStatus] = useState(null);
   const [ibkrDataStatus, setIbkrDataStatus] = useState(null);
-  // IBKR cash activity waiting for the user's add/dismiss on the Capital
-  // page, over all accounts with sync on — a badge next to Capital, so it
-  // gets noticed. Refreshed every few minutes and whenever the Capital
-  // page changes something (the 'broker-activity-changed' event).
+  // What needs the user on the Capital page, over all accounts with sync
+  // on: IBKR cash activity waiting for add/dismiss, and cash that differs
+  // from IBKR's — a badge next to Capital, so it gets noticed. Refreshed
+  // every few minutes and whenever the Capital page changes something (the
+  // 'broker-activity-changed' event).
   const [brokerPending, setBrokerPending] = useState({ total: 0, accounts: [] });
   useEffect(() => {
     if (!isDatabaseConnected || !currentAccountId) return undefined;
@@ -523,8 +524,11 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
             {page.view === 'capital' && brokerPending.total > 0 && (
               <span
                 className={styles.navBadge}
-                title={`Waiting for you from IBKR: ${brokerPending.accounts.map(a => `${a.count} on ${a.name}`).join(', ')}`}
-                aria-label={`${brokerPending.total} IBKR item${brokerPending.total > 1 ? 's' : ''} waiting`}
+                title={`Waiting for you on the Capital page: ${brokerPending.accounts.map(a => [
+                  a.count > 0 && `${a.count} IBKR item${a.count > 1 ? 's' : ''} on ${a.name}`,
+                  (a.offBalance || []).length > 0 && `${a.name}'s ${a.offBalance.join(' and ')} cash differs from IBKR's`,
+                ].filter(Boolean).join(', ')).join('; ')}`}
+                aria-label={`${brokerPending.total} thing${brokerPending.total > 1 ? 's' : ''} to do on the Capital page`}
               >
                 {brokerPending.total > 99 ? '99+' : brokerPending.total}
               </span>
