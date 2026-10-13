@@ -11,23 +11,31 @@ import { findExchangePreset, findFuturesPreset } from '../../data/marketReferenc
 import { NUMBER_FORMATS, getNumberFormat, setNumberFormat } from '../../utils/numberFormat';
 import HistoricalDataSummary from './HistoricalDataSummary';
 import FlexGuide from './FlexGuide';
-import { FaSlidersH, FaTerminal, FaWallet, FaTasks, FaTags, FaPlug, FaGlobeAmericas, FaChartLine, FaDatabase, FaPlus, FaSyncAlt, FaEye, FaEyeSlash } from 'react-icons/fa';
+import { FaSlidersH, FaListUl, FaTerminal, FaWallet, FaTasks, FaTags, FaPlug, FaGlobeAmericas, FaChartLine, FaDatabase, FaPlus, FaSyncAlt, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { notify, confirmDialog } from '../common/Dialogs';
 import { timeframeLabel } from '../../utils/timeframeLabel';
 
-// The sections of the Settings page, in menu order. Without a database only
-// General and Server Logs can be opened.
-const SECTIONS = [
-  { id: 'general', label: 'General', icon: FaSlidersH, description: 'Database connection and how the journal displays things.' },
-  { id: 'logs', label: 'Server Logs', icon: FaTerminal, description: 'The latest lines of the server log.' },
-  { id: 'accounts', label: 'Accounts', icon: FaWallet, description: 'Trading accounts, where their cash is held and how they nest.' },
-  { id: 'checklists', label: 'Checklists', icon: FaTasks, description: 'Checks to tick off when entering and leaving a trade, per account.' },
-  { id: 'tags', label: 'Tags', icon: FaTags, description: 'Tag groups and tags for your trades, shared by all accounts.' },
-  { id: 'tws', label: 'IBKR API', icon: FaPlug, description: 'TWS and IB Gateway connections, and Flex Web Service imports.' },
-  { id: 'exchanges', label: 'Exchanges', icon: FaGlobeAmericas, description: 'Trading venues with their timezone and opening hours.' },
-  { id: 'symbols', label: 'Symbols', icon: FaChartLine, description: 'Contract specs, fees and which timeframes to fetch.' },
-  { id: 'historical', label: 'Historical Data', icon: FaDatabase, description: "What's stored for each symbol, per timeframe and source." },
+// The sections of the Settings page, in menu order, in two groups: what
+// applies to the account open in the menu bar only, and what the whole
+// journal shares. Without a database only General and Server Logs can be
+// opened.
+const SECTION_GROUPS = [
+  { id: 'account', label: 'This account', hint: 'Only for the account open in the menu bar' },
+  { id: 'journal', label: 'Journal-wide', hint: 'The same for every account' },
 ];
+const SECTIONS = [
+  { id: 'tradeList', group: 'account', label: 'Trade list', icon: FaListUl, description: 'How the trade list shows this account\'s trades.' },
+  { id: 'checklists', group: 'account', label: 'Checklists', icon: FaTasks, description: 'Checks to tick off when entering and leaving a trade in this account.' },
+  { id: 'general', group: 'journal', label: 'General', icon: FaSlidersH, description: 'Database connection and number format.' },
+  { id: 'accounts', group: 'journal', label: 'Accounts', icon: FaWallet, description: 'Trading accounts, where their cash is held and how they nest.' },
+  { id: 'tags', group: 'journal', label: 'Tags', icon: FaTags, description: 'Tag groups and tags for your trades, shared by all accounts.' },
+  { id: 'symbols', group: 'journal', label: 'Symbols', icon: FaChartLine, description: 'Contract specs, fees and which timeframes to fetch.' },
+  { id: 'exchanges', group: 'journal', label: 'Exchanges', icon: FaGlobeAmericas, description: 'Trading venues with their timezone and opening hours.' },
+  { id: 'tws', group: 'journal', label: 'IBKR API', icon: FaPlug, description: 'TWS and IB Gateway connections, and Flex Web Service imports.' },
+  { id: 'historical', group: 'journal', label: 'Historical Data', icon: FaDatabase, description: "What's stored for each symbol, per timeframe and source." },
+  { id: 'logs', group: 'journal', label: 'Server Logs', icon: FaTerminal, description: 'The latest lines of the server log.' },
+];
+const OFFLINE_SECTIONS = new Set(['general', 'logs']);
 
 // postgresql://user:secret@host/db -> postgresql://user:••••••@host/db, so
 // the password isn't on screen (or in a screenshot) unless asked for.
@@ -171,6 +179,7 @@ export default function Settings() {
     ibkrFlexQueryIdTradeConfPaper: '',
   });
   const [activeTab, setActiveTab] = useState('general');
+  const currentAccountName = (accounts || []).find(a => String(a.id) === String(currentAccountId))?.name || '';
   const [dbStatus, setDbStatus] = useState(null);
   const [apiBaseUrl, setApiBaseUrl] = useState(process.env.REACT_APP_API_URL);
   const [showFuturesModal, setShowFuturesModal] = useState(false);
@@ -1479,22 +1488,34 @@ export default function Settings() {
           onChange={e => setActiveTab(e.target.value)}
           aria-label="Settings section"
         >
-          {SECTIONS.map(({ id, label }) => (
-            <option key={id} value={id} disabled={!dbStatus?.isConnected && id !== 'general' && id !== 'logs'}>{label}</option>
+          {SECTION_GROUPS.map(group => (
+            <optgroup key={group.id} label={group.id === 'account' && currentAccountName ? `${group.label}: ${currentAccountName}` : group.label}>
+              {SECTIONS.filter(x => x.group === group.id).map(({ id, label }) => (
+                <option key={id} value={id} disabled={!dbStatus?.isConnected && !OFFLINE_SECTIONS.has(id)}>{label}</option>
+              ))}
+            </optgroup>
           ))}
         </select>
-        {SECTIONS.map(({ id, label, icon: Icon }) => (
-          <button
-            key={id}
-            type="button"
-            className={`${styles.navButton} ${activeTab === id ? styles.navActive : ''}`}
-            onClick={() => setActiveTab(id)}
-            disabled={!dbStatus?.isConnected && id !== 'general' && id !== 'logs'}
-            aria-current={activeTab === id ? 'page' : undefined}
-          >
-            <Icon className={styles.navIcon} aria-hidden="true" />
-            <span>{label}</span>
-          </button>
+        {SECTION_GROUPS.map(group => (
+          <div key={group.id} className={styles.navGroup} role="group" aria-label={group.label}>
+            <div className={styles.navGroupLabel} title={group.hint}>
+              <span>{group.label}</span>
+              {group.id === 'account' && currentAccountName && <span className={styles.navGroupAccount}>{currentAccountName}</span>}
+            </div>
+            {SECTIONS.filter(x => x.group === group.id).map(({ id, label, icon: Icon }) => (
+              <button
+                key={id}
+                type="button"
+                className={`${styles.navButton} ${activeTab === id ? styles.navActive : ''}`}
+                onClick={() => setActiveTab(id)}
+                disabled={!dbStatus?.isConnected && !OFFLINE_SECTIONS.has(id)}
+                aria-current={activeTab === id ? 'page' : undefined}
+              >
+                <Icon className={styles.navIcon} aria-hidden="true" />
+                <span>{label}</span>
+              </button>
+            ))}
+          </div>
         ))}
       </nav>
       <div className={styles.contentColumn}>
@@ -1503,7 +1524,14 @@ export default function Settings() {
         return (
           <header className={styles.sectionHeader}>
             <div className={styles.sectionHeading}>
-              <h2>{section.label}</h2>
+              <h2>
+                {section.label}
+                {section.group === 'account' && currentAccountName && (
+                  <span className={styles.accountChip} title="Settings for the account open in the menu bar; switch it there to change another account's">
+                    {currentAccountName}
+                  </span>
+                )}
+              </h2>
               <p>{section.description}</p>
             </div>
             <div className={styles.sectionAction}>
@@ -1605,27 +1633,6 @@ export default function Settings() {
                   </select>
                   <span className={styles.fieldHint}>On every device.</span>
                 </div>
-                <div className={styles.formField}>
-                  <label htmlFor="tradesPerPage">Trades per page</label>
-                  <select
-                    id="tradesPerPage"
-                    value={tradesPerPage === null ? 'unlimited' : tradesPerPage}
-                    onChange={(e) => {
-                      const value = e.target.value === 'unlimited' ? null : parseInt(e.target.value);
-                      setTradesPerPage(value);
-                    }}
-                    className={styles.inputBubble}
-                  >
-                    <option value={10}>10 trades</option>
-                    <option value={25}>25 trades</option>
-                    <option value={50}>50 trades</option>
-                    <option value={100}>100 trades</option>
-                    <option value={200}>200 trades</option>
-                    <option value={500}>500 trades</option>
-                    <option value="unlimited">No limit</option>
-                  </select>
-                  <span className={styles.fieldHint}>For this account.</span>
-                </div>
               </div>
             </section>
 
@@ -1686,6 +1693,39 @@ export default function Settings() {
             </section>
           );
         })()}
+        {activeTab === 'tradeList' && dbStatus?.isConnected && (
+          <section className={styles.card}>
+            <div className={styles.cardHeader}>
+              <div>
+                <h3>Display</h3>
+                <p>Applied straight away.</p>
+              </div>
+            </div>
+            <div className={styles.formGrid}>
+              <div className={styles.formField}>
+                <label htmlFor="tradesPerPage">Trades per page</label>
+                <select
+                  id="tradesPerPage"
+                  value={tradesPerPage === null ? 'unlimited' : tradesPerPage}
+                  onChange={(e) => {
+                    const value = e.target.value === 'unlimited' ? null : parseInt(e.target.value);
+                    setTradesPerPage(value);
+                  }}
+                  className={styles.inputBubble}
+                >
+                  <option value={10}>10 trades</option>
+                  <option value={25}>25 trades</option>
+                  <option value={50}>50 trades</option>
+                  <option value={100}>100 trades</option>
+                  <option value={200}>200 trades</option>
+                  <option value={500}>500 trades</option>
+                  <option value="unlimited">No limit</option>
+                </select>
+                <span className={styles.fieldHint}>How many trades a page of the trade list shows.</span>
+              </div>
+            </div>
+          </section>
+        )}
         {activeTab === 'checklists' && dbStatus?.isConnected && (
           <section className={styles.card}>
             <ChecklistSettings styles={styles} apiBaseUrl={apiBaseUrl} />

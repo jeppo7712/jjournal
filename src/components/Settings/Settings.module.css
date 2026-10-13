@@ -50,6 +50,56 @@
   z-index: 5;
 }
 
+/* "This account" and "Journal-wide": a small heading over each group. */
+.navGroup {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.navGroup + .navGroup {
+  margin-top: 10px;
+  padding-top: 10px;
+  border-top: 1px solid var(--s-border);
+}
+
+.navGroupLabel {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  padding: 2px 12px 6px;
+  color: var(--s-faint);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.navGroupAccount {
+  color: #93C5FD;
+  font-size: 0.78rem;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Next to a per-account section's title: whose settings these are. */
+.accountChip {
+  display: inline-block;
+  margin-left: 10px;
+  padding: 2px 10px;
+  border-radius: 999px;
+  border: 1px solid rgba(59, 130, 246, 0.45);
+  background: rgba(59, 130, 246, 0.12);
+  color: #BFDBFE;
+  font-size: 0.75rem;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
 .navButton {
   display: flex;
   align-items: center;
@@ -920,6 +970,26 @@ select.inputBubble {
     flex: none;
   }
 
+  /* One scrolling row: the groups sit side by side, their label in front. */
+  .navGroup {
+    flex-direction: row;
+    align-items: center;
+    flex: none;
+  }
+
+  .navGroup + .navGroup {
+    margin-top: 0;
+    padding-top: 0;
+    margin-left: 10px;
+    padding-left: 10px;
+    border-top: none;
+    border-left: 1px solid var(--s-border);
+  }
+
+  .navGroupLabel {
+    padding: 0 8px;
+  }
+
   .flexSets {
     grid-template-columns: minmax(0, 1fr);
   }
@@ -1011,7 +1081,8 @@ select.inputBubble {
     border-bottom: none;
   }
 
-  .navButton {
+  .navButton,
+  .navGroup {
     display: none;
   }
 
