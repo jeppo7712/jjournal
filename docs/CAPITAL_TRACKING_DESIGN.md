@@ -556,7 +556,9 @@ in the menu, along with the items waiting in the inbox.
 Transfers between IBKR accounts aren't Cash Transactions: they're the
 query's own Transfers section. Its rows that move cash (`cashTransfer`;
 a position transfer moves none) come into the inbox as deposits and
-withdrawals, keyed `TRANSFER-<transactionID>`. They match the user's own
+withdrawals, keyed `TRANSFER-<transactionID>-IN|OUT` (between two IBKR
+accounts both sides carry the same transaction ID; IBKR marks the rows
+`levelOfDetail="TRANSFER"`). They match the user's own
 deposit or transfer rows like any deposit, so a transfer between two
 journal accounts the user entered as a transfer pair is matched on both
 sides.
