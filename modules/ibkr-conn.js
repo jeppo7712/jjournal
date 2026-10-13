@@ -50,6 +50,8 @@ function createConnection({ name, clientId, resolveAddresses, health = null }) {
   let disconnectionLock = null;
   let managedAccounts = [];
   const commissionMap = new Map();
+  // execId -> the currency IBKR charged the commission in (not always the fill's).
+  const commissionCurrencyMap = new Map();
   // Requests whose caller handles "No security definition" (code 200) itself
   // and reports it with context — contract lookups (validateContract), where
   // the futures contract-chain scan asks about many months that don't exist.
@@ -208,6 +210,7 @@ function createConnection({ name, clientId, resolveAddresses, health = null }) {
                 if (commissionReport.execId) {
                   logger.info(`${tag} Storing commission for execId: ${commissionReport.execId}, commission: ${commissionReport.commission}`);
                   commissionMap.set(commissionReport.execId, commissionReport.commission);
+                  if (commissionReport.currency) commissionCurrencyMap.set(commissionReport.execId, String(commissionReport.currency).toUpperCase());
                 }
               });
 
@@ -232,6 +235,7 @@ function createConnection({ name, clientId, resolveAddresses, health = null }) {
                     connectionCount = 0;
                     managedAccounts = [];
                     commissionMap.clear();
+                    commissionCurrencyMap.clear();
                   }
                 }
               });
@@ -310,6 +314,7 @@ function createConnection({ name, clientId, resolveAddresses, health = null }) {
     expectSelfReportedErrors,
     releaseSelfReportedErrors,
     commissionMap, // Exporting map for use in execution routes
+    commissionCurrencyMap,
   };
 }
 

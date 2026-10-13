@@ -271,6 +271,7 @@ function filterAndMapExecutions(rawTrades, symbol, effectiveType, identity = nul
         quantity: Math.abs(Number(t.quantity)),
         price: Number(t.tradePrice ?? t.price),
         commission: Math.abs(Number(t.ibCommission ?? t.commission ?? 0)),
+        commissionCurrency: String(t.ibCommissionCurrency || t.commissionCurrency || t.currency || '').toUpperCase() || null,
         contractMonth: effectiveType === 'FUT'
           ? futuresContractMonth({ localSymbol: t.localSymbol, symbol: t.symbol, expiry: t.expiry }, t.tradeDate || t.dateTime)
           : null,
