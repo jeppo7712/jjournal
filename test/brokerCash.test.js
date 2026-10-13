@@ -113,10 +113,11 @@ test('query check: a complete Activity query passes', () => {
     type: 'AF',
     statements: [statement([cashRow({ transactionID: '1', amount: '-10' })], {
       Trades: { Trade: [trade] }, CashReport: { CashReportCurrency: { accountId: 'U1000001', currency: 'USD', endingCash: '1', toDate: '20261009' } },
-      OpenDividendAccruals: '',
+      OpenDividendAccruals: '', Transfers: '',
     })],
   }, 'activity', { kind: 'real', accounts: [{ name: 'Main', broker_account_id: 'U1000001' }] });
-  assert.deepEqual(checks.filter(c => c.status !== 'ok').map(c => c.label), ['Open Dividend Accruals']);
+  assert.deepEqual(checks.filter(c => c.status !== 'ok').map(c => c.label), ['Transfers', 'Open Dividend Accruals']);
+  assert.equal(statusOf(checks, 'Transfers'), 'info'); // included, no rows yet
   assert.equal(statusOf(checks, 'Open Dividend Accruals'), 'info');
 });
 
@@ -197,8 +198,48 @@ test('cash report: types IBKR counts but Cash Transactions leave out', () => {
   const [usd] = parseCashReport([interestLeftOut()]);
   // Fees and deposits are listed in full (Summary rows aren't counted twice).
   assert.deepEqual(usd.unlisted, [
-    { field: 'brokerInterest', name: 'broker interest', label: 'Broker Interest Received and Paid', reported: 120.5, listed: 0, monthToDate: 20.5 },
+    { field: 'brokerInterest', name: 'broker interest', label: 'Broker Interest Received and Paid',
+      fix: "Tick Broker Interest Received and Paid in the query's Cash Transactions", reported: 120.5, listed: 0, monthToDate: 20.5 },
   ]);
+});
+
+// Cash moved in from another IBKR account, and a position transfer (no cash).
+const transfer = (over) => ({
+  accountId: 'U1000001', currency: 'USD', assetCategory: 'CASH', type: 'INTERNAL', direction: 'IN', description: 'Cash transfer',
+  dateTime: '20261006;101500', cashTransfer: '25.5', quantity: '0', transactionID: '901', levelOfDetail: 'DETAIL', ...over,
+});
+const withTransfers = (rows, report = {}) => statement([], {
+  Transfers: { Transfer: rows },
+  CashReport: { CashReportCurrency: { accountId: 'U1000001', currency: 'USD', toDate: '20261009', endingCash: '25.5', accountTransfers: '25.5', accountTransfersMTD: '25.5', ...report } },
+});
+
+test('transfers: cash ones come in as deposits and withdrawals, position ones are left out', () => {
+  const items = parseCashItems([withTransfers([
+    transfer(),
+    transfer({ transactionID: '902', direction: 'OUT', cashTransfer: '50' }),
+    transfer({ transactionID: '903', assetCategory: 'STK', cashTransfer: '0', quantity: '10' }),
+    transfer({ transactionID: '', levelOfDetail: 'SUMMARY' }),
+  ])]);
+  assert.deepEqual(items.map(i => [i.externalId, i.kind, i.amount, i.date, i.brokerType]), [
+    ['TRANSFER-901', 'DEPOSIT', 25.5, '2026-10-06', 'Transfer'],
+    ['TRANSFER-902', 'WITHDRAWAL', -50, '2026-10-06', 'Transfer'],
+  ]);
+  // They match a hand-entered transfer like any deposit.
+  assert.deepEqual(matchItems([{ id: 1, kind: 'DEPOSIT', date: '2026-10-06', currency: 'USD', amount: 25.5 }],
+    [{ id: 5, type: 'TRANSFER_IN', date: '2026-10-07', currency: 'USD', amount: 25.5 }]), [{ itemIds: [1], rowIds: [5], dividendId: null }]);
+});
+
+test('transfers the query leaves out are named, with the section to tick', () => {
+  const [none] = parseCashReport([statement([], { CashReport: withTransfers([]).CashReport })]);
+  assert.deepEqual(none.unlisted.map(u => [u.field, u.reported, u.listed, u.fix]), [
+    ['accountTransfers', 25.5, 0, 'Tick the "Transfers" section in the Flex query'],
+  ]);
+  const [listed] = parseCashReport([withTransfers([transfer()])]);
+  assert.deepEqual(listed.unlisted, []);
+  const check = checkFlexQuery({ type: 'AF', statements: [statement([], { CashReport: withTransfers([]).CashReport })] }, 'activity', { kind: 'real' })
+    .find(c => c.label.startsWith('Transfers ('));
+  assert.match(check.detail, /Transfers section doesn't list/);
+  assert.match(check.fix, /tick "Transfers"/);
 });
 
 test('query check: left-out cash types and Summary rows next to Detail ones', () => {

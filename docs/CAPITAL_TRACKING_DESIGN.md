@@ -544,10 +544,30 @@ A difference can come from the Flex query itself: its Cash Transactions
 list only the types ticked in the query, while the Cash Report counts
 every type. Each sync compares the Cash Report's categories (deposits and
 withdrawals, broker and bond interest, dividends, withholding tax, other
-fees) with the Detail rows listed for them over the statement's period,
-per currency, and stores the types that fall short
+fees, and transfers between IBKR accounts) with the Detail rows listed
+for them over the statement's period, per currency, and stores the types
+that fall short
 (`broker_cash_reports.unlisted`). The balance row names them, so the fix
 is ticking the type and syncing again rather than an Align that hides
 what the money was; the Settings query check warns about them too. A
 currency that isn't in line also counts toward the badge next to Capital
 in the menu, along with the items waiting in the inbox.
+
+Transfers between IBKR accounts aren't Cash Transactions: they're the
+query's own Transfers section. Its rows that move cash (`cashTransfer`;
+a position transfer moves none) come into the inbox as deposits and
+withdrawals, keyed `TRANSFER-<transactionID>`. They match the user's own
+deposit or transfer rows like any deposit, so a transfer between two
+journal accounts the user entered as a transfer pair is matched on both
+sides.
+
+### Fees from IBKR
+
+A TWS import takes a fill's fee from the commission report TWS sends
+after the execution; when it hasn't arrived yet the fill is saved without
+a fee. The fills scan (`modules/brokerFills.js`) has IBKR's commission for
+every fill of a linked account from `broker_fills_from` on, so it sets a
+journal fill's fee to it by execution ID when they differ, and rebuilds
+the trade's cash. The fee the journal had is kept on the broker fill
+(`journal_fee_was`, `fee_corrected_at`). A commission IBKR charged in
+another currency than the fill's is left alone.

@@ -10,7 +10,8 @@ const apiBaseUrl = process.env.REACT_APP_API_URL || '';
 const ACTIVITY_SECTIONS = [
   { section: 'Trades', options: 'Execution only', use: 'Importing your trades', need: 'Required' },
   { section: 'Cash Transactions', options: 'Every type, and Detail (not Summary)', use: 'Deposits, fees, interest, dividends and tax on the Capital page', need: 'Recommended' },
-  { section: 'Cash Report', options: '—', use: 'Checking the journal\'s cash against IBKR\'s (coming next)', need: 'Recommended' },
+  { section: 'Cash Report', options: '—', use: 'Checking the journal\'s cash against IBKR\'s', need: 'Recommended' },
+  { section: 'Transfers', options: '—', use: 'Cash moved between IBKR accounts (also one outside the journal) on the Capital page', need: 'Recommended' },
   { section: 'Open Dividend Accruals', options: '—', use: 'Dividends announced but not paid yet', need: 'Optional' },
 ];
 

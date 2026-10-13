@@ -227,12 +227,13 @@ const BrokerActivity = ({ accountId, accounts, onLedgerChange }) => {
                         </span>
                       )}
                       {/* Types IBKR counts but the Flex query doesn't list:
-                          they can't come into the inbox (brokerCash.unlistedCashTypes). */}
-                      {(b.unlisted || []).map(u => (
+                          they can't come into the inbox (brokerCash.unlistedCashTypes).
+                          Only while the currency is off: an in-line one already holds them. */}
+                      {!b.inLine && (b.unlisted || []).map(u => (
                         <span key={u.field} className={styles.unlisted}>
                           IBKR's statement has {u.name}
                           {' '}({Math.abs(u.monthToDate) >= 0.005 ? `${formatNumber(u.monthToDate, 2)} this month` : `${formatNumber(u.reported, 2)} over the statement`})
-                          {' '}that the Flex query's Cash Transactions don't list, so it can't come in here. Tick {u.label} in the query's Cash Transactions (Settings → IBKR API has the query check), then sync.
+                          {' '}that the Flex query doesn't list, so it can't come in here. {u.fix || `Tick ${u.label} in the query's Cash Transactions`} (Settings → IBKR API has the query check), then sync.
                         </span>
                       ))}
                     </span>

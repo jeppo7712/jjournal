@@ -25,7 +25,7 @@ test('a Trade Confirmation row without asset type: a known futures root makes it
   const [fill] = parseFills([{ accountId: 'DU1000002', TradeConfirms: { TradeConfirm: tradeConfirm() } }], new Set(['MES']));
   assert.deepEqual(fill, {
     execId: 'tc-1', brokerAccountId: 'DU1000002', type: 'FUT', symbol: 'MES', rawSymbol: 'MESZ6', contractMonth: '202612',
-    side: 'BUY', quantity: 2, price: 6000.25, commission: 1.24, currency: 'USD', exchange: 'CME', dateTime: '2026-10-14T14:15:30.000Z',
+    side: 'BUY', quantity: 2, price: 6000.25, commission: 1.24, commissionCurrency: null, currency: 'USD', exchange: 'CME', dateTime: '2026-10-14T14:15:30.000Z',
   });
   // Unknown root: taken as a stock symbol as it stands.
   const [stock] = parseFills([{ accountId: 'DU1000002', TradeConfirms: { TradeConfirm: tradeConfirm({ symbol: 'ABCZ6' }) } }], new Set(['MES']));

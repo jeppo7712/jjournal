@@ -2,7 +2,9 @@ const { logger } = require('./logger.js');
 const { syncDividendLedger } = require('./dividends.js');
 
 // Broker cash activity (IBKR Flex "Cash Transactions"): deposits and
-// withdrawals, fees, interest, dividends and the tax withheld on them.
+// withdrawals, fees, interest, dividends and the tax withheld on them; and
+// cash transfers between IBKR accounts (the "Transfers" section), which
+// come in as deposits and withdrawals.
 //
 // Every row IBKR reports is kept in broker_cash_items, keyed by its
 // transaction ID, so it is never imported twice. A row is then
@@ -95,8 +97,49 @@ function parseCashItems(statements) {
                 exDate: flexDate(row.exDate),
             });
         }
+        for (const t of transferRows(statement)) {
+            items.push({
+                brokerAccountId: String(t.row.accountId || statement.accountId || '').toUpperCase(),
+                externalId: `TRANSFER-${t.externalId}`,
+                brokerType: 'Transfer',
+                kind: t.amount < 0 ? 'WITHDRAWAL' : 'DEPOSIT',
+                date: t.date,
+                currency: t.currency,
+                amount: t.amount,
+                symbol: null,
+                description: t.description,
+                actionId: null,
+                exDate: null,
+            });
+        }
     }
     return items;
+}
+
+/**
+ * The cash moved between IBKR accounts (the Flex "Transfers" section, not
+ * part of Cash Transactions): from or to another IBKR account, including
+ * one outside the journal. A position transfer moves no cash and is left
+ * out, and so are Summary rows. Signed: into the account is positive.
+ */
+function transferRows(statement) {
+    const rows = [];
+    for (const row of rowsOf(statement, 'Transfers', 'Transfer')) {
+        if (row.levelOfDetail && String(row.levelOfDetail).toUpperCase() !== 'DETAIL') continue;
+        let amount = Number(row.cashTransfer);
+        if (!Number.isFinite(amount) || amount === 0) continue;
+        const direction = String(row.direction || '').toUpperCase();
+        if (direction === 'OUT' && amount > 0) amount = -amount;
+        if (direction === 'IN' && amount < 0) amount = -amount;
+        const date = flexDate(row.dateTime || row.date || row.settleDate || row.reportDate);
+        const currency = String(row.currency || '').toUpperCase();
+        const externalId = String(row.transactionID || '').trim();
+        if (!externalId || !date || !/^[A-Z]{3}$/.test(currency)) continue;
+        const description = String(row.description || '').trim()
+            || `Cash transfer ${amount < 0 ? 'to' : 'from'} another IBKR account`;
+        rows.push({ row, externalId, date, currency, amount, description });
+    }
+    return rows;
 }
 
 // The account's base currency, from the statement itself: a row whose rate
@@ -157,15 +200,26 @@ const CASH_REPORT_TYPES = [
     { field: 'dividends', name: 'dividends', label: 'Dividends', types: ['dividends'] },
     { field: 'withholdingTax', name: 'withholding tax', label: 'Withholding Tax', types: ['withholding tax'] },
     { field: 'otherFees', name: 'other fees', label: 'Other Fees', types: ['other fees'] },
+    // Not a Cash Transactions type: its own section of the query.
+    { field: 'accountTransfers', name: 'transfers between IBKR accounts', label: 'Transfers', section: 'Transfers' },
 ];
+
+// What to tick in the Flex query for an unlisted type.
+function unlistedFix({ label, section }) {
+    return section
+        ? `Tick the "${section}" section in the Flex query`
+        : `Tick ${label} in the query's Cash Transactions`;
+}
 
 /**
  * Which cash transaction types the Cash Report row counts (over the
  * statement's period) but the statement's Cash Transactions don't list,
- * in one currency. Pure.
+ * in one currency — and transfers between IBKR accounts that its Transfers
+ * section doesn't (or the query has no such section). Pure.
  *
- * @returns {{ field, name, label, reported, listed, monthToDate }[]}
- *   name: what it is, in a sentence; label: the type(s) to tick in the query
+ * @returns {{ field, name, label, fix, reported, listed, monthToDate }[]}
+ *   name: what it is, in a sentence; label: the type(s) to tick in the query;
+ *   fix: what to tick, as an instruction
  */
 function unlistedCashTypes(statement, reportRow, currency) {
     // Detail rows only: a query can list Summary rows of the same payments too.
@@ -173,18 +227,23 @@ function unlistedCashTypes(statement, reportRow, currency) {
         .filter(r => !r.levelOfDetail || String(r.levelOfDetail).toUpperCase() === 'DETAIL')
         .filter(r => String(r.currency || '').toUpperCase() === currency);
     const unlisted = [];
-    for (const { field, name, label, types } of CASH_REPORT_TYPES) {
+    const transfers = transferRows(statement).filter(t => t.currency === currency);
+    for (const type of CASH_REPORT_TYPES) {
+        const { field, name, label, types } = type;
         const reported = Number(reportRow?.[field]);
         if (!Number.isFinite(reported) || Math.abs(reported) < BALANCE_TOLERANCE) continue;
-        const listed = cashRows
-            .filter(r => types.includes(String(r.type || '').trim().toLowerCase()))
-            .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
+        const listed = type.section
+            ? transfers.reduce((sum, t) => sum + t.amount, 0)
+            : cashRows
+                .filter(r => types.includes(String(r.type || '').trim().toLowerCase()))
+                .reduce((sum, r) => sum + (Number(r.amount) || 0), 0);
         if (Math.abs(reported - listed) < BALANCE_TOLERANCE) continue;
         const mtd = Number(reportRow[`${field}MTD`]);
         unlisted.push({
             field,
             name,
             label,
+            fix: unlistedFix(type),
             reported: Math.round(reported * 100) / 100,
             listed: Math.round(listed * 100) / 100,
             monthToDate: Number.isFinite(mtd) ? Math.round(mtd * 100) / 100 : null,
@@ -680,6 +739,7 @@ async function syncBrokerCash(pool, statements) {
 module.exports = {
     classifyCashType,
     parseCashItems,
+    transferRows,
     parseCashReport,
     unlistedCashTypes,
     compareBalances,
