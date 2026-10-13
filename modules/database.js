@@ -532,6 +532,37 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     await client.query(`ALTER TABLE broker_cash_reports ADD COLUMN IF NOT EXISTS unlisted JSONB NOT NULL DEFAULT '[]'`);
     logger.debug('Broker cash sync tables ready');
 
+    // IBKR fills of linked accounts, to tell the user about the ones not in
+    // the journal yet (modules/brokerFills.js), from broker_fills_from on.
+    await client.query(`ALTER TABLE accounts ADD COLUMN IF NOT EXISTS broker_fills_from DATE`);
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS broker_fills (
+        id SERIAL PRIMARY KEY,
+        account_id INTEGER NOT NULL REFERENCES accounts(id) ON DELETE CASCADE,
+        source VARCHAR NOT NULL DEFAULT 'IBKR',
+        exec_id VARCHAR NOT NULL,
+        broker_account_id VARCHAR NOT NULL,
+        type VARCHAR NOT NULL,
+        symbol VARCHAR NOT NULL,
+        raw_symbol VARCHAR,
+        contract_month VARCHAR,
+        side VARCHAR NOT NULL,
+        quantity NUMERIC NOT NULL,
+        price NUMERIC NOT NULL,
+        commission NUMERIC,
+        currency VARCHAR,
+        exchange VARCHAR,
+        date_time TIMESTAMP WITH TIME ZONE NOT NULL,
+        status VARCHAR NOT NULL DEFAULT 'PENDING',
+        created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+        CONSTRAINT check_broker_fill_status CHECK (status IN ('PENDING', 'DISMISSED')),
+        CONSTRAINT check_broker_fill_side CHECK (side IN ('BUY', 'SELL'))
+      );
+    `);
+    await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_broker_fills_exec ON broker_fills (source, exec_id)`);
+    await client.query(`CREATE INDEX IF NOT EXISTS idx_broker_fills_account ON broker_fills (account_id, status)`);
+
     // Trade settlement used to book one net row per trade, dated on its last
     // fill: selling a position moved the purchase's cash to the sale day.
     // Settlement is one row per fill now (settlementEntries); split the old

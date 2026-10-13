@@ -188,8 +188,9 @@ async function connectDatabaseWithRetry(databaseUrl) {
   }
 }
 
-// Set once the routes are built (below); the broker cash cron uses it.
+// Set once the routes are built (below); the broker cash and fills crons use them.
 let brokerActivity = null;
+let brokerFills = null;
 
 (async () => {
   try {
@@ -203,6 +204,7 @@ let brokerActivity = null;
     const ibkrRouter = require('./routes/ibkr.js')(ibkr, broadcastStatus, uuidv4, lazyPool);
     const capitalRouter = require('./routes/capital.js')(lazyPool, broadcastStatus, uuidv4);
     brokerActivity = require('./routes/brokerActivity.js')(lazyPool, broadcastStatus, uuidv4);
+    brokerFills = require('./routes/brokerFills.js')(lazyPool);
     const tagsRouter = require('./routes/tags.js')(lazyPool);
 
     apiRouter.use('/', tradesRouter);
@@ -212,6 +214,7 @@ let brokerActivity = null;
     apiRouter.use('/ibkr', ibkrRouter);
     apiRouter.use('/', capitalRouter);
     apiRouter.use('/', brokerActivity.router);
+    apiRouter.use('/', brokerFills.router);
     apiRouter.use('/', tagsRouter);
 
     await startServer(PORT); // Start the HTTP server
@@ -620,6 +623,20 @@ cron.schedule('20 */6 * * *', async () => {
     logger.warn(`[BrokerCashCron] ${err.message}`);
   }
 });
+
+// IBKR fills not in the journal yet — see modules/brokerFills.js. Every 15
+// minutes: IBKR updates its Trade Confirmation statement with a delay
+// anyway. Also a minute after startup, once the database is up.
+async function scanBrokerFills(label) {
+  if (!brokerFills || !db.getIsConnected()) return;
+  try {
+    await brokerFills.scan();
+  } catch (err) {
+    logger.warn(`[BrokerFillsCron] ${label}: ${err.message}`);
+  }
+}
+cron.schedule('*/15 * * * *', () => scanBrokerFills('scheduled scan'));
+setTimeout(() => scanBrokerFills('startup scan'), 60 * 1000);
 
 // Serve static files and handle frontend routes in production
 if (process.env.NODE_ENV === 'production') {
