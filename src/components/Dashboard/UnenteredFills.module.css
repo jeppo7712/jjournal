@@ -1,49 +1,33 @@
 .panel {
-  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 14px;
   border: 1px solid rgba(59, 130, 246, 0.45);
-  border-radius: var(--ui-radius, 16px);
-  box-shadow: var(--ui-shadow);
-  padding: 10px 14px;
+  border-radius: 10px;
+  background: rgba(59, 130, 246, 0.08);
+  padding: 6px 12px;
   margin-bottom: 12px;
+  font-size: 0.82rem;
+  color: #D1D5DB;
   box-sizing: border-box;
 }
 
-.head {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #E5E7EB;
-  font-size: 0.85rem;
-  font-weight: 600;
-  margin-bottom: 6px;
-}
-
 .dot {
-  width: 8px;
-  height: 8px;
+  width: 7px;
+  height: 7px;
   border-radius: 50%;
   background: #3B82F6;
 }
 
-.groups {
-  list-style: none;
-  margin: 0;
-  padding: 0;
+.head {
+  color: #E5E7EB;
 }
 
 .group {
-  display: grid;
-  grid-template-columns: 90px minmax(0, 1fr) auto;
+  display: inline-flex;
   align-items: center;
-  gap: 4px 14px;
-  padding: 6px 0;
-  border-top: 1px solid var(--ui-border, #2C3244);
-  font-size: 0.82rem;
-  color: #D1D5DB;
-}
-
-.group:first-child {
-  border-top: none;
+  gap: 8px;
 }
 
 .symbol {
@@ -51,34 +35,16 @@
   color: #fff;
 }
 
-.fills {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 4px 16px;
-  font-variant-numeric: tabular-nums;
-}
-
-.buy { color: #34D399; }
-.sell { color: #F87171; }
-
-.time {
-  color: #6B7280;
-  margin-left: 6px;
-}
-
-.actions {
-  display: flex;
-  align-items: center;
-  gap: 6px;
+.count {
+  color: #9CA3AF;
 }
 
 .add {
-  background: #2563EB;
-  color: #fff;
+  background: none;
   border: none;
-  border-radius: 8px;
-  padding: 5px 10px;
-  font-size: 0.8rem;
+  padding: 0;
+  color: #93C5FD;
+  font-size: inherit;
   cursor: pointer;
   white-space: nowrap;
 }
@@ -87,24 +53,13 @@
   background: none;
   border: none;
   color: #6B7280;
-  font-size: 1.1rem;
+  font-size: 1rem;
   line-height: 1;
   cursor: pointer;
-  padding: 2px 6px;
+  padding: 0 2px;
 }
 
 @media (hover: hover) {
-  .add:hover { background: #1D4ED8; }
+  .add:hover { color: #DBEAFE; text-decoration: underline; }
   .dismiss:hover { color: #E5E7EB; }
-}
-
-@media (max-width: 768px) {
-  .group {
-    grid-template-columns: minmax(0, 1fr) auto;
-  }
-
-  .fills {
-    grid-column: 1 / -1;
-    grid-row: 2;
-  }
 }

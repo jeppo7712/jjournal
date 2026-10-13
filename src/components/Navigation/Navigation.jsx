@@ -111,11 +111,11 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   const statusBoxTriggerRef = useRef(null); // Renamed for clarity, ref for the status trigger area //
   const [tradingViewStatus, setTradingViewStatus] = useState(null);
   const [ibkrDataStatus, setIbkrDataStatus] = useState(null);
-  // What IBKR has waiting, over all accounts (BrokerAlertsContext): a badge
-  // next to Capital (cash items, cash that differs from IBKR's) and next to
-  // Dashboard (fills not in the journal), and a mark on each account in the
-  // account list, so it gets noticed whichever account is open.
-  const { capital: brokerPending, fills: brokerFills, rootOf, countsByAccount } = useBrokerAlerts();
+  // What IBKR has waiting (BrokerAlertsContext). For the open account: a
+  // badge next to Capital (cash items, cash that differs from IBKR's) and
+  // next to Dashboard (fills not in the journal). For the other accounts: a
+  // mark on each in the account list, and a badge next to its label.
+  const { capital: brokerPending, rootOf, countsByAccount } = useBrokerAlerts();
 
   useEffect(() => {
     // WebSocket connection is handled by StatusProvider.
@@ -311,26 +311,11 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   const safeAccounts = Array.isArray(accounts) ? accounts : []; //
   const safeCurrentAccountId = currentAccountId || ''; //
 
-  // A badge's page for the account it's about: stays on the open account
-  // if it has some, else switches to the first one that does.
   const currentRoot = rootOf(currentAccountId);
-  const openAlerts = (view, kind) => {
-    if (!(countsByAccount[currentRoot]?.[kind] > 0)) {
-      const other = Object.keys(countsByAccount).find(id => countsByAccount[id][kind] > 0);
-      if (other) setCurrentAccountId(other);
-    }
-    setCurrentView(view);
-  };
-  const alertsLabel = (c) => [
-    c.fills > 0 && `${c.fills} fill${c.fills > 1 ? 's' : ''} to add`,
-    c.capital > 0 && `${c.capital} on Capital`,
-  ].filter(Boolean).join(' · ');
+  const currentAlerts = countsByAccount[currentRoot] || { capital: 0, fills: 0 };
+  const currentCapital = (brokerPending.accounts || []).find(a => String(a.id) === currentRoot);
   const otherAlerts = safeAccounts.filter(a => String(a.id) !== currentRoot && countsByAccount[String(a.id)]);
-  const fillsTitle = () => {
-    const byAccount = {};
-    for (const f of brokerFills) byAccount[f.account_name] = (byAccount[f.account_name] || 0) + 1;
-    return `IBKR fills not in the journal: ${Object.entries(byAccount).map(([name, n]) => `${n} on ${name}`).join(', ')}`;
-  };
+  const otherAlertsCount = otherAlerts.reduce((n, a) => n + countsByAccount[String(a.id)].capital + countsByAccount[String(a.id)].fills, 0);
 
   const currentAccountCashBalances = (safeAccounts.find(a => String(a.id) === String(currentAccountId))?.cash_balances) || [];
   const cashByCurrency = sumByCurrency(currentAccountCashBalances, b => b.balance, b => b.currency);
@@ -396,7 +381,18 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
 
   const renderAccountInfo = () => (
     <div className={styles.accountInfo}>
-      <span className={styles.accountLabel}>Account</span>
+      <span className={styles.accountLabel}>
+        Account
+        {otherAlertsCount > 0 && (
+          <span
+            className={styles.accountBadge}
+            title={`Waiting on other accounts: ${otherAlerts.map(a => a.name).join(', ')}`}
+            aria-label={`${otherAlertsCount} thing${otherAlertsCount > 1 ? 's' : ''} waiting on other accounts`}
+          >
+            {otherAlertsCount > 99 ? '99+' : otherAlertsCount}
+          </span>
+        )}
+      </span>
       <div className={styles.accountName}>
         {isDatabaseConnected && (
           <select
@@ -425,22 +421,6 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
           </select>
         )}
       </div>
-      {otherAlerts.map(a => (
-        <button
-          key={a.id}
-          type="button"
-          className={styles.otherAlerts}
-          onClick={() => {
-            const c = countsByAccount[String(a.id)];
-            setCurrentAccountId(String(a.id));
-            setCurrentView(c.fills > 0 ? 'dashboard' : 'capital');
-          }}
-          title={`Switch to ${a.name}`}
-        >
-          <span className={styles.otherAlertsDot} aria-hidden="true" />
-          {a.name}: {alertsLabel(countsByAccount[String(a.id)])}
-        </button>
-      ))}
       {/* Scrolls internally on short viewports rather than pushing Status
           below the visible sidebar — this section grew from 2 stats to 4
           and a fixed-height nav (see .navigation) won't reflow around it. */}
@@ -548,31 +528,25 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
           >
             <svg className={styles.navIcon} viewBox="0 0 20 20" fill="currentColor">{NAV_ICONS[page.view]}</svg>
             <span className={styles.navLabel}>{page.label}</span>
-            {page.view === 'dashboard' && brokerFills.length > 0 && (
+            {page.view === 'dashboard' && currentAlerts.fills > 0 && (
               <span
                 className={styles.navBadge}
-                role="button"
-                tabIndex={-1}
-                onClick={e => { e.stopPropagation(); openAlerts('dashboard', 'fills'); }}
-                title={fillsTitle()}
-                aria-label={`${brokerFills.length} IBKR fill${brokerFills.length > 1 ? 's' : ''} not in the journal`}
+                title="IBKR fills not in the journal yet"
+                aria-label={`${currentAlerts.fills} IBKR fill${currentAlerts.fills > 1 ? 's' : ''} not in the journal`}
               >
-                {brokerFills.length > 99 ? '99+' : brokerFills.length}
+                {currentAlerts.fills > 99 ? '99+' : currentAlerts.fills}
               </span>
             )}
-            {page.view === 'capital' && brokerPending.total > 0 && (
+            {page.view === 'capital' && currentAlerts.capital > 0 && (
               <span
                 className={styles.navBadge}
-                role="button"
-                tabIndex={-1}
-                onClick={e => { e.stopPropagation(); openAlerts('capital', 'capital'); }}
-                title={`Waiting for you on the Capital page: ${brokerPending.accounts.map(a => [
-                  a.count > 0 && `${a.count} IBKR item${a.count > 1 ? 's' : ''} on ${a.name}`,
-                  (a.offBalance || []).length > 0 && `${a.name}'s ${a.offBalance.join(' and ')} cash differs from IBKR's`,
-                ].filter(Boolean).join(', ')).join('; ')}`}
-                aria-label={`${brokerPending.total} thing${brokerPending.total > 1 ? 's' : ''} to do on the Capital page`}
+                title={`Waiting for you on the Capital page: ${[
+                  currentCapital?.count > 0 && `${currentCapital.count} IBKR item${currentCapital.count > 1 ? 's' : ''}`,
+                  (currentCapital?.offBalance || []).length > 0 && `${currentCapital.offBalance.join(' and ')} cash differs from IBKR's`,
+                ].filter(Boolean).join(', ')}`}
+                aria-label={`${currentAlerts.capital} thing${currentAlerts.capital > 1 ? 's' : ''} to do on the Capital page`}
               >
-                {brokerPending.total > 99 ? '99+' : brokerPending.total}
+                {currentAlerts.capital > 99 ? '99+' : currentAlerts.capital}
               </span>
             )}
             <kbd className={styles.navKey}>{page.key}</kbd>
