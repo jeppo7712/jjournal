@@ -96,6 +96,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
           quantity: execution.shares,
           price: execution.price,
           commission: ibkr.commissionMap.get(execution.execId) || execution.commission || 0,
+          commissionCurrency: contract.currency ? String(contract.currency).toUpperCase() : null,
           contractMonth: effectiveType.toUpperCase() === 'FUT'
             ? futuresContractMonth({ localSymbol: contract.localSymbol, expiry: contract.lastTradeDateOrContractMonth }, execution.time)
             : null,
@@ -112,8 +113,10 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
             commission: ibkr.commissionMap.get(exec.execId) !== undefined
               ? ibkr.commissionMap.get(exec.execId)
               : exec.commission,
+            commissionCurrency: ibkr.commissionCurrencyMap.get(exec.execId) || exec.commissionCurrency,
           }));
           ibkr.commissionMap.clear();
+          ibkr.commissionCurrencyMap.clear();
           logger.debug(`[IBKR fetchExecutions] resolved ${updated.length} executions`);
           resolve(updated);
         }, 2000);
