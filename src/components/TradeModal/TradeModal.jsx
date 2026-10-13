@@ -16,6 +16,7 @@ import { DateTime } from 'luxon';
 import { loadStoredDisplayTimezone, storeDisplayTimezone, resolveDisplayZone, TimezonePicker } from '../../utils/timezonePreference';
 import TradeFormChart from './TradeFormChart';
 import { formatNumber } from '../../utils/numberFormat';
+import { currencyMark } from '../../utils/formatMoney';
 import { notify, confirmDialog, choiceDialog } from '../common/Dialogs';
 
 // Prices, sizes and fees from IBKR as they came, in the number format
@@ -662,6 +663,8 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
   // Helper: convert a raw execution from /trade-groups (TWS, isFlexSource
   // false) or /trade-groups-flex (Flex, isFlexSource true) into a usable
   // object. Which one it came from matters — see FLEX_REPORTED_TIMEZONE above.
+  const symbolCurrency = getFuturesSettings(form.symbol, form.type, futuresSettings || [])?.currency || 'USD';
+  const feeText = (fee, currency, show = showNum) => `${currencyMark(currency || symbolCurrency)}${show(fee)}`;
   const processRawExec = (exec, isFlexSource) => {
     const parseZone = isFlexSource ? FLEX_REPORTED_TIMEZONE : exchangeTimezone;
     const dt = parseIBKRTime(exec.time, parseZone);
@@ -673,6 +676,8 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
       quantity: exec.quantity,
       price: exec.price.toString(),
       fee: exec.commission.toString(),
+      // The currency IBKR charged the fee in; without it, the symbol's.
+      feeCurrency: exec.commissionCurrency || symbolCurrency,
       contractMonth: exec.contractMonth || null,
     };
   };
@@ -1688,7 +1693,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                       <span style={{ color: '#D1D5DB', fontSize: '0.82rem', flex: 1, textAlign: 'right' }}>
                         {totalQty > 0 ? `${showNum(totalQty)} @ ` : ''}{showNum(entryPrice)}
                         {exitPrice !== '—' ? ` → ${showNum(exitPrice)}` : ''}
-                        {totalFee > 0 ? <span style={{ color: '#6B7280' }}> (fee: ${formatNumber(totalFee, 2)})</span> : null}
+                        {totalFee > 0 ? <span style={{ color: '#6B7280' }}> (fee: {feeText(totalFee, allGroupExecs[0]?.feeCurrency, v => formatNumber(v, 2))})</span> : null}
                       </span>
 
                       {/* Expand chevron */}
@@ -1708,7 +1713,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                             {group.entryExecutions.map(e => (
                               <div key={e.execId} style={{ display: 'flex', justifyContent: 'space-between', color: e.inJournal ? '#6B7280' : '#E5E7EB', padding: '3px 0' }}>
                                 <span>{e.action} {showNum(e.quantity)} @ <b>{showNum(e.price)}</b> — {e.dateTime.toFormat('LLL d, HH:mm:ss')}</span>
-                                <span style={{ color: '#9CA3AF' }}>{e.inJournal ? '✓ in journal · ' : ''}fee: ${e.fee}</span>
+                                <span style={{ color: '#9CA3AF' }}>{e.inJournal ? '✓ in journal · ' : ''}fee: {feeText(e.fee, e.feeCurrency, String)}</span>
                               </div>
                             ))}
                           </div>
@@ -1722,7 +1727,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                             {group.tpExecutions.map(e => (
                               <div key={e.execId} style={{ display: 'flex', justifyContent: 'space-between', color: e.inJournal ? '#6B7280' : '#E5E7EB', padding: '3px 0' }}>
                                 <span>{e.action} {showNum(e.quantity)} @ <b>{showNum(e.price)}</b> — {e.dateTime.toFormat('LLL d, HH:mm:ss')}</span>
-                                <span style={{ color: '#9CA3AF' }}>{e.inJournal ? '✓ in journal · ' : ''}fee: ${e.fee}</span>
+                                <span style={{ color: '#9CA3AF' }}>{e.inJournal ? '✓ in journal · ' : ''}fee: {feeText(e.fee, e.feeCurrency, String)}</span>
                               </div>
                             ))}
                           </div>
@@ -1743,7 +1748,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                               <span>LMT {group.tpOrder.action} {showNum(group.tpOrder.quantity)} @ <b>{showNum(group.tpOrder.limitPrice)}</b></span>
                               <span style={{ fontSize: '0.75rem' }}>
                                 {group.tpExecutions.length > 0
-                                  ? `✅ FILLED @ ${showNum(group.tpExecutions[0].price)} (fee: $${showNum(group.tpExecutions[0].fee)})`
+                                  ? `✅ FILLED @ ${showNum(group.tpExecutions[0].price)} (fee: ${feeText(group.tpExecutions[0].fee, group.tpExecutions[0].feeCurrency)})`
                                   : group.tpOrder.status}
                               </span>
                             </div>
@@ -1758,7 +1763,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                               <span>{group.slOrder.orderType} {group.slOrder.action} {showNum(group.slOrder.quantity)} @ <b>{showNum(group.slOrder.stopPrice ?? group.slOrder.limitPrice)}</b></span>
                               <span style={{ fontSize: '0.75rem' }}>
                                 {group.slExecutions.length > 0
-                                  ? `🛑 FILLED @ ${showNum(group.slExecutions[0].price)} (fee: $${showNum(group.slExecutions[0].fee)})`
+                                  ? `🛑 FILLED @ ${showNum(group.slExecutions[0].price)} (fee: ${feeText(group.slExecutions[0].fee, group.slExecutions[0].feeCurrency)})`
                                   : group.slOrder.status}
                               </span>
                             </div>
@@ -1854,7 +1859,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                       <span style={{ color: '#D1D5DB', fontSize: '0.83rem' }}>
                         <b style={{ color: item.action === 'BUY' ? '#60A5FA' : '#F97316' }}>{item.action}</b>{' '}
                         {showNum(item.quantity)} @ {showNum(item.price)} — {item.dateTime.toFormat('LLL d, HH:mm:ss')}
-                        <span style={{ color: '#6B7280' }}> fee: ${showNum(item.fee)}</span>
+                        <span style={{ color: '#6B7280' }}> fee: {feeText(item.fee, item.feeCurrency)}</span>
                       </span>
                       <button
                         onClick={() => handleAddAsAction(item)}
