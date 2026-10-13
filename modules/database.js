@@ -562,6 +562,12 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
     `);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_broker_fills_exec ON broker_fills (source, exec_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_broker_fills_account ON broker_fills (account_id, status)`);
+    // The fee's currency when IBKR charged it in another one than the
+    // fill's (then it isn't comparable with the journal's fee), and what the
+    // journal had when its fee was corrected to IBKR's (brokerFills.correctFees).
+    await client.query(`ALTER TABLE broker_fills ADD COLUMN IF NOT EXISTS commission_currency VARCHAR`);
+    await client.query(`ALTER TABLE broker_fills ADD COLUMN IF NOT EXISTS journal_fee_was NUMERIC`);
+    await client.query(`ALTER TABLE broker_fills ADD COLUMN IF NOT EXISTS fee_corrected_at TIMESTAMP WITH TIME ZONE`);
 
     // Trade settlement used to book one net row per trade, dated on its last
     // fill: selling a position moved the purchase's cash to the sale day.

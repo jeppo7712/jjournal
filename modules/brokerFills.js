@@ -3,6 +3,7 @@ const { logger } = require('./logger.js');
 const { loadConfig } = require('./config.js');
 const { getFlexStatements, sectionRows, isPaperIbkrAccountId } = require('../routes/ibkrFlex.js');
 const { futuresContractMonth } = require('./ibkrSymbols.js');
+const { resettleTrades } = require('./tradeSettlement.js');
 
 // IBKR fills that aren't in the journal yet, so the user hears about a
 // filled order even when they missed IBKR's own notification. Every scan
@@ -25,6 +26,8 @@ const FLEX_TIMEZONE = 'America/New_York';
 const CONTRACT_CODE = /^(.+?)([FGHJKMNQUVXZ]\d{1,2})$/;
 // How far a hand-entered fill's time may be from IBKR's to count as it.
 const HAND_ENTERED_SECONDS = 90;
+// Fees closer than this to IBKR's are the same fee.
+const FEE_TOLERANCE = 0.005;
 // Activity statements change once a day; no need to pull them every scan.
 const ACTIVITY_INTERVAL_MS = 6 * 60 * 60 * 1000;
 const lastActivityPull = new Map(); // query id -> ms
@@ -80,6 +83,7 @@ function parseFills(statements, futuresRoots = new Set()) {
         quantity,
         price,
         commission: Math.abs(Number(row.ibCommission ?? row.commission ?? 0)) || 0,
+        commissionCurrency: String(row.ibCommissionCurrency || row.commissionCurrency || '').toUpperCase() || null,
         currency: String(row.currency || '').toUpperCase() || null,
         exchange: String(row.listingExchange || row.exchange || '').toUpperCase() || null,
         dateTime,
@@ -137,19 +141,69 @@ async function scanBrokerFills(pool) {
     const start = DateTime.fromISO(from, { zone: FLEX_TIMEZONE }).toUTC().toISO();
     for (const f of fills) {
       if (f.brokerAccountId !== account.broker_account_id.toUpperCase() || f.dateTime < start) continue;
-      const { rowCount } = await pool.query(
+      const { rows } = await pool.query(
         `INSERT INTO broker_fills (account_id, source, exec_id, broker_account_id, type, symbol, raw_symbol, contract_month,
-                                   side, quantity, price, commission, currency, exchange, date_time)
-         VALUES ($1, 'IBKR', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14)
-         ON CONFLICT (source, exec_id) DO NOTHING`,
+                                   side, quantity, price, commission, currency, exchange, date_time, commission_currency)
+         VALUES ($1, 'IBKR', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
+         ON CONFLICT (source, exec_id) DO UPDATE SET commission = EXCLUDED.commission, commission_currency = EXCLUDED.commission_currency,
+                                                     updated_at = NOW()
+           WHERE broker_fills.commission IS DISTINCT FROM EXCLUDED.commission
+              OR broker_fills.commission_currency IS DISTINCT FROM EXCLUDED.commission_currency
+         RETURNING (xmax = 0) AS inserted`,
         [account.id, f.execId, f.brokerAccountId, f.type, f.symbol, f.rawSymbol, f.contractMonth,
-         f.side, f.quantity, f.price, f.commission, f.currency, f.exchange, f.dateTime]
+         f.side, f.quantity, f.price, f.commission, f.currency, f.exchange, f.dateTime, f.commissionCurrency]
       );
-      added += rowCount;
+      added += rows.filter(r => r.inserted).length;
     }
   }
   if (added > 0) logger.info(`[BrokerFills] ${added} new IBKR fill(s) recorded`);
-  return { added };
+  const corrected = await correctFees(pool);
+  return { added, corrected };
+}
+
+/**
+ * Sets the fee of journal fills to what IBKR charged, by execution ID, and
+ * rebuilds the trade's cash. A TWS import takes the fee from a commission
+ * report TWS sends after the fill; when it hadn't arrived yet the fill was
+ * saved with no fee, and the journal's cash drifted from IBKR's by it. A
+ * fee IBKR charged in another currency than the fill's is left alone.
+ */
+async function correctFees(pool) {
+  const { rows } = await pool.query(
+    `SELECT ta.id AS action_id, ta.trade_id, ta.fee, f.id AS fill_id, f.commission, f.symbol, f.side, f.quantity::float AS quantity
+     FROM broker_fills f JOIN trade_actions ta ON ta.exec_id = f.exec_id
+     WHERE f.commission IS NOT NULL
+       AND (f.commission_currency IS NULL OR f.currency IS NULL OR f.commission_currency = f.currency)
+       AND ABS(COALESCE(ta.fee, 0) - f.commission) >= $1`,
+    [FEE_TOLERANCE]
+  );
+  let corrected = 0;
+  for (const r of rows) {
+    const client = await pool.connect();
+    try {
+      await client.query('BEGIN');
+      // Only if the journal still has the fee read above (the user may be saving the trade).
+      const { rowCount } = await client.query(
+        `UPDATE trade_actions SET fee = $2 WHERE id = $1 AND fee IS NOT DISTINCT FROM $3`,
+        [r.action_id, r.commission, r.fee]
+      );
+      if (rowCount === 0) { await client.query('ROLLBACK'); continue; }
+      await client.query(
+        `UPDATE broker_fills SET journal_fee_was = $2, fee_corrected_at = NOW(), updated_at = NOW() WHERE id = $1`,
+        [r.fill_id, r.fee ?? 0]
+      );
+      await resettleTrades(client, [r.trade_id]);
+      await client.query('COMMIT');
+      corrected++;
+      logger.info(`[BrokerFills] fee of ${r.symbol} ${r.side} ${r.quantity} (trade ${r.trade_id}) set to IBKR's ${Number(r.commission)} (was ${Number(r.fee ?? 0)})`);
+    } catch (err) {
+      await client.query('ROLLBACK').catch(() => {});
+      logger.warn(`[BrokerFills] fee correction of trade ${r.trade_id} failed: ${err.message}`);
+    } finally {
+      client.release();
+    }
+  }
+  return corrected;
 }
 
 /**
@@ -185,4 +239,4 @@ async function pendingFills(db) {
   return rows;
 }
 
-module.exports = { parseFills, flexTime, scanBrokerFills, pendingFills };
+module.exports = { parseFills, flexTime, scanBrokerFills, correctFees, pendingFills };
