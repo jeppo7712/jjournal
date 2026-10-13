@@ -3,7 +3,8 @@ import { TradeContext } from '../../context/TradeContext';
 import IconButton from '../common/IconButton';
 import AccountOptions from '../common/AccountOptions';
 
-// Settings → Checklists: each account's Entry and Exit checklist. Every
+// Settings → Checklists: the open account's Entry and Exit checklist (to
+// edit another account's, switch account in the menu bar). Every
 // trade's Journal tab shows these as tick boxes (see TradeChecklist), so the
 // same checks don't have to be typed into the notes each time. Lists are per
 // account because the rules differ per trading style.
@@ -21,7 +22,7 @@ const smallBtn = {
 
 function ChecklistSettings({ styles, apiBaseUrl }) {
   const { accounts, setAccounts, currentAccountId } = useContext(TradeContext);
-  const [accountId, setAccountId] = useState(currentAccountId ? String(currentAccountId) : '');
+  const accountId = currentAccountId ? String(currentAccountId) : '';
   const [lists, setLists] = useState(EMPTY);
   const [newItem, setNewItem] = useState({ entry: '', exit: '' });
   const [message, setMessage] = useState(null);
@@ -36,10 +37,6 @@ function ChecklistSettings({ styles, apiBaseUrl }) {
     setNewItem({ entry: '', exit: '' });
     setMessage(null);
   }, [accountId, account?.checklists]);
-
-  useEffect(() => {
-    if (!accountId && accounts?.length) setAccountId(String(accounts[0].id));
-  }, [accountId, accounts]);
 
   const savedLists = account?.checklists || EMPTY;
   const isDirty = JSON.stringify(lists) !== JSON.stringify({ entry: savedLists.entry || [], exit: savedLists.exit || [] });
@@ -92,22 +89,17 @@ function ChecklistSettings({ styles, apiBaseUrl }) {
     }
   };
 
-  if (!accounts?.length) return <p style={{ color: '#9CA3AF' }}>Create an account first.</p>;
+  if (!accounts?.length || !account) return <p style={{ color: '#9CA3AF' }}>Open an account first (Settings → Accounts to create one).</p>;
 
   return (
     <div>
       <p className={styles.subtext}>
         Checks you want to tick off for every trade. They appear in each trade's Journal tab, above the
         notes; a trade keeps the wording it was ticked with, so editing a list here never changes older
-        trades. Each account has its own lists.
+        trades. Each account has its own lists: these are {account ? account.name : 'the open account'}'s. To change
+        another account's, switch to it in the menu bar.
       </p>
       <div className={styles.formGrid}>
-        <div className={styles.formField}>
-          <label htmlFor="checklistAccount">Account</label>
-          <select id="checklistAccount" className={styles.inputBubble} value={accountId} onChange={e => setAccountId(e.target.value)}>
-            <AccountOptions accounts={accounts} />
-          </select>
-        </div>
         <div className={styles.formField}>
           <label htmlFor="checklistCopy">Copy lists from</label>
           <select id="checklistCopy" className={styles.inputBubble} value="" onChange={e => copyFrom(e.target.value)}>
