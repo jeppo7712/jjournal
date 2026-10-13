@@ -100,7 +100,8 @@ function parseCashItems(statements) {
         for (const t of transferRows(statement)) {
             items.push({
                 brokerAccountId: String(t.row.accountId || statement.accountId || '').toUpperCase(),
-                externalId: `TRANSFER-${t.externalId}`,
+                // Between two IBKR accounts both sides carry the same ID.
+                externalId: `TRANSFER-${t.externalId}-${t.amount < 0 ? 'OUT' : 'IN'}`,
                 brokerType: 'Transfer',
                 kind: t.amount < 0 ? 'WITHDRAWAL' : 'DEPOSIT',
                 date: t.date,
@@ -120,12 +121,13 @@ function parseCashItems(statements) {
  * The cash moved between IBKR accounts (the Flex "Transfers" section, not
  * part of Cash Transactions): from or to another IBKR account, including
  * one outside the journal. A position transfer moves no cash and is left
- * out, and so are Summary rows. Signed: into the account is positive.
+ * out, and so are Summary rows (IBKR marks the single ones TRANSFER).
+ * Signed: into the account is positive.
  */
 function transferRows(statement) {
     const rows = [];
     for (const row of rowsOf(statement, 'Transfers', 'Transfer')) {
-        if (row.levelOfDetail && String(row.levelOfDetail).toUpperCase() !== 'DETAIL') continue;
+        if (String(row.levelOfDetail || '').toUpperCase() === 'SUMMARY') continue;
         let amount = Number(row.cashTransfer);
         if (!Number.isFinite(amount) || amount === 0) continue;
         const direction = String(row.direction || '').toUpperCase();
@@ -135,7 +137,7 @@ function transferRows(statement) {
         const currency = String(row.currency || '').toUpperCase();
         const externalId = String(row.transactionID || '').trim();
         if (!externalId || !date || !/^[A-Z]{3}$/.test(currency)) continue;
-        const description = String(row.description || '').trim()
+        const description = String(row.description || '').replace(/^-+$/, '').trim()
             || `Cash transfer ${amount < 0 ? 'to' : 'from'} another IBKR account`;
         rows.push({ row, externalId, date, currency, amount, description });
     }

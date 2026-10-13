@@ -206,7 +206,7 @@ test('cash report: types IBKR counts but Cash Transactions leave out', () => {
 // Cash moved in from another IBKR account, and a position transfer (no cash).
 const transfer = (over) => ({
   accountId: 'U1000001', currency: 'USD', assetCategory: 'CASH', type: 'INTERNAL', direction: 'IN', description: 'Cash transfer',
-  dateTime: '20261006;101500', cashTransfer: '25.5', quantity: '0', transactionID: '901', levelOfDetail: 'DETAIL', ...over,
+  dateTime: '20261006;101500', cashTransfer: '25.5', quantity: '0', transactionID: '901', levelOfDetail: 'TRANSFER', ...over,
 });
 const withTransfers = (rows, report = {}) => statement([], {
   Transfers: { Transfer: rows },
@@ -216,14 +216,18 @@ const withTransfers = (rows, report = {}) => statement([], {
 test('transfers: cash ones come in as deposits and withdrawals, position ones are left out', () => {
   const items = parseCashItems([withTransfers([
     transfer(),
+    // The other side of a transfer between two of the user's IBKR accounts: the same ID.
+    transfer({ accountId: 'U1000002', direction: 'OUT', cashTransfer: '-25.5', description: '--' }),
     transfer({ transactionID: '902', direction: 'OUT', cashTransfer: '50' }),
     transfer({ transactionID: '903', assetCategory: 'STK', cashTransfer: '0', quantity: '10' }),
     transfer({ transactionID: '', levelOfDetail: 'SUMMARY' }),
   ])]);
-  assert.deepEqual(items.map(i => [i.externalId, i.kind, i.amount, i.date, i.brokerType]), [
-    ['TRANSFER-901', 'DEPOSIT', 25.5, '2026-10-06', 'Transfer'],
-    ['TRANSFER-902', 'WITHDRAWAL', -50, '2026-10-06', 'Transfer'],
+  assert.deepEqual(items.map(i => [i.externalId, i.brokerAccountId, i.kind, i.amount, i.date, i.brokerType]), [
+    ['TRANSFER-901-IN', 'U1000001', 'DEPOSIT', 25.5, '2026-10-06', 'Transfer'],
+    ['TRANSFER-901-OUT', 'U1000002', 'WITHDRAWAL', -25.5, '2026-10-06', 'Transfer'],
+    ['TRANSFER-902-OUT', 'U1000001', 'WITHDRAWAL', -50, '2026-10-06', 'Transfer'],
   ]);
+  assert.equal(items[1].description, 'Cash transfer to another IBKR account');
   // They match a hand-entered transfer like any deposit.
   assert.deepEqual(matchItems([{ id: 1, kind: 'DEPOSIT', date: '2026-10-06', currency: 'USD', amount: 25.5 }],
     [{ id: 5, type: 'TRANSFER_IN', date: '2026-10-07', currency: 'USD', amount: 25.5 }]), [{ itemIds: [1], rowIds: [5], dividendId: null }]);
