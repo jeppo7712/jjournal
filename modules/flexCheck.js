@@ -36,6 +36,13 @@ const QUERY_SPECS = {
                 cashOnly: true,
             },
             {
+                section: 'Transfers', row: 'Transfer', label: 'Transfers', need: 'recommended',
+                purpose: 'cash moved between IBKR accounts on the Capital page',
+                fields: ['currency', 'cashTransfer', 'transactionID'],
+                recommended: ['accountId', 'dateTime', 'direction', 'description', 'levelOfDetail'],
+                cashOnly: true,
+            },
+            {
                 section: 'OpenDividendAccruals', row: 'OpenDividendAccrual', label: 'Open Dividend Accruals', need: 'optional',
                 purpose: 'dividends announced but not paid yet',
                 fields: [],
@@ -233,16 +240,18 @@ function checkFlexQuery(result, purpose, { kind, accounts = [] }) {
     }
 
     // Cash transaction types the query leaves out: IBKR's Cash Report
-    // counts them, its Cash Transactions don't list them, so they never
-    // reach the inbox and the journal's cash drifts from IBKR's.
+    // counts them, its Cash Transactions (or Transfers) don't list them, so
+    // they never reach the inbox and the journal's cash drifts from IBKR's.
     if (purpose === 'activity' && kind === 'real') {
         for (const report of parseCashReport(statements)) {
             for (const u of report.unlisted) {
                 const amount = Math.abs(u.monthToDate) >= 0.005 ? `${u.monthToDate.toFixed(2)} this month` : `${u.reported.toFixed(2)} in this period`;
                 checks.push({
                     status: 'warn', label: `${u.label} (${report.brokerAccountId}, ${report.currency})`,
-                    detail: `IBKR's Cash Report counts ${amount} that Cash Transactions don't list${Math.abs(u.listed) >= 0.005 ? ` in full (${u.listed.toFixed(2)} listed of ${u.reported.toFixed(2)})` : ''}, so it can't come into the journal.`,
-                    fix: `In the "Cash Transactions" section options, tick ${u.label} (or all types).`,
+                    detail: `IBKR's Cash Report counts ${amount} that ${u.field === 'accountTransfers' ? 'the Transfers section doesn\'t' : 'Cash Transactions don\'t'} list${Math.abs(u.listed) >= 0.005 ? ` in full (${u.listed.toFixed(2)} listed of ${u.reported.toFixed(2)})` : ''}, so it can't come into the journal.`,
+                    fix: u.field === 'accountTransfers'
+                        ? 'Sections: tick "Transfers" and Select All its fields.'
+                        : `In the "Cash Transactions" section options, tick ${u.label} (or all types).`,
                 });
             }
         }
