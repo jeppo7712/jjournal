@@ -126,7 +126,10 @@ function StarRating({ value, onChange, max = 5 }) {
   );
 }
 
-export default function TradeModal({ trade, onClose }) {
+// importFills ({ symbol, type, execIds }): opened for IBKR fills that aren't
+// in the journal yet (the Dashboard's list): starts the Flex import, showing
+// only the trade groups those fills are in.
+export default function TradeModal({ trade, onClose, importFills = null }) {
   const { refreshTrades, currentAccountId, futuresSettings, trades, accounts } = useContext(TradeContext);
   const { refreshTags } = useTags();
   // Requests for an existing trade go to the account it's booked in, which
@@ -170,8 +173,8 @@ export default function TradeModal({ trade, onClose }) {
     return () => mq.removeEventListener('change', update);
   }, []);
   const [form, setForm] = useState({
-    type: isEditMode ? trade.type : 'FUT',
-    symbol: isEditMode ? trade.symbol : '',
+    type: isEditMode ? trade.type : (importFills?.type || 'FUT'),
+    symbol: isEditMode ? trade.symbol : (importFills?.symbol || ''),
     target: isEditMode ? trade.target : '',
     stopLoss: isEditMode ? (trade.stopLoss || trade.stop_loss || '') : '',
     tickSize: isEditMode ? (trade.tickSize || trade.tick_size || '') : initialTickSize,
@@ -749,8 +752,14 @@ export default function TradeModal({ trade, onClose }) {
         .filter(e => !existingExecIds.has(e.execId))
         .map(e => processRawExec(e, historical));
 
-      setIbkrGroups(groups);
-      setIbkrOrphans(orphans);
+      // Opened for particular fills: just their groups, not the symbol's
+      // whole history.
+      const focus = importFills?.execIds?.length ? new Set(importFills.execIds) : null;
+      const inFocus = execs => execs.some(e => focus.has(e.execId));
+      setIbkrGroups(focus
+        ? groups.filter(g => inFocus([...g.entryExecutions, ...g.tpExecutions, ...g.slExecutions, ...g.otherChildren.flatMap(c => c.executions)]))
+        : groups);
+      setIbkrOrphans(focus ? orphans.filter(e => focus.has(e.execId)) : orphans);
     } catch (err) {
       console.error('Error fetching IBKR trade groups:', err);
       setIbkrError(err.message);
@@ -760,6 +769,11 @@ export default function TradeModal({ trade, onClose }) {
       setIbkrLoading(false);
     }
   };
+
+  // Opened for IBKR fills not in the journal: their import, straight away.
+  useEffect(() => {
+    if (importFills) fetchIBKRData(true);
+  }, []);
 
   const handleAddAsAction = (item) => {
     const newAction = {
