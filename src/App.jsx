@@ -10,6 +10,7 @@ import Capital from './components/Capital/Capital';
 import LoadingIndicator from './components/LoadingIndicator';
 import { TradeProvider } from './context/TradeContext';
 import { TagsProvider } from './context/TagsContext';
+import { BrokerAlertsProvider } from './context/BrokerAlertsContext';
 import { StatusProvider } from './context/StatusContext';
 import { getNumberFormat, subscribeNumberFormat } from './utils/numberFormat';
 import ErrorBoundary, { PageBoundary } from './components/common/ErrorBoundary';
@@ -21,6 +22,9 @@ function App() {
   const [showTradeModal, setShowTradeModal] = useState(false);
   const [showTradeView, setShowTradeView] = useState(false);
   const [selectedTrade, setSelectedTrade] = useState(null);
+  // IBKR fills to bring into the trade window: it opens with the Flex
+  // import for them already running ({ symbol, type, execIds }).
+  const [fillsToImport, setFillsToImport] = useState(null);
   const [showDayNote, setShowDayNote] = useState(false);
   const [selectedDayNote, setSelectedDayNote] = useState(null);
   const [customFilterDate, setCustomFilterDate] = useState(null);
@@ -33,6 +37,7 @@ function App() {
   useEffect(() => subscribeNumberFormat(setNumberFormatState), []);
 
   const handleNewTrade = () => {
+    setFillsToImport(null);
     setShowTradeModal(true);
     setSelectedTrade(null);
     setShowTradeView(false);
@@ -65,7 +70,19 @@ function App() {
   };
 
   const handleEditTrade = (trade) => {
+    setFillsToImport(null);
     setSelectedTrade(trade);
+    setShowTradeModal(true);
+    setShowTradeView(false);
+    setShowDayNote(false);
+    setSelectedDayNote(null);
+  };
+
+  // IBKR fills not in the journal (Dashboard): into the open trade they
+  // belong to, if there is one, or a new trade.
+  const handleAddFills = ({ symbol, type, execIds }, openTrade = null) => {
+    setFillsToImport({ symbol, type, execIds });
+    setSelectedTrade(openTrade);
     setShowTradeModal(true);
     setShowTradeView(false);
     setShowDayNote(false);
@@ -89,6 +106,7 @@ function App() {
   };
 
   const handleCloseModals = () => {
+    setFillsToImport(null);
     setShowTradeModal(false);
     setShowTradeView(false);
     setSelectedTrade(null);
@@ -135,6 +153,7 @@ function App() {
     <StatusProvider>
       <TagsProvider>
       <TradeProvider>
+      <BrokerAlertsProvider>
         <div className="app">
           <ErrorBoundary>
             <Navigation
@@ -148,6 +167,7 @@ function App() {
             <PageBoundary view={currentView}>
             {currentView === 'dashboard' && (
               <Dashboard
+                onAddFills={handleAddFills}
                 onViewTrade={handleViewTrade}
                 onEditTrade={handleEditTrade}
                 onViewDayNote={handleViewDayNote}
@@ -175,6 +195,7 @@ function App() {
           {showTradeModal && (
             <TradeModal
               trade={selectedTrade}
+              importFills={fillsToImport}
               onClose={handleCloseModals}
             />
           )}
@@ -195,6 +216,7 @@ function App() {
           <LoadingIndicator />
           <DialogHost />
         </div>
+      </BrokerAlertsProvider>
       </TradeProvider>
       </TagsProvider>
     </StatusProvider>

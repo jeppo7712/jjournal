@@ -16,6 +16,7 @@ import { formatMoney, currencyMark } from '../../utils/formatMoney';
 import { formatNumber } from '../../utils/numberFormat';
 import { DateTime } from 'luxon';
 import { getRealisedPnL } from '../../context/TradeContext';
+import UnenteredFills from './UnenteredFills';
 
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
@@ -81,7 +82,7 @@ const formatCustomDate = (date) => {
   return dt.toFormat('dd MMM yy').toUpperCase();
 };
 
-const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, customFilterWeek }) => {
+const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, customFilterDate, customFilterWeek }) => {
   const {
     stats,
     toggleFilter,
@@ -928,6 +929,7 @@ const Dashboard = ({ onViewTrade, onEditTrade, onViewDayNote, customFilterDate, 
 
   return (
     <div className={styles.dashboard}>
+      <UnenteredFills onAddFills={onAddFills} />
       <div className={styles.topRow}>
         <div className={styles.statsContainer}>
           <div className={styles.statsGrid}>
