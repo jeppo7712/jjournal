@@ -881,7 +881,25 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
     });
   };
 
+  // One save at a time: a double click (or Save plus the unsaved-changes
+  // dialog's Save) posted the same new trade twice, fills and all.
+  const savingRef = useRef(false);
+  const [saving, setSaving] = useState(false);
   async function saveTrade() {
+    if (savingRef.current) return;
+    savingRef.current = true;
+    setSaving(true);
+    try {
+      await doSaveTrade();
+    } catch (err) {
+      notify(`Error saving trade: ${err.message}`);
+    } finally {
+      savingRef.current = false;
+      setSaving(false);
+    }
+  }
+
+  async function doSaveTrade() {
     for (let i = 0; i < attachments.length; i++) {
       if (!attachments[i].attachment_id && attachments[i].file) {
         const formData = new FormData();
@@ -928,7 +946,8 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
       refreshTags(); // the tags' trade counts
       onClose();
     } else {
-      notify('Error saving trade');
+      const data = await resp.json().catch(() => ({}));
+      notify(data.error ? `Error saving trade: ${data.error}` : 'Error saving trade');
     }
   }
 
@@ -1440,7 +1459,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
             {isEditMode && (
               <IconButton icon="trash" caption="Delete" label="Delete this trade" onClick={requestDelete} />
             )}
-            <IconButton icon="check" caption="Save" label="Save" onClick={saveTrade} disabled={!canSave} />
+            <IconButton icon="check" caption="Save" label="Save" onClick={saveTrade} disabled={!canSave || saving} busy={saving} />
           </div>
         </div>
         </div>
