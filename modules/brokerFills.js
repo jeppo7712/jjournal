@@ -173,6 +173,8 @@ async function correctFees(pool) {
     `SELECT ta.id AS action_id, ta.trade_id, ta.fee, f.id AS fill_id, f.commission, f.symbol, f.side, f.quantity::float AS quantity
      FROM broker_fills f JOIN trade_actions ta ON ta.exec_id = f.exec_id
      WHERE f.commission IS NOT NULL
+       -- The same fill: one that also holds other fills (merged by hand) keeps its fee.
+       AND ta.type = f.side AND ta.quantity = f.quantity
        AND (f.commission_currency IS NULL OR f.currency IS NULL OR f.commission_currency = f.currency)
        AND ABS(COALESCE(ta.fee, 0) - f.commission) >= $1`,
     [FEE_TOLERANCE]

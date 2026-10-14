@@ -1,5 +1,6 @@
 const { logger } = require('./logger.js');
 const { syncDividendLedger } = require('./dividends.js');
+const { fillDay, exchangeTimezone } = require('./tradeSettlement.js');
 
 // Broker cash activity (IBKR Flex "Cash Transactions"): deposits and
 // withdrawals, fees, interest, dividends and the tax withheld on them; and
@@ -431,6 +432,21 @@ async function defaultSyncFrom(db, rootId) {
     return date ? toISODate(date) : new Date().toISOString().slice(0, 10);
 }
 
+/**
+ * The day a ledger row counts on in IBKR's statement: a trade's cash on the
+ * fill's trading day (fillDay: the exchange's own date, a Chicago futures
+ * session from 17:00 on the next day's), anything else on its UTC date. A
+ * New York evening fill is already the next day in UTC, and an evening
+ * futures fill IBKR's next statement day. Pure.
+ *
+ * @param {{ date_time, type?: string }} row  type: the trade's type, for a trade's row
+ * @param {string|null} timezone  the trade's exchange timezone, for a trade's row
+ */
+function ledgerDay(row, timezone = null) {
+    if (row.type) return fillDay(row.date_time, timezone, row.type);
+    return toISODate(new Date(row.date_time));
+}
+
 // Journal cash and waiting inbox items, as of each stored report's day.
 async function balanceCheck(db, rootId) {
     const { rows: reports } = await db.query(
@@ -439,30 +455,37 @@ async function balanceCheck(db, rootId) {
     );
     if (reports.length === 0) return [];
     const ids = await treeAccountIds(db, rootId);
+    const { rows: ledger } = await db.query(
+        `SELECT ct.currency, ct.amount, ct.date_time, t.symbol, t.type FROM cash_transactions ct
+         LEFT JOIN trades t ON t.id = ct.linked_trade_id
+         WHERE ct.account_id = ANY($1)`,
+        [ids]
+    );
+    const { rows: allSettings } = await db.query('SELECT symbol, type, currency, exchange FROM futures_settings');
+    const timezones = new Map();
+    const timezoneOf = async (symbol, type) => {
+        const key = `${symbol}|${type}`;
+        if (!timezones.has(key)) timezones.set(key, await exchangeTimezone(db, symbol, type, allSettings));
+        return timezones.get(key);
+    };
     const journal = {};
+    const since = {};
+    const asOf = reports[0].as_of;
+    for (const row of ledger) {
+        const day = ledgerDay(row, row.type ? await timezoneOf(row.symbol, row.type) : null);
+        const target = day <= (reports.find(r => r.currency === row.currency)?.as_of || asOf) ? journal : since;
+        target[row.currency] = (target[row.currency] || 0) + Number(row.amount);
+    }
     const pending = {};
     for (const r of reports) {
-        const { rows: [own] } = await db.query(
-            `SELECT COALESCE(SUM(amount), 0) AS total FROM cash_transactions
-             WHERE account_id = ANY($1) AND currency = $2 AND date_time < ($3::date + 1)::timestamp AT TIME ZONE 'UTC'`,
-            [ids, r.currency, r.as_of]
-        );
         const { rows: [waiting] } = await db.query(
             `SELECT COALESCE(SUM(amount), 0) AS total FROM broker_cash_items
              WHERE account_id = $1 AND currency = $2 AND status = 'PENDING' AND date_time < ($3::date + 1)::timestamp AT TIME ZONE 'UTC'`,
             [rootId, r.currency, r.as_of]
         );
-        journal[r.currency] = Number(own.total);
+        journal[r.currency] = journal[r.currency] || 0;
         pending[r.currency] = Number(waiting.total);
     }
-    // What the journal booked after IBKR's statement day (today's trades,
-    // say): not in the comparison until IBKR's next statement has it too.
-    const { rows: later } = await db.query(
-        `SELECT currency, COALESCE(SUM(amount), 0) AS total FROM cash_transactions
-         WHERE account_id = ANY($1) AND date_time >= ($2::date + 1)::timestamp AT TIME ZONE 'UTC' GROUP BY currency`,
-        [ids, reports[0].as_of]
-    );
-    const since = Object.fromEntries(later.map(r => [r.currency, Number(r.total)]));
     return compareBalances(
         reports.map(r => ({ currency: r.currency, asOf: r.as_of, endingCash: Number(r.ending_cash) })),
         journal,
@@ -745,6 +768,7 @@ module.exports = {
     parseCashReport,
     unlistedCashTypes,
     compareBalances,
+    ledgerDay,
     balanceCheck,
     alignBalance,
     matchItems,

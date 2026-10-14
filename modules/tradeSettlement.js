@@ -101,4 +101,4 @@ async function resettleTrades(db, tradeIds) {
     }
 }
 
-module.exports = { settleTrade, resettleTrades, openingCoversBefore, fillDay };
+module.exports = { settleTrade, resettleTrades, openingCoversBefore, fillDay, exchangeTimezone };
