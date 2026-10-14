@@ -207,7 +207,10 @@ function createConnection({ name, clientId, resolveAddresses, health = null }) {
               // Setup commission report listener
               ibApi.on(EventName.commissionReport, (commissionReport) => {
                 logger.info(`${tag} Commission report received:`, commissionReport);
-                if (commissionReport.execId) {
+                // TWS sends Double.MAX_VALUE while it doesn't know the
+                // commission yet: not a fee; a later report has the real one.
+                const commission = Number(commissionReport.commission);
+                if (commissionReport.execId && Number.isFinite(commission) && Math.abs(commission) < 1e9) {
                   logger.info(`${tag} Storing commission for execId: ${commissionReport.execId}, commission: ${commissionReport.commission}`);
                   commissionMap.set(commissionReport.execId, commissionReport.commission);
                   if (commissionReport.currency) commissionCurrencyMap.set(commissionReport.execId, String(commissionReport.currency).toUpperCase());
