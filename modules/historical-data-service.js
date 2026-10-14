@@ -2084,6 +2084,14 @@ async function fetchYahooHistoricalData(symbol, timeframe, requestId, timezone, 
         yahooEndDate = DateTime.now().setZone(timezone);
     }
 
+    // Yahoo refuses more than 100 years ("Only 100 years worth of day
+    // granularity data are allowed") and counts a year as 365 days, so the
+    // default lookback for a symbol without stored history
+    // (MAX_LOOKBACK_DURATION, 100 calendar years with their leap days) was
+    // always just over: refused on every run, so nothing was ever stored.
+    const longestStart = yahooEndDate.minus({ years: 99 });
+    if (adjustedStartDate < longestStart) adjustedStartDate = longestStart;
+
     if (adjustedStartDate > yahooEndDate) {
         logger.warn(`[Yahoo] Adjusted start date ${adjustedStartDate.toISO()} is after calculated end date ${yahooEndDate.toISO()}. Skipping Yahoo fetch.`);
         return [];
