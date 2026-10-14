@@ -868,7 +868,9 @@ export const TradeProvider = ({ children }) => {
       // silently reverting "No limit" back to 100 on every load (page
       // refresh, account switch). Only fall back to 100 if the key is
       // actually absent from the response.
-      setTradesPerPage(data.trades_per_page === undefined ? 100 : data.trades_per_page);
+      // A number: the page arithmetic in TradeList adds to it.
+      setTradesPerPage(data.trades_per_page === undefined ? 100
+        : data.trades_per_page === null ? null : (parseInt(data.trades_per_page, 10) || 100));
       setHiddenColumns(migrateHiddenColumns(data.hidden_columns));
       setTagFilter(Array.isArray(data.tag_filter) ? data.tag_filter : []);
       setIncludeSubAccounts(data.include_sub_accounts !== false);

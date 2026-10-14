@@ -302,7 +302,10 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         try {
             const { rows } = await pool.query('SELECT * FROM account_filters WHERE account_id = $1', [id]);
             if (rows.length > 0) {
-                res.json(rows[0]);
+                // The column is text: "100" made the trade list's page end
+                // 100 + "100" = "100100", so page 2 ran on to the last trade.
+                const perPage = rows[0].trades_per_page;
+                res.json({ ...rows[0], trades_per_page: perPage === null || perPage === undefined ? null : (parseInt(perPage, 10) || 100) });
             } else {
                 // Return default filter settings
                 res.json({

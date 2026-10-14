@@ -856,9 +856,21 @@ ON trades (symbol, type, contract_month);
       CREATE INDEX IF NOT EXISTS idx_trades_account_id_created_at ON trades (account_id, created_at DESC);
       CREATE INDEX IF NOT EXISTS idx_trade_actions_trade_id_date_time ON trade_actions (trade_id, date_time ASC);
       CREATE INDEX IF NOT EXISTS idx_trade_attachments_account_id ON trade_attachments (account_id);
-      CREATE INDEX IF NOT EXISTS idx_trade_actions_exec_id ON trade_actions (exec_id) WHERE exec_id IS NOT NULL;
     `);
     logger.debug('Additional indexes created successfully');
+    // An IBKR fill belongs to one trade (routes/trades.js checks it on save;
+    // this also covers two saves at the same moment). In a savepoint: with
+    // duplicates already stored it can't be created, and the journal starts
+    // without it rather than not at all.
+    await client.query('SAVEPOINT exec_id_unique');
+    try {
+      await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_trade_actions_exec_id_unique ON trade_actions (exec_id) WHERE exec_id IS NOT NULL`);
+      await client.query(`DROP INDEX IF EXISTS idx_trade_actions_exec_id`);
+      await client.query('RELEASE SAVEPOINT exec_id_unique');
+    } catch (err) {
+      await client.query('ROLLBACK TO SAVEPOINT exec_id_unique');
+      logger.warn(`Not making IBKR fills unique per trade: ${err.message} (a fill is in more than one trade)`);
+    }
     // --- End New General Indexes ---
 
     await createTagTables(client);
