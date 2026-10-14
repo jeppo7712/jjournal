@@ -412,6 +412,10 @@ apiRouter.get('/config/logs', async (req, res) => {
       await fd.close();
     }
   } catch (err) {
+    // Outside production the logger writes to the console only (modules/logger.js).
+    if (err.code === 'ENOENT' && process.env.NODE_ENV !== 'production') {
+      return res.json({ log: 'This server logs to its console, not to a file: see its container\'s log.' });
+    }
     broadcastStatus(uuidv4(), `Error fetching server logs: ${err.message}`, 'error');
     logger.error('Error fetching server logs:', { error: err });
     res.status(500).json({ error: 'Failed to fetch server logs: ' + err.message });

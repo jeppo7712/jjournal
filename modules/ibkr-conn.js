@@ -220,6 +220,13 @@ function createConnection({ name, clientId, resolveAddresses, health = null }) {
                   logger.debug(`${tag} No security definition for ReqId ${localRequestId} (reported by the lookup itself).`);
                   return;
                 }
+                // "No data" for a quiet contract or a holiday: the request
+                // itself resolves with 0 bars (fetchHistoricalDataFromIBKR).
+                // Other code-162 messages (pacing violations) stay errors.
+                if (code === 162 && /HMDS query returned no data/i.test(String(err?.message || ''))) {
+                  logger.debug(`${tag} ${err.message} (ReqId: ${localRequestId})`);
+                  return;
+                }
                 const errSourceId = localRequestId || requestId || `ibkr-${name}`;
                 logger.error(`${tag} [Persistent Error Handler] Error: ${err.message} (Code: ${code}, ReqId: ${localRequestId})`);
                 broadcastStatus(errSourceId, `IBKR Connection Error: ${err.message} (Code: ${code})`, 'error');

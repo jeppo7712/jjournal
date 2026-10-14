@@ -179,7 +179,10 @@ function parseDuration(durationStr) {
  * @returns {string} The formatted duration string.
  */
 function formatDurationForIBKR(duration) {
-    if (duration.as('years') >= 1) {
+    // IBKR refuses more than 12 months ("must be made in years"). A calendar
+    // year can be just under one in Luxon's casual units (an hour short
+    // across a DST change), which made it 13 M.
+    if (duration.as('years') >= 1 || duration.as('months') > 12) {
         const val = `${Math.ceil(duration.as('years'))} Y`;
         return val;
     } else if (duration.as('months') >= 1) {
@@ -368,6 +371,9 @@ async function generateContractChain(symbol, exchange, requiredStartDate, taskId
         const settledResults = await runTasksInBatches(validationTasks, BATCH_SIZE);
         
         const foundContracts = new Map();
+        // The connection can go mid-search (the gateway's nightly restart):
+        // every month left fails the same way, so that's said once.
+        let notConnected = 0;
         for (const result of settledResults) {
             if (cancellationSignal?.aborted) break;
 
@@ -383,7 +389,9 @@ async function generateContractChain(symbol, exchange, requiredStartDate, taskId
                 
                 const isPastContract = contractMonthStr !== "unknown" && DateTime.fromFormat(contractMonthStr, 'yyyyMM') < now.startOf('month');
 
-                if (error.message.includes("No security definition has been found")) {
+                if (error.message === 'IBKR API is not connected.') {
+                    notConnected += 1;
+                } else if (error.message.includes("No security definition has been found")) {
                     if (isPastContract) {
                         // logger.info(`[populate][${taskId}] Skipping historical contract ${contractMonthStr}: Not found (as expected for old contracts).`);
                     } else {
@@ -396,6 +404,10 @@ async function generateContractChain(symbol, exchange, requiredStartDate, taskId
             }
         }
         
+        if (notConnected > 0) {
+            logger.warn(`[populate][${taskId}] IBKR connection lost during the ${symbol} contract search: ${notConnected} month${notConnected > 1 ? 's' : ''} not checked; the next run checks again.`);
+        }
+
         if (cancellationSignal?.aborted) {
              throw new Error(`Task ${taskId} cancelled during contract validation.`);
         }

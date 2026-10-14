@@ -656,7 +656,8 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
                                     secType: secTypeResolved,
                                     currency: symbolCurrency || 'USD',
                                     exchange: exchangeName.toUpperCase(),
-                                    ...(type === 'FUT' && contractMonth && { lastTradeDateOrContractMonth: contractMonth }),
+                                    // An expired month too (a trade's past contract), as in the contract chain.
+                                    ...(type === 'FUT' && contractMonth && { lastTradeDateOrContractMonth: contractMonth, includeExpired: true }),
                                 };
                             const acceptListing = translated && ibkrIdentity.venues
                                 ? (c) => ibkrIdentity.venues.includes(String(c.primaryExch || '').toUpperCase())
@@ -1023,7 +1024,8 @@ async function fetchHistoricalDataFromIBKR(validatedContract, duration, barSize,
                 // Use the validatedContract (which includes conId) for the request
                 ibkr.getIbApi().reqHistoricalData(
                     ibReqId,
-                    validatedContract, // IMPORTANT: Use the contract object passed in
+                    // An expired futures month only answers with includeExpired.
+                    validatedContract.secType === 'FUT' ? { ...validatedContract, includeExpired: true } : validatedContract,
                     endDateTime,
                     duration,
                     barSize,
@@ -1404,7 +1406,20 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
                 taskId: taskId
             });
 
-                if (bars.length > 0) {
+                // Only bars from the chunk's end on (IBKR dates a daily bar by
+                // its trading day, so asking for the day before the oldest stored
+                // bar can return that same bar): nothing older than what's
+                // stored, so it says no more than an empty answer would. Without
+                // this the 30-day re-check of a known start (a holiday just
+                // before it, say) found "data", stored nothing new, and asked
+                // the same thing again on every run.
+                const olderBars = bars.filter(b => DateTime.fromISO(b.time, { zone: exchangeTimezone }) < currentChunkEnd);
+                const nothingOlder = bars.length > 0 && olderBars.length === 0 && range.end === oldestSpecificIBKRLuxon;
+                if (nothingOlder) {
+                    logger.debug(`[populate][${taskId}] IBKR returned only bars from ${currentChunkEnd.toISO()} on for ${contractDesc}: nothing older.`);
+                }
+
+                if (bars.length > 0 && !nothingOlder) {
                     hasFetchedAnyBarsForThisContract = true;
                     // Filter incomplete bars if this is the most recent chunk
                     if (completionCheckTime && completionCheckTime.isValid && currentChunkEnd >= completionCheckTime) {
@@ -1429,6 +1444,7 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
                 }
                     }
                 } else if (hasFetchedAnyBarsForThisContract && currentChunkEnd < nowInExchangeTimezone.minus({ days: IBKR_BOUND_MIN_AGE_DAYS })) {
+                    // (Also for a chunk with only bars from its end on: see nothingOlder.)
                     // IBKR returned zero bars (not "trimmed to zero" — that's the
                     // `bars.length > 0` branch above, which can legitimately empty
                     // out near `now`; this is the raw response having nothing at
@@ -2098,6 +2114,11 @@ async function fetchYahooHistoricalData(symbol, timeframe, requestId, timezone, 
                 // For now, let's log and process the data if it exists, but be cautious.
             }
 
+            // Bars Yahoo can't use: empty ones (a minute without trades comes
+            // as all nulls) are skipped quietly; inconsistent ones are counted
+            // and named once per fetch, not one log line each.
+            let invalidBars = 0;
+            let firstInvalid = null;
             const bars = data.quotes.map(bar => {
                 // Yahoo dates are typically UTC timestamps, convert to Luxon UTC then set zone
                 const dt = DateTime.fromJSDate(new Date(bar.date), { zone: 'utc' }).setZone(timezone);
@@ -2111,6 +2132,7 @@ async function fetchYahooHistoricalData(symbol, timeframe, requestId, timezone, 
                     volume
                 };
             }).filter(bar => {
+                if ([bar.open, bar.high, bar.low, bar.close].every(v => Number.isNaN(v))) return false;
                 // Beyond NaN checks, verify the OHLC values are physically sane.
                 // Yahoo's "today, market still open" bar assembles its fields from a
                 // live feed non-atomically, and can momentarily return a close below
@@ -2128,7 +2150,8 @@ async function fetchYahooHistoricalData(symbol, timeframe, requestId, timezone, 
                     bar.high >= bar.open && bar.high >= bar.close &&
                     bar.low <= bar.open && bar.low <= bar.close;
                 if (!isValid) {
-                    logger.warn(`[Yahoo] Skipping invalid bar for ${yahooSymbol} (${timeframe}): ${JSON.stringify(bar)}`);
+                    invalidBars += 1;
+                    if (!firstInvalid) firstInvalid = bar;
                 }
                 return isValid;
             }).filter(bar => {
@@ -2154,6 +2177,9 @@ async function fetchYahooHistoricalData(symbol, timeframe, requestId, timezone, 
                 }
                 return true;
             });
+            if (invalidBars > 0) {
+                logger.warn(`[Yahoo] Skipped ${invalidBars} inconsistent bar${invalidBars > 1 ? 's' : ''} for ${yahooSymbol} (${timeframe}), e.g. ${JSON.stringify(firstInvalid)}`);
+            }
 
             // Remove all incomplete bars from the end
             const barDuration = getTimeframeDuration(timeframe);
