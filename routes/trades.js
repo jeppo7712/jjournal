@@ -165,12 +165,30 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
         }
     });
 
+    // IBKR fills (by execution ID) another trade already has: a fill belongs
+    // to one trade. Saving the same new trade twice (a double click) put
+    // its fills into two trades and counted their P&L twice.
+    async function fillsElsewhere(db, actions, tradeId = null) {
+        const execIds = [...new Set((actions || []).map(a => a.execId).filter(Boolean).map(String))];
+        if (execIds.length === 0) return [];
+        const { rows } = await db.query(
+            `SELECT DISTINCT trade_id FROM trade_actions WHERE exec_id = ANY($1) AND ($2::int IS NULL OR trade_id <> $2)`,
+            [execIds, tradeId]
+        );
+        return rows.map(r => r.trade_id);
+    }
+
     // Optimized POST /trades: bulk insert trade_actions, journal, attachments update
     router.post('/trades', async (req, res) => {
         const client = await pool.connect();
         try {
             const { type, symbol, target, stopLoss, tickSize, tickValue, contract_month, actions, journal, attachments } = req.body;
             const accountId = req.accountId;
+
+            const taken = await fillsElsewhere(client, actions);
+            if (taken.length > 0) {
+                return res.status(409).json({ error: `These IBKR fills are already in the journal (trade #${taken.join(', #')}).` });
+            }
 
             await client.query('BEGIN');
 
@@ -272,6 +290,11 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
         try {
             const { type, symbol, target, stopLoss, tickSize, tickValue, contract_month, actions, journal, attachments } = req.body;
             const accountId = req.accountId;
+
+            const taken = await fillsElsewhere(client, actions, Number(id));
+            if (taken.length > 0) {
+                return res.status(409).json({ error: `These IBKR fills are already in another trade (#${taken.join(', #')}).` });
+            }
 
             await client.query('BEGIN');
 
