@@ -660,11 +660,16 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
   // America/New_York regardless of symbol/exchange.
   const FLEX_REPORTED_TIMEZONE = 'America/New_York';
 
+  // A fee's sign: the currency IBKR charged it in, else the symbol's.
+  const symbolCurrency = useMemo(
+    () => getFuturesSettings(form.symbol, form.type, futuresSettings || [])?.currency || 'USD',
+    [form.symbol, form.type, futuresSettings]
+  );
+  const feeText = (fee, currency, show = showNum) => `${currencyMark(currency || symbolCurrency)}${show(fee)}`;
+
   // Helper: convert a raw execution from /trade-groups (TWS, isFlexSource
   // false) or /trade-groups-flex (Flex, isFlexSource true) into a usable
   // object. Which one it came from matters — see FLEX_REPORTED_TIMEZONE above.
-  const symbolCurrency = getFuturesSettings(form.symbol, form.type, futuresSettings || [])?.currency || 'USD';
-  const feeText = (fee, currency, show = showNum) => `${currencyMark(currency || symbolCurrency)}${show(fee)}`;
   const processRawExec = (exec, isFlexSource) => {
     const parseZone = isFlexSource ? FLEX_REPORTED_TIMEZONE : exchangeTimezone;
     const dt = parseIBKRTime(exec.time, parseZone);
@@ -759,7 +764,10 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
 
       // Opened for particular fills: just their groups, not the symbol's
       // whole history.
-      const focus = importFills?.execIds?.length ? new Set(importFills.execIds) : null;
+      // Only while it's still that instrument: another symbol shows all its groups.
+      const forImport = importFills?.execIds?.length
+        && String(form.symbol).toUpperCase() === String(importFills.symbol).toUpperCase() && form.type === importFills.type;
+      const focus = forImport ? new Set(importFills.execIds) : null;
       const inFocus = execs => execs.some(e => focus.has(e.execId));
       setIbkrGroups(focus
         ? groups.filter(g => inFocus([...g.entryExecutions, ...g.tpExecutions, ...g.slExecutions, ...g.otherChildren.flatMap(c => c.executions)]))

@@ -1,7 +1,7 @@
 // Run with: npm test
 const test = require('node:test');
 const assert = require('node:assert/strict');
-const { classifyCashType, parseCashItems, matchItems, flexDate, parseCashReport, compareBalances } = require('../modules/brokerCash.js');
+const { classifyCashType, parseCashItems, matchItems, flexDate, parseCashReport, compareBalances, ledgerDay } = require('../modules/brokerCash.js');
 const { checkFlexQuery } = require('../modules/flexCheck.js');
 
 // Rows shaped like IBKR's Flex XML attributes (made-up account and values).
@@ -272,4 +272,13 @@ test('balance check: rounding is in line, items waiting in the inbox explain the
   assert.equal(usd.unexplained, 1.57);
   assert.equal(gbp.inLine, true); // a waiting -10 fee is the whole difference
   assert.equal(gbp.waiting, -10);
+});
+
+test('balance check: trade cash counts on its trading day, other rows on their UTC date', () => {
+  // A New York after-hours fill is the next day in UTC, but the same statement day.
+  assert.equal(ledgerDay({ date_time: '2026-10-13T00:30:00Z', type: 'STK' }, 'America/New_York'), '2026-10-12');
+  // An evening Globex fill belongs to the next session's day.
+  assert.equal(ledgerDay({ date_time: '2026-10-12T23:30:00Z', type: 'FUT' }, 'America/Chicago'), '2026-10-13');
+  // A deposit or fee row: its own date.
+  assert.equal(ledgerDay({ date_time: '2026-10-12T00:00:00Z' }), '2026-10-12');
 });
