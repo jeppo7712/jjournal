@@ -69,6 +69,8 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
     return !!contract.symbol && contract.symbol.toUpperCase() === symbol.toUpperCase();
   }
 
+  const COMMISSION_WAIT_MS = 6000;
+
   async function fetchExecutions(symbol, effectiveType, identity = null) {
     let execDetailsHandler;
     return new Promise((resolve, reject) => {
@@ -105,9 +107,23 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
 
       ibkr.getIbApi().on(EventName.execDetails, execDetailsHandler);
 
+      // TWS sends each fill's commission in a report of its own, after the
+      // fill. Waiting a fixed 2 s and then clearing every stored report lost
+      // late ones, and those another import running at the same time still
+      // needed: the fill was saved with fee 0. Wait until every fill has its
+      // report (at most COMMISSION_WAIT_MS), and take out only these fills'.
       ibkr.getIbApi().once(EventName.execDetailsEnd, () => {
         if (execDetailsHandler) ibkr.getIbApi().off(EventName.execDetails, execDetailsHandler);
-        setTimeout(() => {
+        const startedAt = Date.now();
+        const settle = () => {
+          const missing = executionData.filter(exec => ibkr.commissionMap.get(exec.execId) === undefined);
+          if (missing.length > 0 && Date.now() - startedAt < COMMISSION_WAIT_MS) {
+            setTimeout(settle, 250);
+            return;
+          }
+          if (missing.length > 0) {
+            logger.warn(`[IBKR fetchExecutions] no commission report from TWS for ${missing.length} of ${executionData.length} fills after ${COMMISSION_WAIT_MS / 1000} s; their fee stays 0 until IBKR's statement corrects it`);
+          }
           const updated = executionData.map(exec => ({
             ...exec,
             commission: ibkr.commissionMap.get(exec.execId) !== undefined
@@ -115,11 +131,14 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
               : exec.commission,
             commissionCurrency: ibkr.commissionCurrencyMap.get(exec.execId) || exec.commissionCurrency,
           }));
-          ibkr.commissionMap.clear();
-          ibkr.commissionCurrencyMap.clear();
+          for (const exec of executionData) {
+            ibkr.commissionMap.delete(exec.execId);
+            ibkr.commissionCurrencyMap.delete(exec.execId);
+          }
           logger.debug(`[IBKR fetchExecutions] resolved ${updated.length} executions`);
           resolve(updated);
-        }, 2000);
+        };
+        setTimeout(settle, 250);
       });
 
       ibkr.getIbApi().once(EventName.error, (err, code) => {
