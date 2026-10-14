@@ -833,7 +833,13 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
         // own connection/transaction (runContinuousSeriesRebuild). The IBKR
         // raw-data write above already commits/rolls back on its own,
         // tightly scoped around just that write.
-        logger.error(`[populate][${taskId}] Error for ${symbol} (${timeframe}, ${fetchPhase}): ${err.message}`);
+        if (cancellationSignal.aborted) {
+            // Stopped on purpose (the user opened another chart); what it
+            // fetched so far is kept and it resumes on its next run.
+            logger.info(`[populate][${taskId}] Stopped ${symbol} (${timeframe}, ${fetchPhase}): ${err.message}`);
+        } else {
+            logger.error(`[populate][${taskId}] Error for ${symbol} (${timeframe}, ${fetchPhase}): ${err.message}`);
+        }
         throw err; // Re-throw the error for the task processor
     } finally {
         // Always release the client connection
@@ -1053,7 +1059,11 @@ async function fetchHistoricalDataFromIBKR(validatedContract, duration, barSize,
         return bars;
 
     } catch (err) {
-        logger.error(`[Historical][${taskId}] Error in fetchHistoricalDataFromIBKR for conId ${validatedContract?.conId}: ${err.message}`);
+        if (cancellationSignal && cancellationSignal.aborted) {
+            logger.debug(`[Historical][${taskId}] fetchHistoricalDataFromIBKR for conId ${validatedContract?.conId} stopped: ${err.message}`);
+        } else {
+            logger.error(`[Historical][${taskId}] Error in fetchHistoricalDataFromIBKR for conId ${validatedContract?.conId}: ${err.message}`);
+        }
         // A task we cancelled ourselves says nothing about IBKR's health.
         if (!(cancellationSignal && cancellationSignal.aborted)) ibkrDataStatus.recordFailure(err.message);
         // Check for error codes or messages that indicate a disconnect
@@ -1403,7 +1413,8 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
             ), {
                     taskName: `IBKR fetch chunk for ${contractDesc}`,
                 retries: 2,
-                taskId: taskId
+                taskId: taskId,
+                cancellationSignal
             });
 
                 // Only bars from the chunk's end on (IBKR dates a daily bar by

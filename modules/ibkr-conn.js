@@ -223,7 +223,11 @@ function createConnection({ name, clientId, resolveAddresses, health = null }) {
                 // "No data" for a quiet contract or a holiday: the request
                 // itself resolves with 0 bars (fetchHistoricalDataFromIBKR).
                 // Other code-162 messages (pacing violations) stay errors.
-                if (code === 162 && /HMDS query returned no data/i.test(String(err?.message || ''))) {
+                // And IBKR confirming a request the journal cancelled itself
+                // (a task stopped for a chart the user opened): "query
+                // cancelled", or code 366 when the cancel crossed the answer.
+                if ((code === 162 && /HMDS query returned no data|historical data query cancelled/i.test(String(err?.message || '')))
+                    || (code === 366 && /No historical data query found/i.test(String(err?.message || '')))) {
                   logger.debug(`${tag} ${err.message} (ReqId: ${localRequestId})`);
                   return;
                 }
