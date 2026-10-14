@@ -46,15 +46,19 @@ const timeout = (ms, message) => new Promise((_, reject) => {
  * @param {number} [options.delay=1000] Initial delay in ms.
  * @param {string} [options.taskName='Unnamed task'] Name of the task for logging.
  * @param {string} [options.taskId=''] The task ID for logging.
+ * @param {AbortSignal} [options.cancellationSignal] Once aborted, a failure isn't retried.
  * @returns {Promise<any>}
  */
 async function withRetries(fn, options = {}) {
-    const { retries = 3, delay: initialDelay = 1000, taskName = 'Unnamed task', taskId = '' } = options;
+    const { retries = 3, delay: initialDelay = 1000, taskName = 'Unnamed task', taskId = '', cancellationSignal = null } = options;
     let attempt = 1;
     while (attempt <= retries) {
         try {
             return await fn();
         } catch (err) {
+            // A cancelled task (the user opened another chart): no retry, and
+            // not a failure.
+            if (cancellationSignal && cancellationSignal.aborted) throw err;
             if (attempt === retries) {
                 logger.error(`[utils][withRetries][${taskId}] ${taskName} failed after ${retries} attempts. Error: ${err.message}`);
                 throw err;
@@ -347,8 +351,12 @@ async function generateContractChain(symbol, exchange, requiredStartDate, taskId
             backwardDate = backwardDate.minus({ months: 1 });
         }
 
-        // 2. Forward search for active/upcoming contracts
-        let forwardDate = now.startOf('month');
+        // 2. Forward search for active/upcoming contracts. From next month:
+        // the backward search already covers this one, expired or not (a
+        // crude oil month stops trading in the month before, so without
+        // includeExpired this month's contract wasn't found and warned on
+        // every run).
+        let forwardDate = now.startOf('month').plus({ months: 1 });
         const forwardLimit = now.plus({ months: 6 });
         while (forwardDate <= forwardLimit) {
             if (rolloverMonths.includes(forwardDate.month)) {
