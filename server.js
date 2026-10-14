@@ -550,8 +550,15 @@ cron.schedule('*/30 * * * *', async () => {
     }
 
     logger.info(`[Cron:${cronRunId}] Adding tasks for ${allSymbols.length} symbols.`);
-    let queuedCount = 0, throttledCount = 0;
-    for (const { symbol, type, exchange, timeframe_settings } of allSymbols) {
+    let queuedCount = 0, throttledCount = 0, expiredCount = 0;
+    // A trade's contract month that ended over a month ago gets no new bars:
+    // it's only fetched until it has IBKR history (in any timeframe: one that
+    // was never stored can't be fetched once IBKR no longer knows the
+    // contract), and not at all after two years. Otherwise every run looked
+    // it up again in every timeframe, and the lookup failed every time.
+    const recentMonth = DateTime.now().minus({ months: 1 }).toFormat('yyyyMM');
+    const oldestMonth = DateTime.now().minus({ years: 2 }).toFormat('yyyyMM');
+    for (const { id: settingId, symbol, type, exchange, timeframe_settings } of allSymbols) {
       let contractMonthsToProcess = [null]; // Default for STK and continuous FUT
       if (type === 'FUT') {
         const { rows: tradeRows } = await db.getPool().query(
@@ -563,6 +570,22 @@ cron.schedule('*/30 * * * *', async () => {
 
       const enabledTimeframes = getEnabledTimeframes(timeframe_settings);
       for (const contractMonth of contractMonthsToProcess) {
+        if (contractMonth && contractMonth < recentMonth) {
+          let done = contractMonth < oldestMonth;
+          // One index lookup per timeframe (idx_historical_data_ranges).
+          for (const timeframe of done ? [] : enabledTimeframes) {
+            const { rows: [stored] } = await db.getPool().query(
+              `SELECT EXISTS (SELECT 1 FROM historical_data WHERE futures_setting_id = $1 AND timeframe = $2 AND source = 'IBKR'
+                 AND COALESCE(contract_month, '') = $3 AND NOT is_continuous) AS has`,
+              [settingId, timeframe, contractMonth]
+            );
+            if (stored.has) { done = true; break; }
+          }
+          if (done) {
+            expiredCount += enabledTimeframes.length;
+            continue;
+          }
+        }
         for (const timeframe of enabledTimeframes) {
           const throttleMinutes = CRON_RECHECK_THROTTLE_MINUTES[timeframe];
           if (throttleMinutes) {
@@ -580,7 +603,7 @@ cron.schedule('*/30 * * * *', async () => {
         }
       }
     }
-    logger.info(`[Cron:${cronRunId}] All daily tasks added to queue (${queuedCount} queued, ${throttledCount} skipped as recently-checked coarse timeframes).`);
+    logger.info(`[Cron:${cronRunId}] All daily tasks added to queue (${queuedCount} queued, ${throttledCount} skipped as recently-checked coarse timeframes, ${expiredCount} for expired contracts).`);
     logCronOutcome(cronRunId, 'tasks_queued', `Queued ${queuedCount} tasks across ${allSymbols.length} symbols (${throttledCount} skipped, recently checked).`);
   } catch (err) {
     logger.error(`[Cron:${cronRunId}] Error during daily data fetch setup: ${err.message}`);
