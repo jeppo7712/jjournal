@@ -35,6 +35,26 @@ async function reconcileSettlementCurrencies(client) {
     return fixed;
 }
 
+// Trades whose currency would change if `removed` (a futures_settings row)
+// went, or became `replacement`: a trade takes its currency from the
+// symbol setting it matches (resolveTradeCurrency), and its cash rows
+// stamped that currency. Renaming or deleting the setting left them on the
+// USD fallback in the journal while their cash stayed in the real one.
+async function tradesChangingCurrency(client, removed, replacement = null) {
+    const { rows: settings } = await client.query('SELECT symbol, type, currency FROM futures_settings');
+    const after = settings.filter(s => !(s.symbol === removed.symbol && s.type === removed.type));
+    if (replacement) after.push(replacement);
+    const { rows: instruments } = await client.query('SELECT symbol, type, COUNT(*)::int AS count FROM trades GROUP BY symbol, type');
+    return instruments
+        .filter(i => resolveTradeCurrency(i.symbol, i.type, settings) !== resolveTradeCurrency(i.symbol, i.type, after))
+        .map(i => ({ symbol: i.symbol, count: i.count }));
+}
+
+function changingCurrencyMessage(affected, what) {
+    const count = affected.reduce((sum, a) => sum + a.count, 0);
+    return `${count} trade(s) (${affected.map(a => a.symbol).join(', ')}) take their currency from this setting; ${what} would change it. Add a setting that covers them first, or keep this one.`;
+}
+
 // Export a function that accepts dependencies
 module.exports = (pool, broadcastStatus, uuidv4) => {
 
@@ -115,6 +135,14 @@ return res.status(400).json({ error: 'Initial margin is required for futures con
                 return res.status(404).json({ error: 'Original symbol and type not found' });
             }
             const futuresSettingId = existingSettings[0].id;
+            if (symbol !== originalSymbol || type !== originalType) {
+                const affected = await tradesChangingCurrency(client, { symbol: originalSymbol, type: originalType },
+                    { symbol, type, currency: (currency || 'USD').toUpperCase() });
+                if (affected.length > 0) {
+                    await client.query('ROLLBACK');
+                    return res.status(409).json({ error: changingCurrencyMessage(affected, 'renaming it') });
+                }
+            }
             const currentExchangeInDb = existingSettings[0].exchange;
             // Preserve the existing value if the request didn't include one, rather
             // than silently resetting it to the (smaller, new-symbol) default.
@@ -203,6 +231,11 @@ return res.status(400).json({ error: 'Initial margin is required for futures con
                 return res.status(404).json({ error: 'Symbol and type not found' });
             }
             const futuresSettingId = existingSettings[0].id;
+            const affected = await tradesChangingCurrency(client, { symbol, type });
+            if (affected.length > 0) {
+                await client.query('ROLLBACK');
+                return res.status(409).json({ error: changingCurrencyMessage(affected, 'deleting it') });
+            }
 
             // 2. Delete associated historical data
             logger.info(`[FuturesSettings] Deleting historical data for ${symbol}/${type} (ID: ${futuresSettingId}) before deleting the setting.`);

@@ -1,9 +1,9 @@
 import React, { useContext, useState } from 'react';
 import { sumByCurrency, formatTotals, toTotalsList, totalsSign } from '../../utils/currencyTotals';
 import { formatMoney } from '../../utils/formatMoney';
-import { TradeContext } from '../../context/TradeContext';
+import { TradeContext, matchLotsFIFO, getTickMultiplier } from '../../context/TradeContext';
 import styles from './Calendar.module.css';
-import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addMonths, subMonths, eachWeekOfInterval, startOfDay, endOfDay } from 'date-fns';
+import { format, startOfMonth, endOfMonth, startOfWeek, endOfWeek, eachDayOfInterval, addMonths, subMonths, eachWeekOfInterval } from 'date-fns';
 import { DateTime } from 'luxon';
 
 // Each currency figure is coloured by its own sign. Colouring the whole
@@ -55,6 +55,28 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
     return acc;
   }, {});
 
+  // A sale out of a position that stays open locks in P&L that day too (as
+  // Stats' daily P&L counts it): added to the day, with the trade.
+  trades.forEach(trade => {
+    if (trade.status !== 'OPEN') return;
+    const code = String(trade.currency || 'USD').toUpperCase();
+    let previous = 0;
+    matchLotsFIFO(trade, getTickMultiplier(trade)).timeline.forEach(step => {
+      const amount = step.realisedPnL - previous;
+      previous = step.realisedPnL;
+      if (Math.abs(amount) < 1e-9) return;
+      const at = DateTime.fromISO(typeof step.dateTime === 'string' ? step.dateTime : new Date(step.dateTime).toISOString());
+      if (!at.isValid) return;
+      const dateKey = at.setZone(zone).toFormat('yyyy-MM-dd');
+      const day = dailyData[dateKey] = dailyData[dateKey] || { totalByCurrency: {}, count: 0, trades: [] };
+      day.totalByCurrency[code] = (day.totalByCurrency[code] || 0) + amount;
+      if (!day.trades.includes(trade)) {
+        day.trades.push(trade);
+        day.count += 1;
+      }
+    });
+  });
+
   const weeklySummaries = weeks.reduce((acc, weekStart) => {
     const weekEnd = endOfWeek(weekStart, { weekStartsOn: 1 });
     // Compare by formatted date-key rather than raw Date, for the same
@@ -67,9 +89,14 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
       const tradeDateKey = trade.lastActionDate.setZone(zone).toFormat('yyyy-MM-dd');
       return tradeDateKey >= weekStartKey && tradeDateKey <= weekEndKey;
     });
-    const totalByCurrency = sumByCurrency(weekTrades, t => t.return || 0);
+    // The week's days, partial sells of open trades included.
+    const weekDays = Object.keys(dailyData).filter(key => key >= weekStartKey && key <= weekEndKey);
+    const totalByCurrency = {};
+    weekDays.forEach(key => Object.entries(dailyData[key].totalByCurrency).forEach(([code, amount]) => {
+      totalByCurrency[code] = (totalByCurrency[code] || 0) + amount;
+    }));
     const feesByCurrency = sumByCurrency(weekTrades, t => (t.buyFee || 0) + (t.sellFee || 0));
-    const count = weekTrades.length;
+    const count = new Set(weekDays.flatMap(key => dailyData[key].trades)).size;
     const wins = weekTrades.filter(trade => trade.status === 'WIN').length;
     const losses = weekTrades.filter(trade => trade.status === 'LOSS').length;
     const weekKey = format(weekStart, 'yyyy-MM-dd');
@@ -81,8 +108,10 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
     const dateKey = format(day, 'yyyy-MM-dd');
     const dayData = dailyData[dateKey];
     if (dayData && dayData.count > 0) {
-      const start = DateTime.fromJSDate(startOfDay(day), { zone }).toISO();
-      const end = DateTime.fromJSDate(endOfDay(day), { zone }).toISO();
+      // The day in the selected zone, as the cells group trades (the
+      // browser's own midnight was another day's range in another zone).
+      const start = DateTime.fromISO(dateKey, { zone }).startOf('day').toISO();
+      const end = DateTime.fromISO(dateKey, { zone }).endOf('day').toISO();
       setCustomStartDate(start);
       setCustomEndDate(end);
       setTimeFilter('CUSTOM');
@@ -94,8 +123,8 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
   const handleWeekClick = (weekKey) => {
     const weekData = weeklySummaries[weekKey];
     if (weekData && weekData.count > 0) {
-      const start = DateTime.fromJSDate(startOfWeek(weekData.weekStart, { weekStartsOn: 1 }), { zone }).toISO();
-      const end = DateTime.fromJSDate(endOfWeek(weekData.weekEnd, { weekStartsOn: 1 }), { zone }).toISO();
+      const start = DateTime.fromISO(format(startOfWeek(weekData.weekStart, { weekStartsOn: 1 }), 'yyyy-MM-dd'), { zone }).startOf('day').toISO();
+      const end = DateTime.fromISO(format(endOfWeek(weekData.weekEnd, { weekStartsOn: 1 }), 'yyyy-MM-dd'), { zone }).endOf('day').toISO();
       setCustomStartDate(start);
       setCustomEndDate(end);
       setTimeFilter('CUSTOM');
