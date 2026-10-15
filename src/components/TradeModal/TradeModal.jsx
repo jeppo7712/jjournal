@@ -753,17 +753,20 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
         const entryExecutions = group.entryExecutions.map(withJournalFlag);
         const tpExecutions = group.tpExecutions.map(withJournalFlag);
         const slExecutions = group.slExecutions.map(withJournalFlag);
-        const allExecs = [...entryExecutions, ...tpExecutions, ...slExecutions];
+        const otherChildren = (group.otherChildren || []).map(c => ({
+          ...c,
+          executions: c.executions.map(withJournalFlag),
+        }));
+        // The other children's fills belong to the position too (a second
+        // take-profit, a trailing limit): counted and applied with the rest.
+        const allExecs = [...entryExecutions, ...tpExecutions, ...slExecutions, ...otherChildren.flatMap(c => c.executions)];
         const newExecCount = allExecs.filter(e => !e.inJournal).length;
         return {
           ...group,
           entryExecutions,
           tpExecutions,
           slExecutions,
-          otherChildren:   (group.otherChildren || []).map(c => ({
-            ...c,
-            executions: c.executions.map(withJournalFlag),
-          })),
+          otherChildren,
           newExecCount,
           // Some fills already in the journal, some not — e.g. a long-held
           // position that was imported before and has since been added to
@@ -836,13 +839,18 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
     setForm(prev => ({ ...prev, stopLoss: item.price, stopLossConfirmed: true }));
   };
 
+  // Every fill of a group, in time order: entry, exits, and the other
+  // children's (a bracket can have more than one take-profit).
+  const groupExecutions = (group) => [
+    ...group.entryExecutions,
+    ...group.tpExecutions,
+    ...group.slExecutions,
+    ...(group.otherChildren || []).flatMap(c => c.executions || []),
+  ].sort((a, b) => (a.dateTime?.toMillis?.() || 0) - (b.dateTime?.toMillis?.() || 0));
+
   // Apply an entire bracket group to the trade form in one click
   const handleApplyTrade = (group) => {
-    const allExecs = [
-      ...group.entryExecutions,
-      ...group.tpExecutions,
-      ...group.slExecutions,
-    ];
+    const allExecs = groupExecutions(group);
 
     if (allExecs.length === 0) return;
 
@@ -1668,7 +1676,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
               {/* Bracket Groups */}
               {!ibkrLoading && ibkrGroups.filter(g => showAlreadyImported || !g.alreadyLogged).map((group) => {
                 const isExpanded = expandedGroups.has(group.parentOrderId);
-                const allGroupExecs = [...group.entryExecutions, ...group.tpExecutions, ...group.slExecutions];
+                const allGroupExecs = groupExecutions(group);
                 const alreadyApplied = allGroupExecs.length > 0 && allGroupExecs.every(e => e.inJournal || addedIbkrItemIds.has(e.execId));
 
                 const resultColor = {
