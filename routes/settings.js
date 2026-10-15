@@ -2,7 +2,8 @@ const express = require('express');
 const router = express.Router();
 const { logger } = require('../modules/logger.js');
 const { DEFAULT_TIMEFRAME_SETTINGS } = require('../modules/historical-data-service.js');
-const { resolveTradeCurrency } = require('../modules/tradeCalculations.js');
+const { resolveTradeCurrency, getFuturesSetting } = require('../modules/tradeCalculations.js');
+const { resettleTrades } = require('../modules/tradeSettlement.js');
 
 // A trade's currency is derived from its symbol's settings rather than
 // stored (see resolveTradeCurrency), but a TRADE_SETTLEMENT cash row stamps
@@ -281,11 +282,18 @@ return res.status(400).json({ error: 'Initial margin is required for futures con
         }
     });
 
+    // An IANA zone name (Europe/Amsterdam): an unknown one made every fill's
+    // day silently New York's (modules/tradeSettlement.js fillDay).
+    const validTimezone = (zone) => {
+        try { new Intl.DateTimeFormat('en-US', { timeZone: String(zone) }); return true; } catch { return false; }
+    };
+
     router.post('/exchanges', async (req, res) => {
         const { name, timezone, opening_hours } = req.body;
         if (!name || !timezone || !opening_hours) {
             return res.status(400).json({ error: 'Name, timezone, and opening hours are required' });
         }
+        if (!validTimezone(timezone)) return res.status(400).json({ error: `Unknown timezone "${timezone}" — use a name like Europe/Amsterdam` });
         try {
             const result = await pool.query(
                 'INSERT INTO exchanges (name, timezone, opening_hours) VALUES ($1, $2, $3) RETURNING *',
@@ -298,27 +306,61 @@ return res.status(400).json({ error: 'Initial margin is required for futures con
         }
     });
 
+    // Symbols name their exchange (futures_settings.exchange, no foreign
+    // key): a rename follows to them, else they lost its timezone and hours.
+    // A new timezone can move a fill to another trading day, and so across
+    // an opening balance date: those trades' cash is rebuilt.
     router.put('/exchanges/:id', async (req, res) => {
         const { id } = req.params;
         const { name, timezone, opening_hours } = req.body;
+        if (!name || !timezone || !opening_hours) {
+            return res.status(400).json({ error: 'Name, timezone, and opening hours are required' });
+        }
+        if (!validTimezone(timezone)) return res.status(400).json({ error: `Unknown timezone "${timezone}" — use a name like Europe/Amsterdam` });
+        const client = await pool.connect();
         try {
-            const result = await pool.query(
+            await client.query('BEGIN');
+            const { rows: [before] } = await client.query('SELECT name, timezone FROM exchanges WHERE id = $1 FOR UPDATE', [parseInt(id)]);
+            if (!before) {
+                await client.query('ROLLBACK');
+                return res.status(404).json({ error: 'Exchange not found' });
+            }
+            const result = await client.query(
                 'UPDATE exchanges SET name = $1, timezone = $2, opening_hours = $3 WHERE id = $4 RETURNING *',
                 [name, timezone, JSON.stringify(opening_hours), parseInt(id)]
             );
-            if (result.rows.length === 0) {
-                return res.status(404).json({ error: 'Exchange not found' });
+            if (before.name !== name) {
+                await client.query('UPDATE futures_settings SET exchange = $1 WHERE exchange = $2', [name, before.name]);
             }
-            res.json(result.rows[0]);
+            let resettled = 0;
+            if (before.timezone !== timezone) {
+                const { rows: settings } = await client.query('SELECT symbol, type, currency, exchange FROM futures_settings');
+                const { rows: trades } = await client.query('SELECT id, symbol, type FROM trades');
+                const ids = trades.filter(t => getFuturesSetting(t.symbol, t.type, settings)?.exchange === name).map(t => t.id);
+                await resettleTrades(client, ids);
+                resettled = ids.length;
+            }
+            await client.query('COMMIT');
+            res.json({ ...result.rows[0], trades_resettled: resettled });
         } catch (err) {
+            await client.query('ROLLBACK').catch(() => {});
             logger.error('Error updating exchange:', err);
-            res.status(500).json({ error: 'Failed to update exchange' });
+            res.status(err.code === '23505' ? 409 : 500).json({ error: err.code === '23505' ? 'An exchange with that name already exists' : 'Failed to update exchange' });
+        } finally {
+            client.release();
         }
     });
 
     router.delete('/exchanges/:id', async (req, res) => {
         const { id } = req.params;
         try {
+            // Still named by symbols: they'd lose its timezone and hours.
+            const { rows: users } = await pool.query(
+                'SELECT fs.symbol FROM futures_settings fs JOIN exchanges e ON e.name = fs.exchange WHERE e.id = $1 ORDER BY fs.symbol', [id]
+            );
+            if (users.length > 0) {
+                return res.status(409).json({ error: `${users.length} symbol(s) use this exchange (${users.map(u => u.symbol).join(', ')}) — move them to another exchange first` });
+            }
             const { rowCount } = await pool.query('DELETE FROM exchanges WHERE id=$1', [id]);
             if (rowCount === 0) {
                 broadcastStatus(uuidv4(), `Exchange ID ${id} not found`, 'error');

@@ -952,7 +952,7 @@ export default function Settings() {
   const handleDeleteSymbol = async (symbol, type) => {
     if (await confirmDialog(`Are you sure you want to delete the settings for ${symbol}?`)) {
       try {
-        const res = await fetch(`${apiBaseUrl}/api/futures-settings?symbol=${symbol}&type=${type}`, {
+        const res = await fetch(`${apiBaseUrl}/api/futures-settings?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}`, {
           method: 'DELETE',
           headers: { 'X-Account-ID': currentAccountId },
         });
@@ -972,7 +972,7 @@ export default function Settings() {
     const [symbol, type] = splitSymbolKey(selectedHistoricalSymbol);
     if (await confirmDialog(`Are you sure you want to delete all historical data for ${symbol} (${type})? This action cannot be undone.`)) {
       try {
-        const res = await fetch(`${apiBaseUrl}/api/historical-data?symbol=${symbol}&type=${type}`, {
+        const res = await fetch(`${apiBaseUrl}/api/historical-data?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}`, {
           method: 'DELETE',
           headers: { 'X-Account-ID': currentAccountId },
         });
@@ -1066,7 +1066,7 @@ export default function Settings() {
       setHistoricalSummary(null);
       const [symbol, type] = splitSymbolKey(selectedHistoricalSymbol);
       try {
-        const res = await fetch(`${apiBaseUrl}/api/historical/summary?symbol=${symbol}&type=${type}`, {
+        const res = await fetch(`${apiBaseUrl}/api/historical/summary?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}`, {
           headers: { 'X-Account-ID': currentAccountId }
         });
         if (!res.ok) {
@@ -1106,7 +1106,7 @@ export default function Settings() {
     setHistoricalSummary(null);
     const [symbol, type] = splitSymbolKey(selectedHistoricalSymbol);
     try {
-      const res = await fetch(`${apiBaseUrl}/api/historical/summary?symbol=${symbol}&type=${type}`);
+      const res = await fetch(`${apiBaseUrl}/api/historical/summary?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}`);
       if (!res.ok) throw new Error('Failed to refresh summary');
       const data = await res.json();
       setHistoricalSummary(data);
