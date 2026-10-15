@@ -39,19 +39,29 @@ function formatFlexDateTime(raw) {
 
 // Runs the SendRequest → GetStatement flow and returns the statement(s): one
 // per IBKR account the query covers, every section as parsed.
+// IBKR's answers that mean "not now, ask again shortly" rather than a
+// failure: the statement still being generated, a busy server, too many
+// requests at once.
+const FLEX_TRY_AGAIN = /not yet available|generation in progress|try again shortly|heavy load|too many requests/i;
+const SEND_ATTEMPTS = 3;
+const SEND_RETRY_MS = 10000;
+
 async function requestFlexStatement(token, queryId) {
   const sendUrl = `${FLEX_BASE}/SendRequest?t=${token}&q=${queryId}&v=3`;
-  const sendRes = await fetch(sendUrl);
-  if (!sendRes.ok) {
-    throw new Error(`Flex SendRequest HTTP ${sendRes.status} for query ${queryId}`);
-  }
-  const sendXml = await sendRes.text();
-  const sendParsed = new XMLParser().parse(sendXml);
-
-  const status = sendParsed?.FlexStatementResponse?.Status;
-  if (status !== 'Success') {
+  let sendParsed;
+  for (let attempt = 1; ; attempt++) {
+    const sendRes = await fetch(sendUrl);
+    if (!sendRes.ok) {
+      throw new Error(`Flex SendRequest HTTP ${sendRes.status} for query ${queryId}`);
+    }
+    sendParsed = new XMLParser().parse(await sendRes.text());
+    if (sendParsed?.FlexStatementResponse?.Status === 'Success') break;
     const errMsg = sendParsed?.FlexStatementResponse?.ErrorMessage || 'Unknown Flex error';
-    throw new Error(`Flex request failed for query ${queryId}: ${errMsg}`);
+    if (attempt >= SEND_ATTEMPTS || !FLEX_TRY_AGAIN.test(String(errMsg))) {
+      throw new Error(`Flex request failed for query ${queryId}: ${errMsg}`);
+    }
+    logger.debug(`[Flex] query ${queryId}: ${errMsg} — trying again in ${SEND_RETRY_MS / 1000} s`);
+    await new Promise(r => setTimeout(r, SEND_RETRY_MS));
   }
   const refCode = sendParsed.FlexStatementResponse.ReferenceCode;
   logger.debug(`[Flex] reference code ${refCode}, polling for statement…`);
@@ -77,7 +87,7 @@ async function requestFlexStatement(token, queryId) {
     if (xml.includes('<FlexStatementResponse')) {
       const parsed = new XMLParser().parse(xml);
       const errMsg = parsed?.FlexStatementResponse?.ErrorMessage;
-      if (errMsg && !errMsg.toLowerCase().includes('not yet available')) {
+      if (errMsg && !FLEX_TRY_AGAIN.test(String(errMsg))) {
         throw new Error(`Flex statement failed for query ${queryId}: ${errMsg}`);
       }
       logger.debug(`[Flex] attempt ${attempt}: statement not ready yet`);
