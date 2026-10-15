@@ -32,6 +32,12 @@ of being a no-op label — see Implementation notes for both.
   charge), computed server-side via `computeFuturesRealizedPnLPerAction`
   in `modules/tradeCalculations.js`, a port of the same FIFO matching
   TradeContext.js already did client-side for realized/unrealized PnL.
+  Both match lots with their own side (client: `src/utils/lots.js`): a
+  fill beyond the open position opens one the other way, so a trade
+  entered with a flip (long 1, then sell 2) settles the long's P&L on
+  that fill and the short's on the fill that closes it. The IBKR import
+  splits such a fill into two trades instead (the opening part's
+  execution ID gets a `.flip` suffix).
 - **Settlement is one row per trade, not one per fill.** A multi-fill
   futures trade used to create a `cash_transactions` row per action,
   which cluttered the ledger fast. `settleTradeActionsToCash` now sums

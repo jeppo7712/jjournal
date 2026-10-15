@@ -153,18 +153,7 @@ function computeTradeDerived(trade, futuresSettings) {
         if (trade.type === 'FUT') {
             const setting = getFuturesSetting(trade.symbol, trade.type, futuresSettings);
             if (setting && setting.initial_margin > 0) {
-                let maxContracts = 0, openContracts = 0;
-                if (side === 'LONG') {
-                    actions.forEach(a => {
-                        if (a.type === 'BUY') { openContracts += Number(a.quantity || 0); if (openContracts > maxContracts) maxContracts = openContracts; }
-                        else { openContracts -= Number(a.quantity || 0); }
-                    });
-                } else if (side === 'SHORT') {
-                    actions.forEach(a => {
-                        if (a.type === 'SELL') { openContracts += Number(a.quantity || 0); if (openContracts > maxContracts) maxContracts = openContracts; }
-                        else { openContracts -= Number(a.quantity || 0); }
-                    });
-                }
+                const maxContracts = maxPosition(actions);
                 const totalInitialMargin = setting.initial_margin * maxContracts;
                 if (totalInitialMargin > 0) returnPercentage = (ret / totalInitialMargin) * 100;
             }
@@ -228,7 +217,7 @@ function computeTradeDerived(trade, futuresSettings) {
  * would double-count it. This only needs to answer "how much of the
  * price move did this specific close realise."
  *
- * @param {string} side - 'LONG' or 'SHORT'
+ * @param {string} side - unused (each lot has its own side)
  * @param {Array} actions - chronologically sorted {type, quantity, price}
  * @param {number} tickMultiplier - see getTickMultiplier
  * @returns {Map<number, number>} action array index -> realised PnL for
@@ -236,33 +225,47 @@ function computeTradeDerived(trade, futuresSettings) {
  *   realise nothing yet).
  */
 function computeFuturesRealizedPnLPerAction(side, actions, tickMultiplier) {
+    // Each lot carries its own side, and what's left of a fill after closing
+    // the position opens one the other way: a trade entered with a flip
+    // (long 1, then sell 2) realises the long's P&L on that fill, and the
+    // short's on the fill that closes it. `side` is no longer needed (kept
+    // for the callers); src/utils/lots.js matches the same way.
     const realizedByIndex = new Map();
-    if (side !== 'LONG' && side !== 'SHORT') return realizedByIndex;
-
-    const openLots = []; // { quantity, price }
-    const openingType = side === 'LONG' ? 'BUY' : 'SELL';
-    const closingType = side === 'LONG' ? 'SELL' : 'BUY';
-    const sign = side === 'LONG' ? 1 : -1;
+    const openLots = []; // { quantity, price, sign }
 
     actions.forEach((action, idx) => {
-        if (action.type === openingType) {
-            openLots.push({ quantity: Number(action.quantity || 0), price: Number(action.price || 0) });
-        } else if (action.type === closingType) {
-            let realizedForThisAction = 0;
-            let closeQty = Number(action.quantity || 0);
-            while (closeQty > 0 && openLots.length > 0) {
-                const lot = openLots[0];
-                const qtyToClose = Math.min(lot.quantity, closeQty);
-                realizedForThisAction += (Number(action.price) - lot.price) * sign * qtyToClose * tickMultiplier;
-                lot.quantity -= qtyToClose;
-                closeQty -= qtyToClose;
-                if (lot.quantity <= 0) openLots.shift();
-            }
-            realizedByIndex.set(idx, realizedForThisAction);
+        const sign = action.type === 'BUY' ? 1 : action.type === 'SELL' ? -1 : 0;
+        if (sign === 0) return;
+        const price = Number(action.price || 0);
+        let remaining = Number(action.quantity || 0);
+        let closed = false;
+        let realizedForThisAction = 0;
+        while (remaining > 0 && openLots.length > 0 && openLots[0].sign !== sign) {
+            const lot = openLots[0];
+            const qtyToClose = Math.min(lot.quantity, remaining);
+            realizedForThisAction += (price - lot.price) * lot.sign * qtyToClose * tickMultiplier;
+            lot.quantity -= qtyToClose;
+            remaining -= qtyToClose;
+            closed = true;
+            if (lot.quantity <= 1e-12) openLots.shift();
         }
+        if (closed) realizedByIndex.set(idx, realizedForThisAction);
+        if (remaining > 1e-12) openLots.push({ quantity: remaining, price, sign });
     });
 
     return realizedByIndex;
+}
+
+// The largest position held at any point (unsigned), also across a flip:
+// what a futures trade's margin is counted on.
+function maxPosition(actions) {
+    let net = 0;
+    let max = 0;
+    for (const a of actions || []) {
+        net += (a.type === 'BUY' ? 1 : a.type === 'SELL' ? -1 : 0) * Number(a.quantity || 0);
+        max = Math.max(max, Math.abs(net));
+    }
+    return max;
 }
 
 /**
