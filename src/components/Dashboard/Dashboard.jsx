@@ -155,18 +155,22 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
   }, [filter]);
 
   useEffect(() => {
+    // A calendar day (a local Date for the cell) as that day in the zone the
+    // calendar grouped it in ({ date, zone } from Stats; local otherwise).
+    const dayIn = (value, zone) => DateTime.fromISO(DateTime.fromJSDate(new Date(value)).toFormat('yyyy-MM-dd'), { zone: zone || 'local' });
     if (customFilterDate) {
       setTimeFilter(null);
-      const start = DateTime.fromJSDate(new Date(customFilterDate), { zone: 'local' }).startOf('day');
-      const end = DateTime.fromJSDate(new Date(customFilterDate), { zone: 'local' }).endOf('day');
+      const { date, zone } = customFilterDate instanceof Date || !customFilterDate.date ? { date: customFilterDate } : customFilterDate;
+      const start = dayIn(date, zone).startOf('day');
+      const end = dayIn(date, zone).endOf('day');
       setCustomStartDate(start.toISO());
       setCustomEndDate(end.toISO());
       setTimeFilter('CUSTOM');
       setShowDatePicker(false);
     } else if (customFilterWeek) {
       setTimeFilter(null);
-      const start = DateTime.fromJSDate(new Date(customFilterWeek.start), { zone: 'local' }).startOf('day');
-      const end = DateTime.fromJSDate(new Date(customFilterWeek.end), { zone: 'local' }).endOf('day');
+      const start = dayIn(customFilterWeek.start, customFilterWeek.zone).startOf('day');
+      const end = dayIn(customFilterWeek.end, customFilterWeek.zone).endOf('day');
       setCustomStartDate(start.toISO());
       setCustomEndDate(end.toISO());
       setTimeFilter('CUSTOM');
