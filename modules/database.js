@@ -501,9 +501,13 @@ async function connectDatabase(databaseUrl, broadcastStatus, uuidv4) {
         created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
         CONSTRAINT check_broker_item_status CHECK (status IN ('PENDING', 'BOOKED', 'MATCHED', 'DISMISSED')),
-        CONSTRAINT check_broker_item_kind CHECK (kind IN ('DEPOSIT', 'WITHDRAWAL', 'INTEREST', 'FEE', 'DIVIDEND', 'PAYMENT_IN_LIEU', 'WITHHOLDING_TAX', 'OTHER'))
+        CONSTRAINT check_broker_item_kind CHECK (kind IN ('DEPOSIT', 'WITHDRAWAL', 'INTEREST', 'FEE', 'DIVIDEND', 'PAYMENT_IN_LIEU', 'WITHHOLDING_TAX', 'EXCHANGE', 'OTHER'))
       );
     `);
+    // EXCHANGE: a leg of a currency conversion (modules/brokerCash.js
+    // conversionItems), for tables made before it existed.
+    await client.query(`ALTER TABLE broker_cash_items DROP CONSTRAINT IF EXISTS check_broker_item_kind`);
+    await client.query(`ALTER TABLE broker_cash_items ADD CONSTRAINT check_broker_item_kind CHECK (kind IN ('DEPOSIT', 'WITHDRAWAL', 'INTEREST', 'FEE', 'DIVIDEND', 'PAYMENT_IN_LIEU', 'WITHHOLDING_TAX', 'EXCHANGE', 'OTHER'))`);
     await client.query(`CREATE UNIQUE INDEX IF NOT EXISTS idx_broker_items_external ON broker_cash_items (source, external_id)`);
     await client.query(`CREATE INDEX IF NOT EXISTS idx_broker_items_account ON broker_cash_items (account_id, status)`);
     // The ledger rows an item booked, or the user's own entries it matched.

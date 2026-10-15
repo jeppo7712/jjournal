@@ -98,6 +98,7 @@ function parseCashItems(statements) {
                 exDate: flexDate(row.exDate),
             });
         }
+        items.push(...conversionItems(statement));
         for (const t of transferRows(statement)) {
             items.push({
                 brokerAccountId: String(t.row.accountId || statement.accountId || '').toUpperCase(),
@@ -113,6 +114,47 @@ function parseCashItems(statements) {
                 actionId: null,
                 exDate: null,
             });
+        }
+    }
+    return items;
+}
+
+/**
+ * Currency conversions: IBKR lists them as trades of asset category CASH
+ * in the Trades section ("EUR.USD": quantity in the first currency,
+ * proceeds in the second), not among the cash transactions. Each becomes
+ * an EXCHANGE item per currency, signed (bought +, sold −), and a FEE item
+ * when IBKR charged one, all with the same actionId: they're booked
+ * together. Execution rows only (a query can add summaries). Pure.
+ */
+function conversionItems(statement) {
+    const items = [];
+    for (const row of rowsOf(statement, 'Trades', 'Trade')) {
+        if (String(row.assetCategory || '').toUpperCase() !== 'CASH') continue;
+        if (row.levelOfDetail && String(row.levelOfDetail).toUpperCase() !== 'EXECUTION') continue;
+        const execId = String(row.ibExecID || row.tradeID || row.transactionID || '').trim();
+        const [base, quoteFromSymbol] = String(row.symbol || '').toUpperCase().split('.');
+        const quote = String(row.currency || quoteFromSymbol || '').toUpperCase();
+        const date = flexDate(row.dateTime || row.tradeDate);
+        const quantity = Math.abs(Number(row.quantity));
+        const sign = String(row.buySell || '').toUpperCase().startsWith('S') ? -1 : 1;
+        const price = Number(row.tradePrice);
+        if (!execId || !/^[A-Z]{3}$/.test(base || '') || !/^[A-Z]{3}$/.test(quote) || base === quote || !date || !(quantity > 0)) continue;
+        const proceeds = Number.isFinite(Number(row.proceeds)) && row.proceeds !== '' && row.proceeds !== undefined
+            ? Number(row.proceeds)
+            : -sign * quantity * price;
+        const brokerAccountId = String(row.accountId || statement.accountId || '').toUpperCase();
+        const description = `${sign > 0 ? 'Bought' : 'Sold'} ${quantity} ${base} at ${price} ${quote}`;
+        const item = (suffix, kind, currency, amount, text) => ({
+            brokerAccountId, externalId: `FX-${execId}-${suffix}`, brokerType: 'Currency conversion', kind, date,
+            currency, amount: Math.round(amount * 1e8) / 1e8, symbol: `${base}.${quote}`, description: text, actionId: `FX-${execId}`, exDate: null,
+        });
+        items.push(item(base, 'EXCHANGE', base, sign * quantity, description));
+        if (Math.abs(proceeds) > 0) items.push(item(quote, 'EXCHANGE', quote, proceeds, description));
+        const fee = Number(row.ibCommission);
+        if (Number.isFinite(fee) && Math.abs(fee) > 0) {
+            const feeCurrency = String(row.ibCommissionCurrency || quote).toUpperCase();
+            items.push(item('FEE', 'FEE', feeCurrency, -Math.abs(fee), `Conversion fee: ${description}`));
         }
     }
     return items;
@@ -361,6 +403,17 @@ function matchItems(items, rows, dividends = []) {
                 break;
             }
         }
+    }
+
+    // Currency conversions: each leg against the user's own exchange entry
+    // in that currency (EXCHANGE_IN for the one bought, EXCHANGE_OUT for the
+    // one sold), one-to-one.
+    for (const item of free(items).filter(i => i.kind === 'EXCHANGE')) {
+        const row = nearest(freeRows(r => r.type === (item.amount > 0 ? 'EXCHANGE_IN' : 'EXCHANGE_OUT')
+            && r.currency === item.currency
+            && cents(r.amount) === cents(item.amount)
+            && dayGap(r.date, item.date) <= MATCH_DAYS), item.date);
+        if (row) take([item], [row]);
     }
 
     // Fees, interest and other: one-to-one only.
@@ -641,6 +694,28 @@ async function bookDividendGroup(db, rootId, group, targetAccountId) {
     await syncDividendLedger(db, dividendId);
 }
 
+// A currency conversion's items (both legs, and its fee) as ledger rows:
+// EXCHANGE_OUT/EXCHANGE_IN linked as a pair, the way an exchange entered
+// on the Capital page is, and the fee as a FEE row.
+async function bookConversionGroup(db, group, accountId) {
+    const legs = [];
+    for (const item of group) {
+        const type = item.kind === 'EXCHANGE' ? (Number(item.amount) > 0 ? 'EXCHANGE_IN' : 'EXCHANGE_OUT') : (LEDGER_TYPE[item.kind] || 'OTHER');
+        const { rows } = await db.query(
+            `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, note)
+             VALUES ($1, $2::date::timestamp AT TIME ZONE 'UTC', $3, $4, $5, $6) RETURNING id`,
+            [accountId, toISODate(item.date_time), type, item.amount, item.currency, `IBKR: ${item.description || item.broker_type}`]
+        );
+        await linkRows(db, item.id, [rows[0].id]);
+        await db.query(`UPDATE broker_cash_items SET status = 'BOOKED', updated_at = NOW() WHERE id = $1`, [item.id]);
+        if (item.kind === 'EXCHANGE') legs.push(rows[0].id);
+    }
+    if (legs.length === 2) {
+        await db.query(`UPDATE cash_transactions SET transfer_pair_id = $2 WHERE id = $1`, [legs[0], legs[1]]);
+        await db.query(`UPDATE cash_transactions SET transfer_pair_id = $2 WHERE id = $1`, [legs[1], legs[0]]);
+    }
+}
+
 async function bookPlainItem(db, item, accountId) {
     const { rows } = await db.query(
         `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, note)
@@ -678,6 +753,14 @@ async function bookItems(db, rootId, itemIds, targetAccountId = null) {
                 ? await db.query(`SELECT *, ex_date::text AS ex_date_text FROM broker_cash_items WHERE account_id = $1 AND action_id = $2 AND status = 'PENDING'`, [rootId, key])
                 : { rows: [item] };
             await bookDividendGroup(db, rootId, group, targetAccountId);
+            group.forEach(i => done.add(i.id));
+            booked += group.length;
+        } else if (item.kind === 'EXCHANGE' || String(item.action_id || '').startsWith('FX-')) {
+            // A conversion goes in whole: both legs and its fee.
+            const { rows: group } = item.action_id
+                ? await db.query(`SELECT * FROM broker_cash_items WHERE account_id = $1 AND action_id = $2 AND status = 'PENDING' ORDER BY amount`, [rootId, item.action_id])
+                : { rows: [item] };
+            await bookConversionGroup(db, group, targetAccountId || rootId);
             group.forEach(i => done.add(i.id));
             booked += group.length;
         } else {
@@ -773,6 +856,7 @@ async function syncBrokerCash(pool, statements) {
 }
 
 module.exports = {
+    conversionItems,
     classifyCashType,
     parseCashItems,
     transferRows,
