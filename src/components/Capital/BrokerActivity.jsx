@@ -14,6 +14,9 @@ const KIND_LABELS = {
   DIVIDEND: 'Dividend',
   PAYMENT_IN_LIEU: 'Payment in lieu',
   WITHHOLDING_TAX: 'Tax withheld',
+  EXCHANGE: 'Currency exchange',
+  EXCHANGE_IN: 'exchange',
+  EXCHANGE_OUT: 'exchange',
   OTHER: 'Other',
 };
 

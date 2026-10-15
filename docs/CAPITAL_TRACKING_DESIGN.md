@@ -569,6 +569,20 @@ deposit or transfer rows like any deposit, so a transfer between two
 journal accounts the user entered as a transfer pair is matched on both
 sides.
 
+Currency conversions aren't Cash Transactions either: IBKR lists them as
+trades of asset category `CASH` in the Trades section (`EUR.USD`: the
+quantity in the first currency, the proceeds in the second, the fee in
+`ibCommissionCurrency`). Each execution comes into the inbox as an
+`EXCHANGE` item per currency, signed (bought +, sold −), and a `FEE` item
+when IBKR charged one, keyed `FX-<execID>-<currency>` / `FX-<execID>-FEE`
+and sharing `action_id` `FX-<execID>`. Booking any of them books all of
+them: the legs as `EXCHANGE_OUT`/`EXCHANGE_IN` linked by
+`transfer_pair_id`, like an exchange entered on the Capital page, and the
+fee as `FEE`. A leg matches the user's own exchange entry in its currency
+(`EXCHANGE_IN` for the one bought, `EXCHANGE_OUT` for the one sold, same
+amount, within three days). The query's Forex P/L Details and Forex
+Balances sections aren't read.
+
 ### Fees from IBKR
 
 A TWS import takes a fill's fee from the commission report TWS sends
