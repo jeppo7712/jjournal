@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect, useCallback } from 'react';
+import React, { useContext, useState, useEffect, useCallback, useRef } from 'react';
 import { TradeContext } from '../../context/TradeContext';
 import styles from './Capital.module.css';
 import { formatNumber } from '../../utils/numberFormat';
@@ -158,7 +158,16 @@ const Capital = () => {
     } catch (err) { notify(err.message); }
   };
 
-  const submitTransaction = async (e) => {
+  // One save at a time: a double click (or Enter twice) booked the same
+  // deposit, transfer or exchange twice.
+  const savingRef = useRef(false);
+  const oneAtATime = (fn) => async (e) => {
+    if (savingRef.current) { e?.preventDefault?.(); return; }
+    savingRef.current = true;
+    try { await fn(e); } finally { savingRef.current = false; }
+  };
+
+  const submitTransaction = oneAtATime(async (e) => {
     e.preventDefault();
     if (!txForm.amount || Number(txForm.amount) <= 0) { notify('Enter a positive amount.'); return; }
     try {
@@ -171,9 +180,9 @@ const Capital = () => {
       setTxForm(prev => ({ ...prev, amount: '', note: '' }));
       fetchAll();
     } catch (err) { notify(err.message); }
-  };
+  });
 
-  const submitTransfer = async (e) => {
+  const submitTransfer = oneAtATime(async (e) => {
     e.preventDefault();
     if (!transferForm.to_account_id) { notify('Choose a destination account.'); return; }
     if (!transferForm.amount || Number(transferForm.amount) <= 0) { notify('Enter a positive amount.'); return; }
@@ -187,9 +196,9 @@ const Capital = () => {
       setTransferForm(prev => ({ ...prev, amount: '', note: '' }));
       fetchAll();
     } catch (err) { notify(err.message); }
-  };
+  });
 
-  const submitExchange = async (e) => {
+  const submitExchange = oneAtATime(async (e) => {
     e.preventDefault();
     if (!exchangeForm.from_amount || Number(exchangeForm.from_amount) <= 0 || !exchangeForm.to_amount || Number(exchangeForm.to_amount) <= 0) {
       notify('Enter positive amounts on both sides.'); return;
@@ -212,7 +221,7 @@ const Capital = () => {
       setExchangeForm(prev => ({ ...prev, from_amount: '', to_amount: '', note: '' }));
       fetchAll();
     } catch (err) { notify(err.message); }
-  };
+  });
 
   const deleteTransaction = async (id) => {
     if (!await confirmDialog('Delete this cash transaction? A transfer\'s matching entry in the other account is deleted too.')) return;
@@ -246,7 +255,7 @@ const Capital = () => {
     });
   };
 
-  const submitDividend = async (e) => {
+  const submitDividend = oneAtATime(async (e) => {
     e.preventDefault();
     const gross = Number(dividendForm.gross_amount);
     const tax = dividendForm.withholding_tax === '' ? 0 : Number(dividendForm.withholding_tax);
@@ -268,7 +277,7 @@ const Capital = () => {
       resetDividendForm();
       fetchAll();
     } catch (err) { notify(err.message); }
-  };
+  });
 
   const deleteDividend = async (d) => {
     const msg = d.source === 'MANUAL'
@@ -291,7 +300,7 @@ const Capital = () => {
     } catch (err) { notify(err.message); }
   };
 
-  const submitHolding = async (e) => {
+  const submitHolding = oneAtATime(async (e) => {
     e.preventDefault();
     if (!holdingForm.name.trim() || !holdingForm.face_value || !holdingForm.purchase_price || !holdingForm.purchase_date) {
       notify('Name, face value, purchase price, and purchase date are required.');
@@ -314,7 +323,7 @@ const Capital = () => {
       setHoldingForm(prev => ({ ...prev, name: '', face_value: '', purchase_price: '', maturity_date: '', coupon_rate: '', coupon_frequency: '', notes: '' }));
       fetchAll();
     } catch (err) { notify(err.message); }
-  };
+  });
 
   const redeemHolding = async (holding) => {
     const input = await promptDialog(`Redemption amount for "${holding.name}" (${holding.currency}):`, holding.face_value, { title: "Redeem holding", confirmLabel: "Redeem" });
