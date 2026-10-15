@@ -593,9 +593,16 @@ function getTimeRange(filter, customStartDate, customEndDate) {
   const setStartOfDay = dt => dt.startOf('day');
 
   if (filter === 'CUSTOM' && customStartDate && customEndDate) {
+    // Whole days. A time with its own offset (the Stats calendar's day in
+    // the exchange's zone) is a day in that offset: snapped to local days,
+    // a New York day spanned two days here. Plain dates and UTC ("Z") times
+    // (saved filters, the default range) are local days.
+    const day = value => (/[+-]\d{2}:\d{2}$/.test(String(value))
+      ? DateTime.fromISO(value, { setZone: true })
+      : DateTime.fromISO(value, { zone: 'local' }));
     return {
-      start: DateTime.fromISO(customStartDate, { zone: 'local' }).startOf('day'),
-      end: DateTime.fromISO(customEndDate, { zone: 'local' }).endOf('day')
+      start: day(customStartDate).startOf('day'),
+      end: day(customEndDate).endOf('day')
     };
   }
 
