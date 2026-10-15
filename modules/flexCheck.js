@@ -20,7 +20,7 @@ const QUERY_SPECS = {
                 section: 'Trades', row: 'Trade', label: 'Trades', need: 'required',
                 purpose: 'importing your trades',
                 fields: ['symbol', 'dateTime', 'buySell', 'quantity', 'tradePrice', 'ibCommission', 'ibExecID'],
-                recommended: ['accountId', 'assetCategory', 'currency', 'listingExchange', 'expiry', 'underlyingSymbol', 'ibOrderID'],
+                recommended: ['accountId', 'assetCategory', 'currency', 'listingExchange', 'expiry', 'underlyingSymbol', 'ibOrderID', 'ibCommissionCurrency'],
             },
             {
                 section: 'CashTransactions', row: 'CashTransaction', label: 'Cash Transactions', need: 'recommended',
@@ -59,7 +59,7 @@ const QUERY_SPECS = {
                 section: 'TradeConfirms', row: 'TradeConfirm', label: 'Trade Confirmations', need: 'required',
                 purpose: 'importing today\'s trades',
                 fields: ['symbol', 'dateTime', 'buySell', 'quantity', 'price', 'commission', 'execID'],
-                recommended: ['accountId', 'assetCategory', 'currency', 'listingExchange', 'expiry'],
+                recommended: ['accountId', 'assetCategory', 'currency', 'listingExchange', 'expiry', 'commissionCurrency'],
             },
         ],
     },

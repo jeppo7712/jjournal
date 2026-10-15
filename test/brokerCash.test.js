@@ -106,7 +106,7 @@ const statusOf = (checks, label) => checks.find(c => c.label === label)?.status;
 
 test('query check: a complete Activity query passes', () => {
   const trade = Object.fromEntries(['accountId', 'assetCategory', 'symbol', 'underlyingSymbol', 'currency', 'listingExchange', 'expiry',
-    'dateTime', 'buySell', 'quantity', 'tradePrice', 'ibCommission', 'ibExecID', 'ibOrderID'].map(f => [f, 'x']));
+    'dateTime', 'buySell', 'quantity', 'tradePrice', 'ibCommission', 'ibExecID', 'ibOrderID', 'ibCommissionCurrency'].map(f => [f, 'x']));
   trade.dateTime = '20260910;101500';
   trade.levelOfDetail = 'EXECUTION';
   const checks = checkFlexQuery({
