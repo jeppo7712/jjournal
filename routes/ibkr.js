@@ -82,8 +82,12 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
       logger.debug(`[IBKR fetchExecutions] filter time: ${execFilter.time}`);
 
       let executionData = [];
+      // TWS also sends fills as they happen (reqId -1), of any symbol, and
+      // errors of other requests on this connection: only this request's.
+      const execReqId = generateIbReqId();
 
       execDetailsHandler = (reqId, contract, execution) => {
+        if (reqId !== execReqId) return;
         logger.debug('[DEBUG] execDetails orderId=%d parentId=%d symbol=%s side=%s qty=%d price=%d',
           execution.orderId, execution.permId, contract.symbol, execution.side, execution.shares, execution.price);
         // The filter above only narrows by ticker; the same ticker can be a
@@ -112,8 +116,19 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
       // late ones, and those another import running at the same time still
       // needed: the fill was saved with fee 0. Wait until every fill has its
       // report (at most COMMISSION_WAIT_MS), and take out only these fills'.
-      ibkr.getIbApi().once(EventName.execDetailsEnd, () => {
-        if (execDetailsHandler) ibkr.getIbApi().off(EventName.execDetails, execDetailsHandler);
+      const ibApi = ibkr.getIbApi();
+      const onError = (err, code, reqId) => {
+        if (reqId !== execReqId) return;
+        ibApi.off(EventName.execDetails, execDetailsHandler);
+        ibApi.off(EventName.execDetailsEnd, onEnd);
+        ibApi.off(EventName.error, onError);
+        reject(new Error(`IBKR execution error (code ${code}): ${err.message}`));
+      };
+      const onEnd = (reqId) => {
+        if (reqId !== execReqId) return;
+        ibApi.off(EventName.execDetails, execDetailsHandler);
+        ibApi.off(EventName.execDetailsEnd, onEnd);
+        ibApi.off(EventName.error, onError);
         const startedAt = Date.now();
         const settle = () => {
           const missing = executionData.filter(exec => ibkr.commissionMap.get(exec.execId) === undefined);
@@ -139,14 +154,11 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
           resolve(updated);
         };
         setTimeout(settle, 250);
-      });
+      };
+      ibApi.on(EventName.execDetailsEnd, onEnd);
+      ibApi.on(EventName.error, onError);
 
-      ibkr.getIbApi().once(EventName.error, (err, code) => {
-        if (execDetailsHandler) ibkr.getIbApi().off(EventName.execDetails, execDetailsHandler);
-        reject(new Error(`IBKR execution error (code ${code}): ${err.message}`));
-      });
-
-      ibkr.getIbApi().reqExecutions(generateIbReqId(), execFilter);
+      ibApi.reqExecutions(execReqId, execFilter);
     });
   }
 
@@ -239,16 +251,21 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
 
       ibkr.getIbApi().on(EventName.openOrder, openOrderHandler);
 
-      ibkr.getIbApi().once(EventName.openOrderEnd, () => {
-        if (openOrderHandler) ibkr.getIbApi().off(EventName.openOrder, openOrderHandler);
+      // Taken off when done: left on, it rejected on the connection's next
+      // error, and the listeners piled up with every import.
+      const onError = (err, code) => {
+        ibkr.getIbApi().off(EventName.openOrder, openOrderHandler);
+        ibkr.getIbApi().off(EventName.openOrderEnd, onEnd);
+        reject(new Error(`IBKR open orders error (code ${code}): ${err.message}`));
+      };
+      const onEnd = () => {
+        ibkr.getIbApi().off(EventName.openOrder, openOrderHandler);
+        ibkr.getIbApi().off(EventName.error, onError);
         logger.debug(`[IBKR fetchOpenOrders] got ${orders.length} open orders`);
         resolve(orders);
-      });
-
-      ibkr.getIbApi().once(EventName.error, (err, code) => {
-        if (openOrderHandler) ibkr.getIbApi().off(EventName.openOrder, openOrderHandler);
-        reject(new Error(`IBKR open orders error (code ${code}): ${err.message}`));
-      });
+      };
+      ibkr.getIbApi().once(EventName.openOrderEnd, onEnd);
+      ibkr.getIbApi().once(EventName.error, onError);
 
       // reqAllOpenOrders returns ALL open orders (including manually placed TWS orders)
       // This ensures bracket children from the TWS GUI have their parentId correctly set
