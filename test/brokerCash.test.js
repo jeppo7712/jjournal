@@ -319,3 +319,18 @@ test('currency conversions: an exchange entered by hand matches its legs', () =>
   const matches = matchItems(items, rows);
   assert.deepEqual(matches.map(m => [m.itemIds, m.rowIds]), [[[1], [11]], [[2], [10]]]);
 });
+
+test('currency conversions: the other leg follows the user\'s exchange pair, cents off', () => {
+  const { matchItems } = require('../modules/brokerCash.js');
+  const items = [
+    { id: 1, kind: 'EXCHANGE', date: '2026-10-20', currency: 'EUR', amount: 1000, actionId: 'FX-a' },
+    { id: 2, kind: 'EXCHANGE', date: '2026-10-20', currency: 'USD', amount: -1080, actionId: 'FX-a' },
+  ];
+  const rows = [
+    { id: 10, type: 'EXCHANGE_OUT', date: '2026-10-20', currency: 'USD', amount: -1079.99, transferPairId: 11 },
+    { id: 11, type: 'EXCHANGE_IN', date: '2026-10-20', currency: 'EUR', amount: 1000, transferPairId: 10 },
+  ];
+  assert.deepEqual(matchItems(items, rows).map(m => [m.itemIds, m.rowIds]), [[[1], [11]], [[2], [10]]]);
+  // Without the pair link it stays waiting.
+  assert.deepEqual(matchItems(items, rows.map(r => ({ ...r, transferPairId: null }))).map(m => [m.itemIds, m.rowIds]), [[[1], [11]]]);
+});

@@ -415,6 +415,20 @@ function matchItems(items, rows, dividends = []) {
             && dayGap(r.date, item.date) <= MATCH_DAYS), item.date);
         if (row) take([item], [row]);
     }
+    // The other leg of a conversion whose first leg matched one side of the
+    // user's exchange pair: the other side, even a few cents off (entered
+    // by hand from the confirmation). Left in the inbox it'd be booked on
+    // top of the user's own entry.
+    for (const item of free(items).filter(i => i.kind === 'EXCHANGE' && i.actionId)) {
+        const sibling = matches.find(m => m.rowIds.length === 1 && m.itemIds.some(id => {
+            const other = items.find(i => i.id === id);
+            return other && other.kind === 'EXCHANGE' && other.actionId === item.actionId;
+        }));
+        const matchedRow = sibling && rows.find(r => r.id === sibling.rowIds[0]);
+        const pairRow = matchedRow && matchedRow.transferPairId
+            && freeRows(r => r.id === matchedRow.transferPairId && r.currency === item.currency && Math.sign(r.amount) === Math.sign(item.amount))[0];
+        if (pairRow) take([item], [pairRow]);
+    }
 
     // Fees, interest and other: one-to-one only.
     for (const item of free(items).filter(i => ['FEE', 'INTEREST', 'OTHER'].includes(i.kind))) {
@@ -598,7 +612,7 @@ async function matchPending(db, rootId) {
     );
     if (pending.length === 0) return 0;
     const { rows: ledger } = await db.query(
-        `SELECT ct.id, ct.type, ct.date_time, ct.currency, ct.amount FROM cash_transactions ct
+        `SELECT ct.id, ct.type, ct.date_time, ct.currency, ct.amount, ct.transfer_pair_id FROM cash_transactions ct
          WHERE ct.account_id = ANY($1) AND ct.linked_trade_id IS NULL AND ct.linked_dividend_id IS NULL
            AND ct.linked_holding_id IS NULL
            AND NOT EXISTS (SELECT 1 FROM broker_item_links l WHERE l.cash_transaction_id = ct.id)`,
@@ -612,7 +626,7 @@ async function matchPending(db, rootId) {
     );
     const matches = matchItems(
         pending.map(p => ({ id: p.id, kind: p.kind, date: toISODate(p.date_time), currency: p.currency, amount: Number(p.amount), symbol: p.symbol, actionId: p.action_id })),
-        ledger.map(r => ({ id: r.id, type: r.type, date: toISODate(r.date_time), currency: r.currency, amount: Number(r.amount) })),
+        ledger.map(r => ({ id: r.id, type: r.type, date: toISODate(r.date_time), currency: r.currency, amount: Number(r.amount), transferPairId: r.transfer_pair_id })),
         ownDividends.map(d => ({ id: d.id, symbol: d.symbol, currency: d.currency, payDate: d.pay_date, gross: Number(d.gross_amount) }))
     );
     let count = 0;
