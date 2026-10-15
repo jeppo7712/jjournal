@@ -728,7 +728,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
       const endpoint = historical ? 'trade-groups-flex' : 'trade-groups';
       const refreshParam = historical && forceRefresh ? '&refresh=true' : '';
       const res = await fetch(
-        `${process.env.REACT_APP_API_URL}/api/ibkr/${endpoint}?symbol=${form.symbol}&type=${form.type}${refreshParam}`,
+        `${process.env.REACT_APP_API_URL}/api/ibkr/${endpoint}?symbol=${encodeURIComponent(form.symbol)}&type=${encodeURIComponent(form.type)}${refreshParam}`,
         // trade-groups-flex needs to know which account this is for, to pick
         // that account's paper-vs-real Flex Query credentials (see
         // routes/ibkr.js). Harmless no-op for the TWS-live endpoint.
