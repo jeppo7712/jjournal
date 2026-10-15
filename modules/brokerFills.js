@@ -82,7 +82,7 @@ function parseFills(statements, futuresRoots = new Set()) {
         side: String(row.buySell || '').toUpperCase().startsWith('S') ? 'SELL' : 'BUY',
         quantity,
         price,
-        commission: Math.abs(Number(row.ibCommission ?? row.commission ?? 0)) || 0,
+        commission: commissionOf(row),
         commissionCurrency: String(row.ibCommissionCurrency || row.commissionCurrency || '').toUpperCase() || null,
         currency: String(row.currency || '').toUpperCase() || null,
         exchange: String(row.listingExchange || row.exchange || '').toUpperCase() || null,
@@ -91,6 +91,16 @@ function parseFills(statements, futuresRoots = new Set()) {
     }
   }
   return [...fills.values()];
+}
+
+// IBKR's fee for a fill, positive; null when the query doesn't have the
+// field (a Trade Confirmation query without Commission): an unknown fee,
+// not a zero one, or the fee check would set the journal's fees to 0.
+function commissionOf(row) {
+  const raw = row.ibCommission ?? row.commission;
+  if (raw === undefined || raw === null || String(raw).trim() === '') return null;
+  const value = Math.abs(Number(raw));
+  return Number.isFinite(value) ? value : null;
 }
 
 // One credential set's statements: Trade Confirmation every scan, Activity
@@ -147,8 +157,10 @@ async function scanBrokerFills(pool) {
          VALUES ($1, 'IBKR', $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15)
          ON CONFLICT (source, exec_id) DO UPDATE SET commission = EXCLUDED.commission, commission_currency = EXCLUDED.commission_currency,
                                                      updated_at = NOW()
-           WHERE broker_fills.commission IS DISTINCT FROM EXCLUDED.commission
-              OR broker_fills.commission_currency IS DISTINCT FROM EXCLUDED.commission_currency
+           -- A statement without the fee leaves the one already known.
+           WHERE EXCLUDED.commission IS NOT NULL
+             AND (broker_fills.commission IS DISTINCT FROM EXCLUDED.commission
+              OR broker_fills.commission_currency IS DISTINCT FROM EXCLUDED.commission_currency)
          RETURNING (xmax = 0) AS inserted`,
         [account.id, f.execId, f.brokerAccountId, f.type, f.symbol, f.rawSymbol, f.contractMonth,
          f.side, f.quantity, f.price, f.commission, f.currency, f.exchange, f.dateTime, f.commissionCurrency]

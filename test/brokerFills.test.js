@@ -51,3 +51,12 @@ test('Activity rows: one per execution, other asset types and summaries left out
   assert.equal(fills[0].quantity, 10);
   assert.equal(fills[0].contractMonth, null);
 });
+
+test('a query without the commission field gives an unknown fee, not a zero one', () => {
+  const row = tradeConfirm();
+  delete row.commission;
+  const [fill] = parseFills([{ accountId: 'DU1000002', TradeConfirms: { TradeConfirm: row } }], new Set(['MES']));
+  assert.equal(fill.commission, null);
+  const [free] = parseFills([{ accountId: 'DU1000002', TradeConfirms: { TradeConfirm: tradeConfirm({ commission: '0' }) } }], new Set(['MES']));
+  assert.equal(free.commission, 0);
+});

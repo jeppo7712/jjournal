@@ -286,10 +286,11 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
     return status;
   };
 
-  // Reset to page 1 when filtered items change
+  // Reset to page 1 when filtered items or the page size change (a bigger
+  // page size left page 3 of 1, empty).
   useEffect(() => {
     setCurrentPage(1);
-  }, [safeFilteredItems.length, setCurrentPage]);
+  }, [safeFilteredItems.length, tradesPerPage, setCurrentPage]);
 
   // Calculate pagination
   const totalTrades = safeFilteredItems.length;
