@@ -282,6 +282,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   // Both follow the Dashboard's Sub-accounts toggle (scopedTrades), like the
   // trade list: a parent like "IB Main" with no trades of its own shows its
   // sub-accounts' P&L and positions.
+  const sideSign = trade => (trade.side === 'SHORT' ? -1 : 1);
   const totalMarketValueByCurrency = sumByCurrency(
     (Array.isArray(scopedTrades) ? scopedTrades : []).filter(trade =>
       trade.status === 'OPEN' &&
@@ -292,7 +293,8 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
     // FUT contracts aren't worth their raw quoted price per unit (e.g. an ES
     // point isn't a dollar) — scale by the same tick multiplier every PnL
     // formula in this file uses. STK keeps multiplier 1, so unaffected.
-    trade => trade.position * trade.currentPrice * getTickMultiplier(trade)
+    // position is unsigned: a short is worth minus its value.
+    trade => sideSign(trade) * trade.position * trade.currentPrice * getTickMultiplier(trade)
   );
 
   // Realised (closed trades' return, plus open trades' realised-so-far) *and*
@@ -331,7 +333,9 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
     .filter(t => t.status === 'OPEN' && (t.type === 'STK' || t.type === 'FUT'));
   const stkMarketValueByCurrency = sumByCurrency(
     openTrades.filter(t => t.type === 'STK' && typeof t.position === 'number' && typeof t.currentPrice === 'number'),
-    t => t.position * t.currentPrice
+    // A short stock is a debt of its value: the sale's cash is already in
+    // Cash, so counting it positive would add it twice.
+    t => sideSign(t) * t.position * t.currentPrice
   );
   const futUnrealisedByCurrency = sumByCurrency(
     openTrades.filter(t => t.type === 'FUT'),
