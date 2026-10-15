@@ -1,6 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { logger } = require('../modules/logger.js');
+const { resettleTrades } = require('../modules/tradeSettlement.js');
 
 // A parent/child group represents one real broker account (see the
 // cash_balances roll-up in GET / below) — is_virtual, custodian, and
@@ -193,6 +194,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
             const brokerIdSent = Object.prototype.hasOwnProperty.call(req.body, 'broker_account_id');
             const brokerAccountId = parentId ? null : (String(req.body.broker_account_id || '').trim().toUpperCase() || null);
 
+            const { rows: [before] } = await pool.query('SELECT parent_account_id FROM accounts WHERE id = $1', [id]);
             const { rowCount } = await pool.query(
                 `UPDATE accounts SET name=$1,
                     parent_account_id = $2,
@@ -214,6 +216,30 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
                 custodian: effectiveCustodian,
                 custodian_is_us: effectiveCustodianIsUs,
             });
+
+            // Under another top-level account, another opening balance date
+            // (opening_covers_before) decides which fills book cash: rebuild
+            // the cash of this account's and its sub-accounts' trades.
+            if (String(before?.parent_account_id ?? '') !== String(parentId ?? '')) {
+                const client = await pool.connect();
+                try {
+                    await client.query('BEGIN');
+                    const { rows: trades } = await client.query(
+                        `WITH RECURSIVE tree AS (
+                            SELECT id FROM accounts WHERE id = $1
+                            UNION SELECT a.id FROM accounts a JOIN tree t ON a.parent_account_id = t.id
+                        ) SELECT id FROM trades WHERE account_id IN (SELECT id FROM tree)`,
+                        [id]
+                    );
+                    await resettleTrades(client, trades.map(t => t.id));
+                    await client.query('COMMIT');
+                } catch (err) {
+                    await client.query('ROLLBACK').catch(() => {});
+                    throw err;
+                } finally {
+                    client.release();
+                }
+            }
 
             broadcastStatus(uuidv4(), `Updated account ID ${id} to ${name}`, 'success');
             res.json({ success: true });

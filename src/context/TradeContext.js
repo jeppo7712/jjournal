@@ -410,9 +410,11 @@ async function fetchCurrentPrice(symbol, type) {
 }
 
 // Day notes from the API, ready for the list (dates local, type 'dayNote').
+// A note is for a calendar day: midnight of that day here. The API sends
+// UTC midnight, which west of UTC is still the day before.
 function processDayNotes(data) {
   return Array.isArray(data) ? data.map(note => {
-    const date = DateTime.fromISO(note.date, { zone: 'utc' }).toLocal();
+    const date = DateTime.fromISO(String(note.date).slice(0, 10));
     return { ...note, date, type: 'dayNote', openDate: formatDate(date), firstActionDate: date };
   }) : [];
 }

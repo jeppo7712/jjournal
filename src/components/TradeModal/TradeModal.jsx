@@ -921,7 +921,11 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
           headers: { 'X-Account-ID': tradeAccountId },
           body: formData
         });
-        const data = await resp.json();
+        const data = await resp.json().catch(() => ({}));
+        // Saving on without it would drop the screenshot without a word.
+        if (!resp.ok || !data.attachment_id) {
+          throw new Error(`the screenshot ${attachments[i].file.name || ''} could not be uploaded${data.error ? ` (${data.error})` : ''}; nothing was saved`);
+        }
         attachments[i].attachment_id = data.attachment_id;
       }
     }
