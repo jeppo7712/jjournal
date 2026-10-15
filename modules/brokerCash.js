@@ -503,7 +503,16 @@ async function balanceCheck(db, rootId) {
  * on the top-level account: a visible ledger entry the user can delete.
  * Only ever on request.
  */
+// One change to an account's broker items or IBKR alignment at a time, until
+// the transaction ends: two Aligns at once (a double click, two tabs) each
+// booked the same difference, and a booking alongside the sync's could book
+// an item twice. Within a transaction (db is a client in one).
+async function lockBrokerAccount(db, rootId) {
+    await db.query(`SELECT pg_advisory_xact_lock(hashtext('jjournal_broker_cash'), $1::int)`, [rootId]);
+}
+
 async function alignBalance(db, rootId, currency) {
+    await lockBrokerAccount(db, rootId);
     const row = (await balanceCheck(db, rootId)).find(b => b.currency === currency);
     if (!row) throw new Error(`IBKR reported no ${currency} cash for this account`);
     if (row.inLine) return { amount: 0, row };
@@ -650,6 +659,7 @@ async function bookPlainItem(db, item, accountId) {
  * for a dividend the account that holds the stock.
  */
 async function bookItems(db, rootId, itemIds, targetAccountId = null) {
+    await lockBrokerAccount(db, rootId);
     if (targetAccountId) {
         const ids = await treeAccountIds(db, rootId);
         if (!ids.map(String).includes(String(targetAccountId))) throw new Error('That account is not part of this broker account');
@@ -708,6 +718,7 @@ async function syncBrokerCash(pool, statements) {
         const client = await pool.connect();
         try {
             await client.query('BEGIN');
+            await lockBrokerAccount(client, account.id);
             const from = account.broker_sync_from ? toISODate(account.broker_sync_from) : await defaultSyncFrom(client, account.id);
             if (!account.broker_sync_from) {
                 await client.query(`UPDATE accounts SET broker_sync_from = $2 WHERE id = $1`, [account.id, from]);
