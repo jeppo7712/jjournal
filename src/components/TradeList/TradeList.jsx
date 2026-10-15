@@ -9,6 +9,7 @@ import { useTags } from '../../context/TagsContext';
 import { formatMoney, currencyMark } from '../../utils/formatMoney';
 import { formatNumber } from '../../utils/numberFormat';
 import { sumByCurrency, formatTotals, toTotalsList } from '../../utils/currencyTotals';
+import { openedInPosition } from '../../utils/lots';
 
 // An open position valued at a stored price (Yahoo had none): its return is
 // marked, with the price's time on hover.
@@ -86,7 +87,7 @@ function tradeSize(item) {
   }
   const held = Number(item.position);
   if (!Number.isFinite(held)) return { text: '-', held: '-' };
-  const opened = Number(item.side === 'SHORT' ? item.sellQty : item.buyQty) || held;
+  const opened = openedInPosition(item.actions) || held;
   const closed = opened - held;
   if (closed > 0) {
     return {

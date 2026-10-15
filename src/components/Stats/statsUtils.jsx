@@ -563,7 +563,7 @@ export const computePortfolioValueSeries = (trades, historicalDataMap) => {
     const steps = matchLotsFIFO(t, multiplier).timeline
       .map(step => ({ ...step, at: toDT(step.dateTime) }))
       .filter(step => step.at && step.at.isValid);
-    return { trade: t, multiplier, sign: t.side === 'SHORT' ? -1 : 1, steps, next: 0 };
+    return { trade: t, multiplier, steps, next: 0 };
   });
   // Trades whose side can't be replayed (no fills) still count their
   // return on the closing date, as before.
@@ -598,9 +598,11 @@ export const computePortfolioValueSeries = (trades, historicalDataMap) => {
       const close = closes && closes.get ? closes.get(dateISO) : undefined;
       if (typeof close === 'number' && !isNaN(close)) lastClose[symbol] = close;
       const price = lastClose[symbol] ?? state.price;
-      const open = r.sign * (price * state.openQty - state.openCost) * r.multiplier - state.openFee;
+      // The position's own side at that point: a flip changes it.
+      const sign = state.sign || 1;
+      const open = sign * (price * state.openQty - state.openCost) * r.multiplier - state.openFee;
       unrealized += open;
-      positionValue += r.trade.type === 'FUT' ? open : r.sign * price * state.openQty * r.multiplier;
+      positionValue += r.trade.type === 'FUT' ? open : sign * price * state.openQty * r.multiplier;
     });
     unreplayable.forEach(t => {
       const closedAt = toDT(t.lastActionDate);

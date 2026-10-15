@@ -18,6 +18,7 @@ import TradeFormChart from './TradeFormChart';
 import { formatNumber } from '../../utils/numberFormat';
 import { currencyMark } from '../../utils/formatMoney';
 import { notify, confirmDialog, choiceDialog } from '../common/Dialogs';
+import { replayLots } from '../../utils/lots';
 
 // Prices, sizes and fees from IBKR as they came, in the number format
 // setting: their own decimals (trailing zeros dropped), '—' when missing.
@@ -394,11 +395,18 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
       fees += num(a.fee);
     });
     const ordered = [...valid].sort((x, y) => (x.dateTime?.toMillis?.() || 0) - (y.dateTime?.toMillis?.() || 0));
-    const side = ordered[0].type === 'BUY' ? 'LONG' : 'SHORT';
-    const entryQty = side === 'LONG' ? buyQty : sellQty;
-    const avgEntry = entryQty ? (side === 'LONG' ? buySum : sellSum) / entryQty : null;
     const openQty = Math.abs(buyQty - sellQty);
     const multiplier = form.type === 'FUT' && num(form.tickSize) && num(form.tickValue) ? num(form.tickValue) / num(form.tickSize) : 1;
+    // Still open: the open lots' side and average (after a flip, the new
+    // side's). Flat: the first fill's side and the average of its side.
+    const lots = replayLots(ordered.map(a => ({ type: a.type, quantity: num(a.quantity), price: num(a.price), fee: num(a.fee), dateTime: a.dateTime })), multiplier);
+    const openSide = lots.sign > 0 ? 'LONG' : lots.sign < 0 ? 'SHORT' : null;
+    const side = openSide || (ordered[0].type === 'BUY' ? 'LONG' : 'SHORT');
+    const entryQty = side === 'LONG' ? buyQty : sellQty;
+    const openLotsQty = lots.openLots.reduce((sum, lot) => sum + lot.quantity, 0);
+    const avgEntry = openSide && openLotsQty
+      ? lots.openLots.reduce((sum, lot) => sum + lot.price * lot.quantity, 0) / openLotsQty
+      : entryQty ? (side === 'LONG' ? buySum : sellSum) / entryQty : null;
     const isFlat = openQty < 1e-9 && buyQty > 0;
     const pnl = isFlat ? (sellSum - buySum) * multiplier - fees : null;
     const stop = num(form.stopLoss), target = num(form.target);
@@ -423,10 +431,11 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
     tickValue: form.tickValue === '' || !onlyNumber(form.tickValue),
   };
 
-  // Not an error (saving still works), just a heads-up: side, P&L and
-  // return % assume one position per trade, opened and closed once. A trade
-  // whose position goes flat or flips side before its last fill (long,
-  // flat, then short) gets its side from the last leg only.
+  // Not an error (saving still works), just a heads-up: P&L and cash
+  // follow every leg (src/utils/lots.js), but side, R-multiple and return %
+  // assume one position per trade, opened and closed once. A trade whose
+  // position goes flat or flips side before its last fill (long, flat, then
+  // short) gets its side from one leg only.
   const positionReentryWarning = useMemo(() => {
     const ordered = actions
       .filter(a => a.dateTime && a.dateTime.isValid && a.quantity !== '' && Number(a.quantity) > 0)
@@ -437,7 +446,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
       position += (ordered[i].type === 'BUY' ? 1 : -1) * Number(ordered[i].quantity);
       const flippedSide = (before > 0 && position < 0) || (before < 0 && position > 0);
       if (Math.abs(position) < 1e-9 || flippedSide) {
-        return 'The position goes flat or switches side before the last fill. Side, P&L and return % treat a trade as one position — consider logging each position as its own trade.';
+        return 'The position goes flat or switches side before the last fill. P&L and cash count every leg, but side, R-multiple and return % treat a trade as one position — consider logging each position as its own trade.';
       }
     }
     return null;
@@ -684,6 +693,9 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
       // The currency IBKR charged the fee in; without it, the symbol's.
       feeCurrency: exec.commissionCurrency || symbolCurrency,
       contractMonth: exec.contractMonth || null,
+      // Part of a fill that flipped the position, split by the import
+      // (routes/ibkr.js): the fill's own execution ID.
+      splitOf: exec.splitOf || null,
     };
   };
 
@@ -768,11 +780,11 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
       const forImport = importFills?.execIds?.length
         && String(form.symbol).toUpperCase() === String(importFills.symbol).toUpperCase() && form.type === importFills.type;
       const focus = forImport ? new Set(importFills.execIds) : null;
-      const inFocus = execs => execs.some(e => focus.has(e.execId));
+      const inFocus = execs => execs.some(e => focus.has(e.execId) || (e.splitOf && focus.has(e.splitOf)));
       setIbkrGroups(focus
         ? groups.filter(g => inFocus([...g.entryExecutions, ...g.tpExecutions, ...g.slExecutions, ...g.otherChildren.flatMap(c => c.executions)]))
         : groups);
-      setIbkrOrphans(focus ? orphans.filter(e => focus.has(e.execId)) : orphans);
+      setIbkrOrphans(focus ? orphans.filter(e => focus.has(e.execId) || (e.splitOf && focus.has(e.splitOf))) : orphans);
     } catch (err) {
       console.error('Error fetching IBKR trade groups:', err);
       setIbkrError(err.message);

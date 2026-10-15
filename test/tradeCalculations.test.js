@@ -98,6 +98,21 @@ test('FIFO realised P&L per closing fill', () => {
     assert.equal(realized.has(0), false);
 });
 
+test('FIFO realised P&L per closing fill, across a flip', () => {
+    const { settlementEntries } = require('../modules/tradeCalculations.js');
+    const actions = [
+        action('BUY', '2026-01-05T15:00:00Z', 1, 100),
+        action('SELL', '2026-01-06T15:00:00Z', 2, 110), // closes the long, opens 1 short
+        action('BUY', '2026-01-07T15:00:00Z', 1, 105),  // closes the short
+    ];
+    const realized = computeFuturesRealizedPnLPerAction('LONG', actions, 2);
+    assert.equal(realized.get(1), 20);
+    assert.equal(realized.get(2), 10);
+    // The cash: every fill's realised P&L (no fees here), the trade's total.
+    const entries = settlementEntries('FUT', actions, 0.25, 0.5);
+    assert.deepEqual(entries.map(e => e.amount), [20, 10]);
+});
+
 test('symbol settings resolution', () => {
     assert.equal(getFuturesSetting('MNQZ5', 'FUT', futuresSettings).symbol, 'MNQ');
     assert.equal(getFuturesSetting('ESZ5', 'FUT', futuresSettings).symbol, 'DEFAULT');

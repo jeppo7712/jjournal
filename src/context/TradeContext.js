@@ -5,6 +5,7 @@ import { formatNumber } from '../utils/numberFormat';
 import { useTags } from './TagsContext';
 import { matchesTagFilter } from '../utils/tagFilter';
 import { descendantAccountIds } from '../utils/accountTree';
+import { replayLots, maxPosition } from '../utils/lots';
 
 // The trade list's hideable columns, in display order (TradeList.jsx renders
 // them and its header's column picker toggles them, per account).
@@ -77,70 +78,15 @@ export function getTickMultiplier(trade) {
   return tickValue !== 0 && tickSize !== 0 ? tickValue / tickSize : 1;
 }
 
-// FIFO-matches a trade's actions against each other (opening action type
-// depends on side: BUY for LONG, SELL for SHORT). Returns the realised PnL
-// from closed portions plus whatever lots remain open (used by callers that
-// need the open cost basis for unrealised PnL, e.g. updateTradePriceData).
-// `timeline` is the position's state after each fill (open quantity, open
-// cost, entry fee still carried by open lots, realised PnL so far, fill
-// price) — Stats uses it to value a position on any past day and to date
-// the P&L locked in by partial closes of a still-open trade.
+// FIFO-matches a trade's fills (src/utils/lots.js): the realised P&L of
+// closed portions, the lots still open (for the open cost basis, e.g.
+// updateTradePriceData), the open position's sign, and the position after
+// each fill (`timeline`) — Stats uses it to value a position on any past
+// day and to date the P&L locked in by partial closes of a still-open
+// trade. Each lot carries its own side, so a trade entered with a flip
+// (long 1, then sell 2) is matched right; trade.side isn't used.
 export function matchLotsFIFO(trade, tickMultiplier) {
-  const openLots = [];
-  const timeline = [];
-  let realisedPnL = 0;
-  const actions = Array.isArray(trade.actions) ? trade.actions : [];
-  if (trade.side !== 'LONG' && trade.side !== 'SHORT') return { realisedPnL, openLots, timeline };
-
-  const openingType = trade.side === 'LONG' ? 'BUY' : 'SELL';
-  const closingType = trade.side === 'LONG' ? 'SELL' : 'BUY';
-  const sign = trade.side === 'LONG' ? 1 : -1;
-
-  actions.forEach(action => {
-    if (action.type === openingType) {
-      openLots.push({
-        quantity: Number(action.quantity || 0),
-        price: Number(action.price || 0),
-        fee: Number(action.fee || 0),
-      });
-    } else if (action.type === closingType) {
-      // Fixed at the fill's own total so the exit-fee split doesn't shrink as
-      // this fill eats into successive lots (see bug writeup below).
-      const totalCloseQty = Number(action.quantity || 0);
-      let closeQty = totalCloseQty;
-      while (closeQty > 0 && openLots.length > 0) {
-        const lot = openLots[0];
-        const qtyToClose = Math.min(lot.quantity, closeQty);
-        // Proportion of this lot's entry fee attributable to the quantity being
-        // closed right now, based on whatever quantity/fee the lot has left.
-        const entryFeeSlice = lot.fee * (qtyToClose / lot.quantity);
-        const exitFeeSlice = Number(action.fee || 0) * (qtyToClose / totalCloseQty);
-        realisedPnL += (Number(action.price) - lot.price) * sign * qtyToClose * tickMultiplier
-          - entryFeeSlice
-          - exitFeeSlice;
-        // Reduce the lot's remaining fee by the slice just realised, in lockstep
-        // with quantity, so a lot closed via multiple separate fills only ever
-        // has its entry fee attributed once in total (previously `lot.fee` stayed
-        // at its original value while `lot.quantity` shrank, so each subsequent
-        // partial close over-attributed fee against a shrinking denominator, and
-        // any fee left on a still-open lot double-counted what closes already took).
-        lot.fee -= entryFeeSlice;
-        lot.quantity -= qtyToClose;
-        closeQty -= qtyToClose;
-        if (lot.quantity <= 0) openLots.shift();
-      }
-    }
-    timeline.push({
-      dateTime: action.dateTime,
-      price: Number(action.price || 0),
-      openQty: openLots.reduce((sum, lot) => sum + lot.quantity, 0),
-      openCost: openLots.reduce((sum, lot) => sum + lot.price * lot.quantity, 0),
-      openFee: openLots.reduce((sum, lot) => sum + lot.fee, 0),
-      realisedPnL,
-    });
-  });
-
-  return { realisedPnL, openLots, timeline };
+  return replayLots(trade && trade.actions, tickMultiplier);
 }
 
 export function getRealisedPnL(trade) {
@@ -343,29 +289,8 @@ async function computeTradeMeta(trade, futuresSettings) {
       const applicableSetting = getFuturesSettings(trade.symbol, trade.type, futuresSettings);
 
       if (applicableSetting && applicableSetting.initial_margin > 0) {
-        let maxContracts = 0;
-        let openContracts = 0;
-        const tradeDirection = side;
-
-        if (tradeDirection === 'LONG') {
-          actions.forEach(a => {
-            if (a.type === 'BUY') {
-              openContracts += Number(a.quantity || 0);
-              if (openContracts > maxContracts) maxContracts = openContracts;
-      } else {
-              openContracts -= Number(a.quantity || 0);
-            }
-          });
-        } else if (tradeDirection === 'SHORT') {
-          actions.forEach(a => {
-            if (a.type === 'SELL') {
-              openContracts += Number(a.quantity || 0);
-              if (openContracts > maxContracts) maxContracts = openContracts;
-    } else {
-              openContracts -= Number(a.quantity || 0);
-            }
-          });
-        }
+        // The largest position held, also across a flip.
+        const maxContracts = maxPosition(actions);
 
         const totalInitialMargin = applicableSetting.initial_margin * maxContracts;
         if (totalInitialMargin > 0) {
@@ -579,30 +504,8 @@ function computeStats(trades, futuresSettings) {
     if (trade.type === 'FUT') {
       const setting = getFuturesSettings(trade.symbol, trade.type, futuresSettings);
       if (setting && setting.initial_margin > 0) {
-        // Calculate max contracts from trade actions
-        let maxContracts = 0;
-        let openContracts = 0;
-        const actions = Array.isArray(trade.actions) ? trade.actions : [];
-        const tradeDirection = trade.side;
-        if (tradeDirection === 'LONG') {
-          actions.forEach(a => {
-            if (a.type === 'BUY') {
-              openContracts += Number(a.quantity || 0);
-              if (openContracts > maxContracts) maxContracts = openContracts;
-            } else {
-              openContracts -= Number(a.quantity || 0);
-            }
-          });
-        } else if (tradeDirection === 'SHORT') {
-          actions.forEach(a => {
-            if (a.type === 'SELL') {
-              openContracts += Number(a.quantity || 0);
-              if (openContracts > maxContracts) maxContracts = openContracts;
-            } else {
-              openContracts -= Number(a.quantity || 0);
-            }
-          });
-        }
+        // The largest position held, also across a flip.
+        const maxContracts = maxPosition(Array.isArray(trade.actions) ? trade.actions : []);
         const totalInitialMargin = setting.initial_margin * maxContracts;
         if (totalInitialMargin > 0) {
           returnPct = (ret / totalInitialMargin) * 100;
@@ -989,20 +892,19 @@ export const TradeProvider = ({ children }) => {
     const currentPrice = quote.price;
 
     const tickMultiplier = getTickMultiplier(trade);
-    const { openLots } = matchLotsFIFO(trade, tickMultiplier);
+    // The open lots' own side: after a flip it isn't the first fill's.
+    const { openLots, sign } = matchLotsFIFO(trade, tickMultiplier);
     let unrealisedPnL = 0;
     let openCost = 0;
     let openFee = 0;
     let currentReturnPercentage = null;
 
-    if (trade.side === 'LONG' || trade.side === 'SHORT') {
+    if (sign !== 0) {
         const openQty = openLots.reduce((sum, lot) => sum + lot.quantity, 0);
         openCost = openLots.reduce((sum, lot) => sum + lot.price * lot.quantity, 0);
         openFee = openLots.reduce((sum, lot) => sum + lot.fee, 0);
         const avgOpenCost = openQty > 0 ? openCost / openQty : 0;
-        unrealisedPnL = trade.side === 'LONG'
-            ? (currentPrice - avgOpenCost) * openQty * tickMultiplier - openFee
-            : (avgOpenCost - currentPrice) * openQty * tickMultiplier - openFee;
+        unrealisedPnL = sign * (currentPrice - avgOpenCost) * openQty * tickMultiplier - openFee;
     }
 
     if (trade.type === 'FUT') {
