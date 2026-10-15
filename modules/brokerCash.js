@@ -247,10 +247,16 @@ const CASH_REPORT_TYPES = [
     { field: 'otherFees', name: 'other fees', label: 'Other Fees', types: ['other fees'] },
     // Not a Cash Transactions type: its own section of the query.
     { field: 'accountTransfers', name: 'transfers between IBKR accounts', label: 'Transfers', section: 'Transfers' },
+    // Taxes on trades (e.g. a financial transaction tax) aren't read at all
+    // (the query's Transaction Taxes section isn't imported yet): named, so
+    // the difference has a cause instead of being unexplained.
+    { field: 'transactionTax', name: 'transaction taxes', label: 'Transaction Taxes', notImported: true },
+    { field: 'salesTax', name: 'sales tax', label: 'Sales Tax', notImported: true },
 ];
 
 // What to tick in the Flex query for an unlisted type.
-function unlistedFix({ label, section }) {
+function unlistedFix({ label, section, notImported }) {
+    if (notImported) return `The journal doesn't import ${label.toLowerCase()} yet: enter them as a Fee on the Capital page, or Align`;
     return section
         ? `Tick the "${section}" section in the Flex query`
         : `Tick ${label} in the query's Cash Transactions`;
@@ -277,7 +283,7 @@ function unlistedCashTypes(statement, reportRow, currency) {
         const { field, name, label, types } = type;
         const reported = Number(reportRow?.[field]);
         if (!Number.isFinite(reported) || Math.abs(reported) < BALANCE_TOLERANCE) continue;
-        const listed = type.section
+        const listed = type.notImported ? 0 : type.section
             ? transfers.reduce((sum, t) => sum + t.amount, 0)
             : cashRows
                 .filter(r => types.includes(String(r.type || '').trim().toLowerCase()))
@@ -289,6 +295,7 @@ function unlistedCashTypes(statement, reportRow, currency) {
             name,
             label,
             fix: unlistedFix(type),
+            ...(type.notImported ? { notImported: true } : {}),
             reported: Math.round(reported * 100) / 100,
             listed: Math.round(listed * 100) / 100,
             monthToDate: Number.isFinite(mtd) ? Math.round(mtd * 100) / 100 : null,
