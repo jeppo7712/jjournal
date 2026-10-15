@@ -757,7 +757,9 @@ const Capital = () => {
                   const isDividendRow = !!tx.linked_dividend_id;
                   // Trade rows follow the trade's fills (rebuilt on every save).
                   const isTradeRow = !!tx.linked_trade_id;
-                  const canDelete = isOwnAccount && !isDividendRow && !isTradeRow;
+                  // So are a holding's purchase and redemption.
+                  const isHoldingRow = !!tx.linked_holding_id;
+                  const canDelete = isOwnAccount && !isDividendRow && !isTradeRow && !isHoldingRow;
                   const key = monthKey(tx);
                   const newMonth = index === 0 || monthKey(visibleLedger[index - 1]) !== key;
                   return (
@@ -791,6 +793,7 @@ const Capital = () => {
                             disabled={!canDelete}
                             title={isDividendRow ? 'Part of a dividend — edit or remove it under Dividends'
                               : isTradeRow ? 'Part of a trade — edit the trade instead'
+                              : isHoldingRow ? 'Part of a holding — edit or delete it under Holdings'
                               : isOwnAccount ? 'Delete' : `Belongs to ${tx.account_name} — switch to it to delete this`}
                           >
                             ×
