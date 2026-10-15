@@ -46,7 +46,8 @@ async function tradesChangingCurrency(client, removed, replacement = null) {
     if (replacement) after.push(replacement);
     const { rows: instruments } = await client.query('SELECT symbol, type, COUNT(*)::int AS count FROM trades GROUP BY symbol, type');
     return instruments
-        .filter(i => resolveTradeCurrency(i.symbol, i.type, settings) !== resolveTradeCurrency(i.symbol, i.type, after))
+        // USD is what a trade without a setting is counted in (GET /trades, settleTrade).
+        .filter(i => (resolveTradeCurrency(i.symbol, i.type, settings) || 'USD') !== (resolveTradeCurrency(i.symbol, i.type, after) || 'USD'))
         .map(i => ({ symbol: i.symbol, count: i.count }));
 }
 

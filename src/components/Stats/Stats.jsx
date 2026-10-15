@@ -160,14 +160,16 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
     if (trades.length === 1) {
       onViewTrade(trades[0]);
     } else if (trades.length > 1) {
-      setCustomFilterDate(date);
+      // With the zone the calendar grouped the day in: the Dashboard's
+      // range is that day there, not the browser's own day.
+      setCustomFilterDate({ date, zone: displayTimezone });
       setCustomFilterWeek(null);
       setCurrentView('dashboard');
     }
   };
 
   const handleCalendarWeekClick = (weekStart, weekEnd) => {
-    setCustomFilterWeek({ start: weekStart, end: weekEnd });
+    setCustomFilterWeek({ start: weekStart, end: weekEnd, zone: displayTimezone });
     setCustomFilterDate(null);
     setCurrentView('dashboard');
   };
