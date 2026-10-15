@@ -56,9 +56,18 @@ function addTask(symbol, timeframe, phase, priority, requestedBy, contractMonth 
     const isDuplicate = (t) =>
         t.symbol === upperSymbol && t.timeframe === timeframe && t.phase === phase &&
         t.contractMonth === contractMonth && t.type === type;
-    const alreadyPending = taskQueue.some(t => t.status === TASK_STATUS.PENDING && isDuplicate(t));
+    const pending = taskQueue.find(t => t.status === TASK_STATUS.PENDING && isDuplicate(t));
     const alreadyRunning = currentRunningTaskInfo && isDuplicate(currentRunningTaskInfo);
-    if (alreadyPending || alreadyRunning) {
+    // Asked for sooner than the waiting copy (a user's "load now" on top of
+    // the cron's): it moves up, instead of the request waiting behind the
+    // whole backlog at the cron's priority.
+    if (pending && priority < pending.priority) {
+        logger.debug(`[TaskManager] Raised waiting task ${pending.id} (${upperSymbol} ${timeframe} ${phase}) from priority ${pending.priority} to ${priority} for ${requestedBy}.`);
+        pending.priority = priority;
+        pending.requestedBy = requestedBy;
+        return pending.id;
+    }
+    if (pending || alreadyRunning) {
         logger.debug(`[TaskManager] Skipped duplicate task: (${upperSymbol} ${timeframe} ${phase} contract=${contractMonth || 'N/A'}) already ${alreadyRunning ? 'running' : 'pending'}.`);
         return null;
     }

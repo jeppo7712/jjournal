@@ -26,7 +26,11 @@ const showNum = (value) => (value === null || value === undefined || value === '
   ? '—'
   : formatNumber(Number(value), 8, true));
 
+// While typing: digits, one sign, separators ("1." on the way to "1.5").
 const onlyNumber = val => /^-?\d*[,.\d]*$/.test(val);
+// To save: a whole number. onlyNumber also lets "-", "." and "1.2.3" through.
+const isNumber = val => /^-?(\d+([.,]\d*)?|[.,]\d+)$/.test(String(val ?? '').trim());
+const numberOf = val => Number(String(val ?? '').trim().replace(',', '.'));
 const validTimeFormat = val => /^([0-1]?[0-9]|2[0-3]):[0-5][0-9]$/.test(val);
 const validExpression = val => /^[0-9+\-*/().\s]*$/.test(val);
 
@@ -417,18 +421,21 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
   }, [actions, form.type, form.tickSize, form.tickValue, form.stopLoss, form.target]);
 
   const actionErrors = actions.map((action, idx) => ({
-    quantity: action.quantity === '' || !onlyNumber(action.quantity),
-    price: action.price === '' || !onlyNumber(String(action.price).replace(',', '.')),
-    fee: action.fee === '' || !onlyNumber(String(action.fee).replace(',', '.')),
+    // A quantity is positive: the side says buy or sell (a negative one
+    // booked a buy's cash as a sale's).
+    quantity: !isNumber(action.quantity) || !(numberOf(action.quantity) > 0),
+    price: !isNumber(action.price),
+    fee: !isNumber(action.fee) || numberOf(action.fee) < 0,
     dateTime: tempTimeInputs[idx] !== '' && !validTimeFormat(tempTimeInputs[idx]) && touched[idx]?.dateTime,
   }));
 
   const formErrors = {
     symbol: !form.symbol,
-    target: form.target === '' || !onlyNumber(form.target),
-    stopLoss: form.stopLoss === '' || !onlyNumber(form.stopLoss),
-    tickSize: form.tickSize === '' || !onlyNumber(form.tickSize),
-    tickValue: form.tickValue === '' || !onlyNumber(form.tickValue),
+    target: !isNumber(form.target),
+    stopLoss: !isNumber(form.stopLoss),
+    // A future's P&L is points × tick value / tick size: both positive.
+    tickSize: !isNumber(form.tickSize) || !(numberOf(form.tickSize) > 0),
+    tickValue: !isNumber(form.tickValue) || !(numberOf(form.tickValue) > 0),
   };
 
   // Not an error (saving still works), just a heads-up: P&L and cash

@@ -165,6 +165,23 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
         }
     });
 
+    // What's wrong with a trade's fills, or null: each is a BUY or SELL with
+    // a positive quantity, a price, a fee of 0 or more and a valid time. A
+    // bad one reached the cash ledger as it was (a negative quantity booked
+    // a buy as a sale).
+    function invalidActions(actions) {
+        if (actions !== undefined && !Array.isArray(actions)) return 'actions must be a list';
+        for (const [i, a] of (actions || []).entries()) {
+            const n = `Fill ${i + 1}`;
+            if (a.type !== 'BUY' && a.type !== 'SELL') return `${n}: type must be BUY or SELL`;
+            if (!(Number(a.quantity) > 0)) return `${n}: the quantity must be a number above 0`;
+            if (!Number.isFinite(Number(a.price)) || a.price === '' || a.price === null) return `${n}: the price must be a number`;
+            if (!Number.isFinite(Number(a.fee ?? 0)) || Number(a.fee ?? 0) < 0) return `${n}: the fee must be 0 or more`;
+            if (!a.dateTime || Number.isNaN(Date.parse(a.dateTime))) return `${n}: the time is missing or invalid`;
+        }
+        return null;
+    }
+
     // IBKR fills (by execution ID) another trade already has: a fill belongs
     // to one trade. Saving the same new trade twice (a double click) put
     // its fills into two trades and counted their P&L twice.
@@ -185,6 +202,8 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
             const { type, symbol, target, stopLoss, tickSize, tickValue, contract_month, actions, journal, attachments } = req.body;
             const accountId = req.accountId;
 
+            const badFill = invalidActions(actions);
+            if (badFill) return res.status(400).json({ error: badFill });
             const taken = await fillsElsewhere(client, actions);
             if (taken.length > 0) {
                 return res.status(409).json({ error: `These IBKR fills are already in the journal (trade #${taken.join(', #')}).` });
@@ -291,6 +310,8 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
             const { type, symbol, target, stopLoss, tickSize, tickValue, contract_month, actions, journal, attachments } = req.body;
             const accountId = req.accountId;
 
+            const badFill = invalidActions(actions);
+            if (badFill) return res.status(400).json({ error: badFill });
             const taken = await fillsElsewhere(client, actions, Number(id));
             if (taken.length > 0) {
                 return res.status(409).json({ error: `These IBKR fills are already in another trade (#${taken.join(', #')}).` });
