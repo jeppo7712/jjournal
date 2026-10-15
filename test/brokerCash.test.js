@@ -282,3 +282,40 @@ test('balance check: trade cash counts on its trading day, other rows on their U
   // A deposit or fee row: its own date.
   assert.equal(ledgerDay({ date_time: '2026-10-12T00:00:00Z' }), '2026-10-12');
 });
+
+test('currency conversions: two EXCHANGE legs and a fee, booked together', () => {
+  const { conversionItems, parseCashItems } = require('../modules/brokerCash.js');
+  // Made-up account and values, shaped like IBKR's Flex Trades rows.
+  const statement = { accountId: 'U1000001', Trades: { Trade: [
+    { assetCategory: 'CASH', symbol: 'EUR.USD', currency: 'USD', buySell: 'BUY', quantity: '1000', tradePrice: '1.08', proceeds: '-1080',
+      ibCommission: '-2', ibCommissionCurrency: 'USD', ibExecID: 'fx-1', dateTime: '20261020;101500', levelOfDetail: 'EXECUTION' },
+    { assetCategory: 'CASH', symbol: 'USD.AED', currency: 'AED', buySell: 'SELL', quantity: '-500', tradePrice: '3.6725', proceeds: '1836.25',
+      ibCommission: '0', ibExecID: 'fx-2', dateTime: '20261021;090000', levelOfDetail: 'EXECUTION' },
+    { assetCategory: 'STK', symbol: 'ABC', currency: 'USD', buySell: 'BUY', quantity: '1', tradePrice: '10', ibExecID: 's-1', dateTime: '20261021;090000' },
+  ] } };
+  const items = conversionItems(statement);
+  assert.deepEqual(items.map(i => [i.externalId, i.kind, i.currency, i.amount, i.actionId, i.date]), [
+    ['FX-fx-1-EUR', 'EXCHANGE', 'EUR', 1000, 'FX-fx-1', '2026-10-20'],
+    ['FX-fx-1-USD', 'EXCHANGE', 'USD', -1080, 'FX-fx-1', '2026-10-20'],
+    ['FX-fx-1-FEE', 'FEE', 'USD', -2, 'FX-fx-1', '2026-10-20'],
+    ['FX-fx-2-USD', 'EXCHANGE', 'USD', -500, 'FX-fx-2', '2026-10-21'],
+    ['FX-fx-2-AED', 'EXCHANGE', 'AED', 1836.25, 'FX-fx-2', '2026-10-21'],
+  ]);
+  // Part of what the cash sync reads.
+  assert.equal(parseCashItems([statement]).filter(i => i.kind === 'EXCHANGE').length, 4);
+});
+
+test('currency conversions: an exchange entered by hand matches its legs', () => {
+  const { matchItems } = require('../modules/brokerCash.js');
+  const items = [
+    { id: 1, kind: 'EXCHANGE', date: '2026-10-20', currency: 'EUR', amount: 1000 },
+    { id: 2, kind: 'EXCHANGE', date: '2026-10-20', currency: 'USD', amount: -1080 },
+  ];
+  const rows = [
+    { id: 10, type: 'EXCHANGE_OUT', date: '2026-10-21', currency: 'USD', amount: -1080 },
+    { id: 11, type: 'EXCHANGE_IN', date: '2026-10-21', currency: 'EUR', amount: 1000 },
+    { id: 12, type: 'DEPOSIT', date: '2026-10-20', currency: 'EUR', amount: 1000 },
+  ];
+  const matches = matchItems(items, rows);
+  assert.deepEqual(matches.map(m => [m.itemIds, m.rowIds]), [[[1], [11]], [[2], [10]]]);
+});
