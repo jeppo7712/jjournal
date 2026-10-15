@@ -63,3 +63,19 @@ test('date range: the first day falls back to the last close before it', async (
   assert.equal(labels.length, 3);
   assert.deepEqual(seriesByCurrency.USD, [20, 20, 30]);
 });
+
+test('a trade entered with a flip is valued as the short it became', async () => {
+  const { computeUnrealisedSeries } = await load();
+  const trades = [{
+    symbol: 'MES', type: 'FUT', side: 'SHORT', status: 'OPEN', currency: 'USD', tick_size: 0.25, tick_value: 1.25,
+    firstActionDate: at(-2),
+    actions: [
+      { type: 'BUY', dateTime: at(-2), quantity: 1, price: 6000, fee: 0 },
+      { type: 'SELL', dateTime: at(-1), quantity: 2, price: 6010, fee: 0 }, // short 1 from here
+    ],
+  }];
+  const closes = { MES: new Map([[iso(-2), 6004], [iso(-1), 6012], [iso(0), 6000]]) };
+  const { seriesByCurrency } = computeUnrealisedSeries(trades, closes);
+  // -2: long 1 at 6000, close 6004 → +20; -1: short 1 at 6010, 6012 → -10; 0: 6000 → +50
+  assert.deepEqual(seriesByCurrency.USD.map(v => Math.round(v * 100) / 100), [20, -10, 50]);
+});

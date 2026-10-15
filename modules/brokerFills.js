@@ -26,6 +26,8 @@ const FLEX_TIMEZONE = 'America/New_York';
 const CONTRACT_CODE = /^(.+?)([FGHJKMNQUVXZ]\d{1,2})$/;
 // How far a hand-entered fill's time may be from IBKR's to count as it.
 const HAND_ENTERED_SECONDS = 90;
+// The execution ID of the opening part of a fill split at a flip.
+const FLIP_SUFFIX = '.flip';
 // Fees closer than this to IBKR's are the same fee.
 const FEE_TOLERANCE = 0.005;
 // Activity statements change once a day; no need to pull them every scan.
@@ -224,7 +226,8 @@ async function correctFees(pool) {
  * Fills waiting for the user: PENDING, and not in the journal under the
  * account they belong to (or any of its sub-accounts) — by execution ID,
  * or entered by hand with the same symbol, side, quantity and price within
- * HAND_ENTERED_SECONDS. An execution ID anywhere in the journal counts.
+ * HAND_ENTERED_SECONDS. An execution ID anywhere in the journal counts
+ * (for a fill split at a flip, both its parts).
  */
 async function pendingFills(db) {
   const { rows } = await db.query(
@@ -237,7 +240,13 @@ async function pendingFills(db) {
             f.currency, f.exchange, f.date_time
      FROM broker_fills f JOIN accounts a ON a.id = f.account_id
      WHERE f.status = 'PENDING'
-       AND NOT EXISTS (SELECT 1 FROM trade_actions ta WHERE ta.exec_id = f.exec_id)
+       -- A fill the import split at a flip (routes/ibkr.js) is in two
+       -- trades: its own ID on the closing part, FLIP_SUFFIX on the other.
+       -- It's in the journal once both are.
+       AND NOT EXISTS (
+         SELECT 1 FROM trade_actions ta WHERE ta.exec_id = f.exec_id
+           AND (ta.quantity >= f.quantity OR EXISTS (SELECT 1 FROM trade_actions tf WHERE tf.exec_id = f.exec_id || '${FLIP_SUFFIX}'))
+       )
        AND NOT EXISTS (
          SELECT 1 FROM trade_actions ta
          JOIN trades t ON t.id = ta.trade_id
@@ -253,4 +262,4 @@ async function pendingFills(db) {
   return rows;
 }
 
-module.exports = { parseFills, flexTime, scanBrokerFills, correctFees, pendingFills };
+module.exports = { parseFills, flexTime, scanBrokerFills, correctFees, pendingFills, FLIP_SUFFIX };
