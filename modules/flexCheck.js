@@ -246,6 +246,14 @@ function checkFlexQuery(result, purpose, { kind, accounts = [] }) {
         for (const report of parseCashReport(statements)) {
             for (const u of report.unlisted) {
                 const amount = Math.abs(u.monthToDate) >= 0.005 ? `${u.monthToDate.toFixed(2)} this month` : `${u.reported.toFixed(2)} in this period`;
+                if (u.notImported) {
+                    checks.push({
+                        status: 'warn', label: `${u.label} (${report.brokerAccountId}, ${report.currency})`,
+                        detail: `IBKR's Cash Report counts ${amount} of ${u.name}, which the journal doesn't import yet, so its cash differs from IBKR's by that.`,
+                        fix: 'Enter them as a Fee on the Capital page, or use Align there.',
+                    });
+                    continue;
+                }
                 checks.push({
                     status: 'warn', label: `${u.label} (${report.brokerAccountId}, ${report.currency})`,
                     detail: `IBKR's Cash Report counts ${amount} that ${u.field === 'accountTransfers' ? 'the Transfers section doesn\'t' : 'Cash Transactions don\'t'} list${Math.abs(u.listed) >= 0.005 ? ` in full (${u.listed.toFixed(2)} listed of ${u.reported.toFixed(2)})` : ''}, so it can't come into the journal.`,

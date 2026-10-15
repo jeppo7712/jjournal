@@ -334,3 +334,14 @@ test('currency conversions: the other leg follows the user\'s exchange pair, cen
   // Without the pair link it stays waiting.
   assert.deepEqual(matchItems(items, rows.map(r => ({ ...r, transferPairId: null }))).map(m => [m.itemIds, m.rowIds]), [[[1], [11]]]);
 });
+
+test('unlisted: transaction taxes are named as not imported', () => {
+  const { unlistedCashTypes } = require('../modules/brokerCash.js');
+  const statement = { accountId: 'U1000001', CashTransactions: { CashTransaction: [] } };
+  const unlisted = unlistedCashTypes(statement, { currency: 'EUR', transactionTax: '-4.20', transactionTaxMTD: '-4.20' }, 'EUR');
+  assert.equal(unlisted.length, 1);
+  assert.equal(unlisted[0].field, 'transactionTax');
+  assert.equal(unlisted[0].notImported, true);
+  assert.equal(unlisted[0].reported, -4.2);
+  assert.match(unlisted[0].fix, /doesn't import transaction taxes/);
+});
