@@ -450,8 +450,12 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
       accountedOrderIds.add(parent.orderId);
       for (const c of children) accountedOrderIds.add(c.orderId);
 
-      // Mark all executions in this group as accounted for
-      [...entryExecs, ...tpExecs, ...slExecs].forEach(e => accountedExecIds.add(e.execId));
+      // Mark all executions in this group as accounted for — the other
+      // children's too (a second take-profit when scaling out, a trailing
+      // limit): left out, they showed up again as a position group of
+      // their own.
+      [...entryExecs, ...tpExecs, ...slExecs, ...otherChildren.flatMap(c => execByOrderId.get(c.orderId) || [])]
+        .forEach(e => accountedExecIds.add(e.execId));
     }
 
     // Sort bracket groups by first entry execution time (oldest first)

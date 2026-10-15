@@ -483,6 +483,18 @@ module.exports = (db, taskManager, historicalDataService, broadcastStatus, uuidv
         if (!symbol || !type || !from_contract_month || !to_contract_month || !override_date) {
             return res.status(400).json({ error: 'symbol, type, from_contract_month, to_contract_month, and override_date are required.' });
         }
+        // A typo used to reach the database as is: a vague 500, or an
+        // override for a roll that never happens.
+        const month = /^\d{4}(0[1-9]|1[0-2])$/;
+        if (!month.test(String(from_contract_month)) || !month.test(String(to_contract_month))) {
+            return res.status(400).json({ error: 'Contract months are YYYYMM, e.g. 202612.' });
+        }
+        if (String(to_contract_month) <= String(from_contract_month)) {
+            return res.status(400).json({ error: 'The contract rolled to must be later than the one rolled from.' });
+        }
+        if (!/^\d{4}-\d{2}-\d{2}/.test(String(override_date)) || Number.isNaN(Date.parse(override_date))) {
+            return res.status(400).json({ error: 'override_date must be a date (YYYY-MM-DD).' });
+        }
 
         try {
             const { rows: fsRows } = await db.getPool().query('SELECT id FROM futures_settings WHERE symbol = $1 AND type = $2', [symbol, type]);
