@@ -489,6 +489,17 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
             if (!symbol || !timeframe) {
                 return res.status(400).json({ error: 'symbol and timeframe are required' });
             }
+            // The continuous series joins the contracts at each roll without
+            // adjusting them; adjust=back|ratio back-adjusts it (see
+            // EXTERNAL_API.md). An unknown value is an error, not ignored:
+            // a caller trying parameter names got unadjusted bars silently.
+            const adjust = String(req.query.adjust || 'none').toLowerCase();
+            if (!['none', 'back', 'ratio'].includes(adjust)) {
+                return res.status(400).json({ error: 'adjust must be none, back or ratio' });
+            }
+            if (adjust !== 'none' && (String(type).toUpperCase() !== 'FUT' || contract_month)) {
+                return res.status(400).json({ error: 'adjust applies to a future\'s continuous series only (type FUT, no contract_month)' });
+            }
             if (!historicalDataService.VALID_TIMEFRAMES.includes(timeframe)) {
                 return res.status(400).json({ error: `Invalid timeframe. Valid values: ${historicalDataService.VALID_TIMEFRAMES.join(', ')}` });
             }
@@ -524,7 +535,7 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
                 }
             }
 
-            const bars = await historicalDataService.getMergedHistoricalSeries({
+            let bars = await historicalDataService.getMergedHistoricalSeries({
                 futuresSettingId: fsRows[0].id,
                 type: upperType,
                 contractMonth: contract_month || null,
@@ -532,12 +543,20 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
                 startDate: from,
                 endDate: to,
             });
+            // Every roll, not just those inside from/to: a back-adjusted bar
+            // is relative to the latest contract, whatever the window.
+            const rolls = upperType === 'FUT' && !contract_month
+                ? await historicalDataService.getContinuousRolls(fsRows[0].id, timeframe)
+                : [];
+            bars = historicalDataService.adjustContinuousBars(bars, rolls, adjust);
 
             res.json({
                 symbol: upperSymbol,
                 type: upperType,
                 timeframe,
                 contract_month: contract_month || null,
+                adjustment: upperType === 'FUT' && !contract_month ? adjust : null,
+                rolls,
                 bar_count: bars.length,
                 bars,
             });
