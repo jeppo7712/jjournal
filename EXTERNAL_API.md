@@ -400,8 +400,11 @@ This endpoint always responds immediately from whatever is already in the databa
 | `symbol` | yes | e.g. `MNQ`, `AAPL`. |
 | `timeframe` | yes | One of `1M`, `5M`, `15M`, `1H`, `4H`, `1D`, `1W`. |
 | `type` | no | `STK` or `FUT`, default `FUT`. |
-| `contract_month` | no | e.g. `202506`. Omit for the continuous (rollover-adjusted) series — the right choice for most analysis. |
+| `contract_month` | no | e.g. `202506`. Omit for the continuous series: the contracts joined at each roll (by volume), prices **as traded, not adjusted** unless `adjust` says otherwise. |
+| `adjust` | no | Continuous futures series only. `none` (default): prices as traded, so each roll shows as a jump that never happened (NQ: 29163 on the September contract, 29458.25 on December the next minute). `back`: back-adjusted, every bar before a roll moved by that roll's gap, the latest contract's prices unchanged — the usual choice for point-based backtests. `ratio`: bars before a roll multiplied by the new/old price ratio instead (keeps percentage moves). Any other value is a `400`. |
 | `from` / `to` | no | ISO date/time bounds. |
+
+The rolls of the continuous series come with the bars, oldest first, whatever `adjust` is: `rolls: [{ "time", "from", "to", "gap", "ratio", "method" }]` — the first bar on the new contract, the two contract months, and the gap (new − old) and ratio (new / old) between the two contracts' own prices at that bar (`method: "same bar"`), at the bar before if the old contract has none then (`"bar before the roll"`), or, with neither, the new contract's open against the old one's last close (`"approximate"`, which also holds that minute's move). An adjusted bar is relative to the latest contract, also for `from`/`to` windows that end earlier.
 
 ### Response
 
@@ -411,6 +414,10 @@ This endpoint always responds immediately from whatever is already in the databa
   "type": "FUT",
   "timeframe": "1D",
   "contract_month": null,
+  "adjustment": "none",
+  "rolls": [
+    { "time": "2026-09-14T05:00:00.000Z", "from": "202609", "to": "202612", "gap": 297.25, "ratio": 1.0102, "method": "same bar" }
+  ],
   "bar_count": 750,
   "bars": [
     {
