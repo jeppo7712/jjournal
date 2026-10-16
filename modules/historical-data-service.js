@@ -2556,7 +2556,90 @@ async function getMergedHistoricalSeries({ futuresSettingId, type, contractMonth
     return processedBars;
 }
 
+/**
+ * The rolls of a future's continuous series and the price gap at each: the
+ * continuous series joins the contracts at each roll without adjusting
+ * them, so a roll shows as a jump that never happened (NQ's September
+ * contract at 29163, December's at 29458.25 the next minute).
+ *
+ * The gap is the two contracts' own prices at the same moment, from the
+ * stored raw contract bars: at the roll bar if the old contract has one
+ * then, else at the bar before the roll if the new one has one; only
+ * without either it's the new contract's open against the old one's last
+ * close ('approximate', which also holds that minute's move).
+ *
+ * @returns {Promise<{ time: string, from: string, to: string, gap: number, ratio: number, method: string }[]>} oldest first
+ */
+async function getContinuousRolls(futuresSettingId, timeframe) {
+    const pool = db.getPool();
+    const { rows: rolls } = await pool.query(
+        `SELECT time, contract_month, open, close FROM historical_data
+         WHERE futures_setting_id = $1 AND timeframe = $2 AND is_continuous = TRUE AND is_rollover = TRUE
+         ORDER BY time ASC`,
+        [futuresSettingId, timeframe]
+    );
+    const raw = async (contractMonth, time) => (await pool.query(
+        `SELECT close FROM historical_data
+         WHERE futures_setting_id = $1 AND timeframe = $2 AND is_continuous = FALSE AND contract_month = $3 AND time = $4 LIMIT 1`,
+        [futuresSettingId, timeframe, contractMonth, time]
+    )).rows[0];
+    const result = [];
+    for (const roll of rolls) {
+        const { rows: [before] } = await pool.query(
+            `SELECT time, contract_month, close FROM historical_data
+             WHERE futures_setting_id = $1 AND timeframe = $2 AND is_continuous = TRUE AND time < $3
+             ORDER BY time DESC LIMIT 1`,
+            [futuresSettingId, timeframe, roll.time]
+        );
+        if (!before || !before.contract_month || before.contract_month === roll.contract_month) continue;
+        let oldPrice, newPrice, method;
+        const oldAtRoll = await raw(before.contract_month, roll.time);
+        if (oldAtRoll) {
+            [oldPrice, newPrice, method] = [Number(oldAtRoll.close), Number(roll.close), 'same bar'];
+        } else {
+            const newBefore = await raw(roll.contract_month, before.time);
+            if (newBefore) [oldPrice, newPrice, method] = [Number(before.close), Number(newBefore.close), 'bar before the roll'];
+            else [oldPrice, newPrice, method] = [Number(before.close), Number(roll.open), 'approximate'];
+        }
+        if (!(oldPrice > 0) || !(newPrice > 0)) continue;
+        result.push({
+            time: new Date(roll.time).toISOString(),
+            from: before.contract_month,
+            to: roll.contract_month,
+            gap: Math.round((newPrice - oldPrice) * 1e8) / 1e8,
+            ratio: newPrice / oldPrice,
+            method,
+        });
+    }
+    return result;
+}
+
+/**
+ * Back-adjusts a continuous series by its rolls: the latest contract's
+ * prices stay as they are, every bar before a roll moves by that roll's
+ * gap ('back': added, the usual choice for point-based backtests) or
+ * ratio ('ratio': multiplied, keeps percentage moves). Bars after the last
+ * IBKR bar (Yahoo/TradingView's front month) count as the latest contract.
+ * Pure.
+ */
+function adjustContinuousBars(bars, rolls, mode) {
+    if (mode !== 'back' && mode !== 'ratio') return bars;
+    const sorted = [...rolls].sort((a, b) => (a.time < b.time ? -1 : 1));
+    return bars.map(bar => {
+        let offset = 0;
+        let factor = 1;
+        for (const roll of sorted) {
+            if (bar.time < roll.time) { offset += roll.gap; factor *= roll.ratio; }
+        }
+        if (offset === 0 && factor === 1) return bar;
+        const adj = v => (mode === 'back' ? Math.round((v + offset) * 1e6) / 1e6 : Math.round(v * factor * 1e6) / 1e6);
+        return { ...bar, open: adj(bar.open), high: adj(bar.high), low: adj(bar.low), close: adj(bar.close) };
+    });
+}
+
 module.exports = {
+    getContinuousRolls,
+    adjustContinuousBars,
     populateHistoricalData,
     VALID_TIMEFRAMES,
     getExchangeInfo,
