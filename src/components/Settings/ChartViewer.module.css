@@ -156,3 +156,35 @@
     height: 60vh;
   }
 }
+
+/* Maximise: the viewer over the whole window, the chart taking the rest
+   of the height. */
+.zone {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.maximised {
+  position: fixed;
+  inset: 0;
+  /* Above the menu bar (~1000) and the phone's sticky section picker (1999). */
+  z-index: 3000;
+  padding: 16px;
+  background: var(--s-card, #13161F);
+  overflow: auto;
+}
+
+.maximised .chartWrap {
+  height: auto;
+  flex: 1 1 auto;
+  min-height: 320px;
+}
+
+.maximised .hint {
+  display: none;
+}
+
+:global(body.jj-chart-maximised) :global(.main-content) {
+  z-index: 3000;
+}

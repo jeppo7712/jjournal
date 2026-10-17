@@ -64,6 +64,8 @@ export default function ChartViewer({ futuresSettings = [], apiBaseUrl }) {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [hover, setHover] = useState(null);
+  // The chart over the whole window (Esc or the button leaves it).
+  const [maximised, setMaximised] = useState(false);
 
   const zone = resolveDisplayZone(displayTimezone, summary?.exchangeTimezone || 'America/New_York');
   const summaryTf = summary?.timeframes?.[timeframe];
@@ -289,6 +291,19 @@ export default function ChartViewer({ futuresSettings = [], apiBaseUrl }) {
 
   // The candle under the pointer (the last one loaded can be off screen).
   const shown = hover;
+
+  useEffect(() => {
+    if (!maximised) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') setMaximised(false); };
+    window.addEventListener('keydown', onKey);
+    // On phones the page's main area is position: fixed, a layer of its own
+    // below the menu bar: lifted while maximised, or the bar stays on top.
+    document.body.classList.add('jj-chart-maximised');
+    return () => {
+      window.removeEventListener('keydown', onKey);
+      document.body.classList.remove('jj-chart-maximised');
+    };
+  }, [maximised]);
   const fmt = v => formatNumber(v, selected?.precision ?? 2);
   const goToSubmit = (e) => {
     e.preventDefault();
@@ -301,7 +316,7 @@ export default function ChartViewer({ futuresSettings = [], apiBaseUrl }) {
   if (symbols.length === 0) return <p className={styles.empty}>Add a symbol under Symbols first.</p>;
 
   return (
-    <div className={styles.viewer}>
+    <div className={`${styles.viewer} ${maximised ? styles.maximised : ''}`}>
       <div className={styles.controls}>
         <label className={styles.field}>
           <span>Symbol</span>
@@ -330,7 +345,7 @@ export default function ChartViewer({ futuresSettings = [], apiBaseUrl }) {
               onClick={() => setTimeframe(tf)}
               title={availableTimeframes.includes(tf) ? timeframeLabel(tf) : `No ${timeframeLabel(tf)} data stored`}
             >
-              {tf}
+              {timeframeLabel(tf)}
             </button>
           ))}
         </div>
@@ -344,6 +359,15 @@ export default function ChartViewer({ futuresSettings = [], apiBaseUrl }) {
         </form>
         <div className={styles.zone}>
           <TimezonePicker value={displayTimezone} onChange={v => { setDisplayTimezone(v); storeDisplayTimezone(v); }} />
+          <button
+            type="button"
+            className={styles.button}
+            onClick={() => setMaximised(m => !m)}
+            title={maximised ? 'Back to the page (Esc)' : 'Show the chart over the whole window'}
+            aria-pressed={maximised}
+          >
+            {maximised ? '✕ Close' : '⤢ Maximise'}
+          </button>
         </div>
       </div>
 
