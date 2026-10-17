@@ -11,7 +11,8 @@ import { findExchangePreset, findFuturesPreset } from '../../data/marketReferenc
 import { NUMBER_FORMATS, getNumberFormat, setNumberFormat } from '../../utils/numberFormat';
 import HistoricalDataSummary from './HistoricalDataSummary';
 import FlexGuide from './FlexGuide';
-import { FaSlidersH, FaListUl, FaTerminal, FaWallet, FaTasks, FaTags, FaPlug, FaGlobeAmericas, FaChartLine, FaDatabase, FaPlus, FaSyncAlt, FaEye, FaEyeSlash } from 'react-icons/fa';
+import ChartViewer from './ChartViewer';
+import { FaSlidersH, FaListUl, FaTerminal, FaWallet, FaTasks, FaTags, FaPlug, FaGlobeAmericas, FaChartLine, FaDatabase, FaChartBar, FaPlus, FaSyncAlt, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { notify, confirmDialog } from '../common/Dialogs';
 import { timeframeLabel } from '../../utils/timeframeLabel';
 
@@ -33,6 +34,7 @@ const SECTIONS = [
   { id: 'exchanges', group: 'journal', label: 'Exchanges', icon: FaGlobeAmericas, description: 'Trading venues with their timezone and opening hours.' },
   { id: 'tws', group: 'journal', label: 'IBKR API', icon: FaPlug, description: 'TWS and IB Gateway connections, and Flex Web Service imports.' },
   { id: 'historical', group: 'journal', label: 'Historical Data', icon: FaDatabase, description: "What's stored for each symbol, per timeframe and source." },
+  { id: 'charts', group: 'journal', label: 'Charts', icon: FaChartBar, description: "Any symbol's stored price history, without opening a trade." },
   { id: 'logs', group: 'journal', label: 'Server Logs', icon: FaTerminal, description: 'The latest lines of the server log.' },
 ];
 const OFFLINE_SECTIONS = new Set(['general', 'logs']);
@@ -2321,6 +2323,11 @@ export default function Settings() {
               </table>
             </div>
           </div>
+        )}
+        {activeTab === 'charts' && dbStatus?.isConnected && (
+          <section className={styles.card}>
+            <ChartViewer futuresSettings={futuresSettings} apiBaseUrl={apiBaseUrl} />
+          </section>
         )}
         {activeTab === 'historical' && dbStatus?.isConnected && (
           <div className={styles.historicalTab}>
