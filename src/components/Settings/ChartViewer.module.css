@@ -1,0 +1,158 @@
+/* Settings → Charts (ChartViewer.jsx). Colours from the Settings tokens. */
+
+.viewer {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-width: 0;
+}
+
+.controls {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 12px;
+}
+
+.field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 0.78rem;
+  color: var(--s-muted);
+}
+
+.field select,
+.field input {
+  padding: 8px 10px;
+  background: var(--s-input);
+  border: 1px solid var(--s-border);
+  border-radius: 8px;
+  color: var(--s-text);
+  font-family: inherit;
+  font-size: 0.9rem;
+  min-width: 0;
+}
+
+.field select:focus,
+.field input:focus {
+  outline: none;
+  border-color: var(--s-accent);
+}
+
+.timeframes {
+  display: flex;
+  gap: 4px;
+  flex-wrap: wrap;
+}
+
+.tf,
+.button {
+  padding: 8px 10px;
+  background: var(--s-input);
+  border: 1px solid var(--s-border);
+  border-radius: 8px;
+  color: var(--s-muted);
+  font-family: inherit;
+  font-size: 0.85rem;
+  cursor: pointer;
+}
+
+.tf:hover:not(:disabled),
+.button:hover {
+  color: var(--s-text);
+  border-color: var(--s-accent);
+}
+
+.tf:disabled {
+  opacity: 0.35;
+  cursor: not-allowed;
+}
+
+.tfActive {
+  background: var(--s-accent);
+  border-color: var(--s-accent);
+  color: #fff;
+}
+
+.goTo {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
+.zone {
+  margin-left: auto;
+}
+
+.readout {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: baseline;
+  gap: 4px 14px;
+  font-size: 0.85rem;
+  font-variant-numeric: tabular-nums;
+  color: var(--s-text);
+  min-height: 1.4em;
+}
+
+.muted {
+  color: var(--s-muted);
+}
+
+.rangeNote {
+  margin-left: auto;
+  color: var(--s-faint);
+  font-size: 0.78rem;
+}
+
+.chartWrap {
+  position: relative;
+  height: min(70vh, 640px);
+  min-height: 320px;
+  border: 1px solid var(--s-border);
+  border-radius: 10px;
+  overflow: hidden;
+}
+
+.chart {
+  position: absolute;
+  inset: 0;
+}
+
+.loading {
+  position: absolute;
+  top: 10px;
+  left: 50%;
+  transform: translateX(-50%);
+  padding: 4px 12px;
+  border-radius: 999px;
+  background: rgba(19, 22, 31, 0.85);
+  border: 1px solid var(--s-border);
+  color: var(--s-muted);
+  font-size: 0.8rem;
+  pointer-events: none;
+}
+
+.error {
+  margin: 0;
+  color: #EF4444;
+  font-size: 0.85rem;
+}
+
+.hint,
+.empty {
+  margin: 0;
+  color: var(--s-faint);
+  font-size: 0.8rem;
+}
+
+@media (max-width: 700px) {
+  .zone,
+  .rangeNote {
+    margin-left: 0;
+  }
+  .chartWrap {
+    height: 60vh;
+  }
+}
