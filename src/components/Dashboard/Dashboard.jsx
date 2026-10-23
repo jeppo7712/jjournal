@@ -82,6 +82,16 @@ const formatCustomDate = (date) => {
   return dt.toFormat('dd MMM yy').toUpperCase();
 };
 
+// The percentage inside a stat tile's ring, sized to fit it: the ring's
+// inside is about 21px across, which "100%" at the tiles' 8.5px overran.
+// A bold digit is ~0.6em wide, a "%" ~0.85em, a minus ~0.6em.
+const RING_TEXT_WIDTH = 17;
+const ringFontSize = (text) => {
+  const t = String(text ?? '');
+  const ems = [...t].reduce((sum, ch) => sum + (ch === '%' ? 0.85 : 0.6), 0) || 1;
+  return Math.min(8.5, Math.round((RING_TEXT_WIDTH / ems) * 10) / 10);
+};
+
 const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, customFilterDate, customFilterWeek }) => {
   const {
     stats,
@@ -888,7 +898,7 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
                 style={{ transform: 'rotate(-90deg)', transformOrigin: 'center', transition: 'stroke-dashoffset 0.4s ease' }}
               />
             </svg>
-            <div className={styles.statPct}>{stat.pct}</div>
+            <div className={styles.statPct} style={{ fontSize: `${ringFontSize(stat.pct)}px` }}>{stat.pct}</div>
           </div>
         )}
         {isExcluded && <span className={styles.statFlag}>hidden</span>}
