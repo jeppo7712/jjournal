@@ -191,6 +191,42 @@ module.exports = (db, taskManager, historicalDataService, broadcastStatus, uuidv
     // even though the symbol genuinely has rollovers, just not within the
     // currently-loaded range. This is a cheap, separate, index-assisted
     // EXISTS check, not tied to how much history is actually loaded.
+    // GET /historical/nearest?symbol&type&timeframe[&contractMonth]&before=ISO|after=ISO
+    // The time of the nearest stored bar before (or after) a moment, of the
+    // series GET /historical/db returns: the continuous series and Yahoo /
+    // TradingView bars for a future without contractMonth, else that
+    // contract's (or the stock's) bars. { time: null } when there's none.
+    // Lets Settings → Charts jump over a gap in the data in one step.
+    router.get('/historical/nearest', async (req, res) => {
+        const { symbol, type = 'FUT', timeframe, contractMonth, before, after } = req.query;
+        if (!symbol || !VALID_TIMEFRAMES.includes(timeframe) || (!before === !after)) {
+            return res.status(400).json({ error: 'symbol, a valid timeframe and one of before/after are required' });
+        }
+        const moment = before || after;
+        if (Number.isNaN(Date.parse(moment))) return res.status(400).json({ error: 'before/after must be a date and time' });
+        try {
+            const { rows: [setting] } = await db.getPool().query(
+                'SELECT id FROM futures_settings WHERE symbol = $1 AND type = $2', [String(symbol).toUpperCase(), String(type).toUpperCase()]
+            );
+            if (!setting) return res.status(404).json({ error: 'Symbol not found' });
+            const continuous = String(type).toUpperCase() === 'FUT' && !contractMonth;
+            const which = continuous
+                ? `(is_continuous = TRUE OR (is_continuous = FALSE AND source IN ('Yahoo', 'TradingView')))`
+                : `is_continuous = FALSE AND (contract_month = $4 OR ($4::text IS NULL AND contract_month IS NULL))`;
+            const params = [setting.id, timeframe, moment];
+            if (!continuous) params.push(contractMonth || null);
+            const { rows: [row] } = await db.getPool().query(
+                `SELECT time FROM historical_data WHERE futures_setting_id = $1 AND timeframe = $2 AND ${which}
+                 AND time ${before ? '<' : '>'} $3 ORDER BY time ${before ? 'DESC' : 'ASC'} LIMIT 1`,
+                params
+            );
+            res.json({ time: row ? new Date(row.time).toISOString() : null });
+        } catch (err) {
+            logger.error(`[Historical/Nearest] ${err.message}`);
+            res.status(500).json({ error: err.message });
+        }
+    });
+
     router.get('/historical/has-rollover', async (req, res) => {
         const { symbol, type = 'FUT', timeframe } = req.query;
         if (!symbol || !timeframe) {
