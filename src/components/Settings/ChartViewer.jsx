@@ -138,7 +138,11 @@ export default function ChartViewer({ futuresSettings = [], apiBaseUrl }) {
     try {
       const data = await fetchBars(start, end);
       if (seq !== requestSeqRef.current) return;
-      edgesRef.current = { earliest: data.length === 0 || data[0].time <= range.earliest, latest: data.length === 0 || data[data.length - 1].time >= range.latest };
+      // As instants: the bars say "…Z", the summary "…+00:00".
+      edgesRef.current = {
+        earliest: data.length === 0 || Date.parse(data[0].time) <= Date.parse(range.earliest),
+        latest: data.length === 0 || Date.parse(data[data.length - 1].time) >= Date.parse(range.latest),
+      };
       pendingViewRef.current = { center: centerIso ? center : null };
       setBars(data);
     } catch (err) {
@@ -158,13 +162,28 @@ export default function ChartViewer({ futuresSettings = [], apiBaseUrl }) {
     try {
       const edge = toSeconds(direction === 'older' ? current[0].time : current[current.length - 1].time);
       const step = BAR_SECONDS[timeframe];
-      const [start, end] = direction === 'older'
-        ? [edge - 2 * spanSeconds, edge - step]
-        : [edge + step, edge + 2 * spanSeconds];
-      const data = await fetchBars(new Date(start * 1000).toISOString(), new Date(end * 1000).toISOString());
-      if (seq !== requestSeqRef.current) return;
       const known = new Set(current.map(b => b.time));
-      const added = data.filter(b => !known.has(b.time));
+      const windowAt = (from) => (direction === 'older' ? [from - 2 * spanSeconds, from - step] : [from + step, from + 2 * spanSeconds]);
+      let [start, end] = windowAt(edge);
+      let data = await fetchBars(new Date(start * 1000).toISOString(), new Date(end * 1000).toISOString());
+      if (seq !== requestSeqRef.current) return;
+      let added = data.filter(b => !known.has(b.time));
+      if (added.length === 0) {
+        // Nothing in the window: the end of the data, or a gap in it (weeks
+        // without 1-minute bars happen). The nearest stored bar that way
+        // says which, and the next window starts there.
+        const params = new URLSearchParams({ symbol: selected.symbol, type: selected.type, timeframe, [direction === 'older' ? 'before' : 'after']: new Date(edge * 1000).toISOString() });
+        if (contract) params.set('contractMonth', contract);
+        const near = await fetch(`${apiBaseUrl}/api/historical/nearest?${params}`).then(r => r.json()).catch(() => ({}));
+        if (seq !== requestSeqRef.current) return;
+        if (near && near.time) {
+          const t = toSeconds(near.time);
+          [start, end] = direction === 'older' ? [t - 2 * spanSeconds, t] : [t, t + 2 * spanSeconds];
+          data = await fetchBars(new Date(start * 1000).toISOString(), new Date(end * 1000).toISOString());
+          if (seq !== requestSeqRef.current) return;
+          added = data.filter(b => !known.has(b.time));
+        }
+      }
       if (added.length === 0) {
         edgesRef.current[direction === 'older' ? 'earliest' : 'latest'] = true;
         return;
@@ -183,7 +202,7 @@ export default function ChartViewer({ futuresSettings = [], apiBaseUrl }) {
     } finally {
       if (seq === requestSeqRef.current) { loadingRef.current = false; setLoading(false); }
     }
-  }, [fetchBars, spanSeconds, timeframe]);
+  }, [fetchBars, spanSeconds, timeframe, selected?.symbol, selected?.type, contract, apiBaseUrl]);
 
   // A new symbol, timeframe or contract: the latest bars (or the moment
   // chosen in "Go to").
@@ -223,9 +242,12 @@ export default function ChartViewer({ futuresSettings = [], apiBaseUrl }) {
       timeScale: { tickMarkFormatter: ts => DateTime.fromSeconds(ts, { zone }).toFormat(daily ? "d LLL ''yy" : 'HH:mm') },
       localization: {
         timeFormatter: ts => DateTime.fromSeconds(ts, { zone }).toFormat(daily ? 'ccc d LLL yyyy' : "ccc d LLL yyyy, HH:mm"),
-        priceFormatter: price => formatNumber(price, selected?.precision ?? 2),
       },
     });
+    // Per series: chart-wide, the price format gave volumes decimals too.
+    const precision = selected?.precision ?? 2;
+    seriesRef.current?.applyOptions({ priceFormat: { type: 'custom', minMove: 1 / 10 ** precision, formatter: price => formatNumber(price, precision) } });
+    volumeRef.current?.applyOptions({ priceFormat: { type: 'custom', minMove: 1, formatter: v => formatNumber(v, 0) } });
   }, [zone, timeframe, selected?.precision]);
 
   // Bars to the chart, then the view: centred on "Go to", shifted after
