@@ -1709,6 +1709,9 @@ async function _buildAndStoreContinuousSeries(client, futuresSettingId, timefram
     // real reason once the daily-volume computation above no longer needs
     // the by-contract grouping either.
     const barsByTimestamp = new Map();
+    // Each contract's last bar: see the "skip a contract without bars" roll.
+    const lastBarMillisByContract = new Map();
+    const firstBarMillisByContract = new Map();
     for (let i = 0; i < rawHistoricalData.length; i++) {
         if (i > 0 && i % YIELD_EVERY_N_ITEMS === 0) await yieldToEventLoop();
         const row = rawHistoricalData[i];
@@ -1724,6 +1727,11 @@ async function _buildAndStoreContinuousSeries(client, futuresSettingId, timefram
             case '5M': const minute5M = dt.minute - (dt.minute % 5); normalizedTimeMillis = dt.set({ minute: minute5M, second: 0, millisecond: 0 }).toMillis(); break;
             case '1M': normalizedTimeMillis = dt.set({ second: 0, millisecond: 0 }).toMillis(); break;
             default: normalizedTimeMillis = dt.toMillis(); break;
+        }
+        if (row.contract_month) {
+            const t = dt.toMillis();
+            if (!(lastBarMillisByContract.get(row.contract_month) >= t)) lastBarMillisByContract.set(row.contract_month, t);
+            if (!(firstBarMillisByContract.get(row.contract_month) <= t)) firstBarMillisByContract.set(row.contract_month, t);
         }
         if (!barsByTimestamp.has(normalizedTimeMillis)) {
             barsByTimestamp.set(normalizedTimeMillis, []);
@@ -1902,6 +1910,30 @@ async function _buildAndStoreContinuousSeries(client, futuresSettingId, timefram
                             nextContract = potentialNextContract;
                             rolloverType = 'FALLBACK';
                         }
+                    }
+                }
+            }
+
+            // The current contract has ended (no bars from here on at all) and
+            // the next one has none now: roll to the nearest later contract
+            // that has. Waiting for the next one left the series empty until
+            // it had bars: PA's June 2026 contract has 1-minute bars on its
+            // last day only, so from March's last bar on 24 March there was
+            // nothing until 25 June, while September traded all along.
+            if (!shouldRollover) {
+                const currentEnded = !(lastBarMillisByContract.get(currentContract) >= timestamp);
+                const currentIndex = sortedContracts.indexOf(currentContract);
+                const next = sortedContracts[currentIndex + 1];
+                // Not a minute without a trade in the next contract: its bars
+                // start more than a day from now (or there are none).
+                const nextStartsLater = next && !(firstBarMillisByContract.get(next) <= timestamp + 24 * 60 * 60 * 1000);
+                if (currentEnded && currentIndex >= 0 && nextStartsLater && !hasValidBarFor(next)) {
+                    const later = sortedContracts.slice(currentIndex + 2).find(hasValidBarFor);
+                    if (later) {
+                        logger.debug(`${logPrefix} ${currentContract} has ended and ${sortedContracts[currentIndex + 1]} has no bars on ${barDate.toISO()}: rolling to ${later}.`);
+                        shouldRollover = true;
+                        nextContract = later;
+                        rolloverType = 'FALLBACK';
                     }
                 }
             }
