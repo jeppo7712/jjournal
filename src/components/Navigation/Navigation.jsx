@@ -425,8 +425,8 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
           </select>
         )}
       </div>
-      {/* Scrolls internally on short viewports rather than pushing Status
-          below the visible sidebar — this section grew from 2 stats to 4
+      {/* Scrolls internally on short viewports rather than pushing the status
+          lights below the visible sidebar — this section grew from 2 stats to 4
           and a fixed-height nav (see .navigation) won't reflow around it. */}
       <div className={styles.navStatsGroup}>
         <div className={styles.navStat}>
@@ -446,39 +446,38 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
           {renderCurrencyStat(totalPortfolioByCurrency)}
         </div>
       </div>
+    </div>
+  );
 
-      {/* Integrated Status Display */}
-      <div 
-        className={styles.integratedStatusSection} 
-        onClick={handleStatusTriggerClick} 
-        ref={statusBoxTriggerRef} 
-        title="Click to see all logs"
-      >
-        <div className={styles.statusHeader}>
-          <span className={styles.statusLabel}>Status</span>
-          <div className={styles.statusLights}>
-            {ibkrDataLight && (
-              <span className={styles.statusLight} title={ibkrDataLight.title}>
-                <span className={styles.statusLightLabel}>HIS</span>
-                <div className={styles.statusIndicator} style={{ backgroundColor: ibkrDataLight.color }}></div>
-              </span>
-            )}
-            {tradingViewLight && (
-              <span className={styles.statusLight} title={tradingViewLight.title}>
-                <span className={styles.statusLightLabel}>TV</span>
-                <div className={styles.statusIndicator} style={{ backgroundColor: tradingViewLight.color }}></div>
-              </span>
-            )}
-            <span className={styles.statusLight} title={isDatabaseConnected ? 'Database connected' : 'Database not connected'}>
-              <span className={styles.statusLightLabel}>DB</span>
-              <div
-                className={styles.statusIndicator}
-                style={{ backgroundColor: isDatabaseConnected ? '#0d8050' : '#b32424' }} //
-              ></div>
-            </span>
-          </div>
-        </div>
-        {/* Removed the logList div to free up space */}
+  // The connection lights aren't about the account, so they sit apart from
+  // its card: a bare row of pills under it (click for the log).
+  const renderStatusLights = () => (
+    <div
+      className={styles.integratedStatusSection}
+      onClick={handleStatusTriggerClick}
+      ref={statusBoxTriggerRef}
+      title="Click to see all logs"
+    >
+      <div className={styles.statusLights}>
+        {ibkrDataLight && (
+          <span className={styles.statusLight} title={ibkrDataLight.title}>
+            <span className={styles.statusLightLabel}>HIS</span>
+            <div className={styles.statusIndicator} style={{ backgroundColor: ibkrDataLight.color }}></div>
+          </span>
+        )}
+        {tradingViewLight && (
+          <span className={styles.statusLight} title={tradingViewLight.title}>
+            <span className={styles.statusLightLabel}>TV</span>
+            <div className={styles.statusIndicator} style={{ backgroundColor: tradingViewLight.color }}></div>
+          </span>
+        )}
+        <span className={styles.statusLight} title={isDatabaseConnected ? 'Database connected' : 'Database not connected'}>
+          <span className={styles.statusLightLabel}>DB</span>
+          <div
+            className={styles.statusIndicator}
+            style={{ backgroundColor: isDatabaseConnected ? '#0d8050' : '#b32424' }} //
+          ></div>
+        </span>
       </div>
     </div>
   );
@@ -499,7 +498,8 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
             className={`${styles.logoPopup} ${showLogoPopup ? styles.show : ''}`} //
             ref={logoPopupRef} //
           >
-            {renderAccountInfo()} {/* Account info (now with status) for medium/small modes */}
+            {renderAccountInfo()}
+            {renderStatusLights()}
           </div>
         )}
       </div>
@@ -593,10 +593,11 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
         </div>
       )}
 
-      {/* AccountInfo for wide mode (now includes status display) */}
+      {/* Account card and status lights, at the bottom in wide mode */}
       {navMode === 'wide' && (
-        <div className={styles.wideFooterAccountInfo}> {/* Wrapper for positioning account info in wide mode */}
+        <div className={styles.wideFooterAccountInfo}>
           {renderAccountInfo()}
+          {renderStatusLights()}
         </div>
       )}
       
