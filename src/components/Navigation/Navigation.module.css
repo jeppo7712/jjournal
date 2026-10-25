@@ -132,13 +132,14 @@
 }
 
 /* ---------- Pages ---------- */
+/* Never shorter than its buttons: on a short window the account card below
+   shrinks (its stats scroll) instead of sliding over the menu. */
 .navItems {
-  flex: 1;
+  flex: 1 0 auto;
   display: flex;
   flex-direction: column;
   gap: 2px;
   margin-bottom: 16px;
-  min-height: 0;
 }
 
 .navSectionLabel {
@@ -259,6 +260,7 @@
   min-height: 0;
   display: flex;
   flex-direction: column;
+  gap: 8px;
 }
 
 .accountInfo {
@@ -402,17 +404,15 @@
   line-height: 1.3;
 }
 
-/* Status lights: a row of small pills; click for the log. */
+/* Status lights: a row of small pills under the account card; click for the log. */
 .integratedStatusSection {
   width: 100%;
   border-radius: 10px;
-  padding: 8px;
-  background: rgba(0, 0, 0, 0.18);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  padding: 4px;
   font-size: 11px;
   color: #8B93A3;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition: background 0.15s;
   flex-shrink: 0;
   box-sizing: border-box;
 }
@@ -420,29 +420,13 @@
 @media (hover: hover) {
   .integratedStatusSection:hover {
     background: rgba(255, 255, 255, 0.03);
-    border-color: rgba(255, 255, 255, 0.08);
   }
-}
-
-.statusHeader {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
-}
-
-.statusLabel {
-  font-size: 10.5px;
-  font-weight: 600;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: #5F6778;
 }
 
 .statusLights {
   display: flex;
   flex-wrap: wrap;
-  justify-content: flex-end;
+  justify-content: center;
   align-items: center;
   gap: 4px;
 }
@@ -765,6 +749,10 @@
     width: 240px;
     max-width: calc(100vw - 16px);
     box-sizing: border-box;
+  }
+
+  .logoPopup .integratedStatusSection {
+    padding: 0 14px 12px;
   }
 
   .logoPopup .accountInfo {
