@@ -48,7 +48,7 @@ const { DateTime, Duration } = require('luxon');
 const { Contract, EventName } = require('@stoqey/ib'); // Import Contract and EventName
 const yahoo = require('./yahoo.js');
 const ibkrDataStatus = require('./ibkr-data-status.js');
-const { withRetries, normalizeDate, extractIBKRTimezoneSuffix, getTimeframeDuration, parseDuration, formatDurationForIBKR, generateContractChain, validateContract, delay, generateIbReqId } = require('./utils.js');
+const { withRetries, normalizeDate, extractIBKRTimezoneSuffix, getTimeframeDuration, parseDuration, formatDurationForIBKR, generateContractChain, validateContract, delay, generateIbReqId, futuresContractLabel } = require('./utils.js');
 
 // Days covered by an IBKR duration string ("1800 S", "2 D", "1 W", "1 M",
 // "1 Y"); never throws, unlike parseDuration, which knows no seconds.
@@ -1218,7 +1218,7 @@ async function fetchAndStoreIBKRContractData(futuresSettingId, validatedContract
 }
 
 async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId, validatedContract, timeframe, exchangeTimezone, cancellationSignal, broadcastStatus, taskId, completionCheckTime, requiredConfig) {
-    const specificContractMonth = validatedContract.lastTradeDateOrContractMonth?.substring(0, 6) || null;
+    const specificContractMonth = validatedContract.secType === 'FUT' ? futuresContractLabel(validatedContract) : null;
     const contractDesc = `${validatedContract.symbol} (${timeframe}, contract: ${specificContractMonth || 'N/A'}, conId: ${validatedContract.conId})`;
 
     logger.debug(`[populate][${taskId}] Determining fetch range for IBKR contract ${contractDesc}...`);

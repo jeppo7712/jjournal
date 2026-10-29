@@ -268,7 +268,8 @@ async function validateContract(contract, taskId, cancellationSignal = null, bro
         const specificContractDetailsHandler = (id, contractDetails) => {
             if (id === ibReqId && (!accept || accept(contractDetails.contract))) {
                 // logger.info(`[Historical][validateContract][${taskId}] Contract validated (ibReqId ${ibReqId}): ${JSON.stringify(contractDetails.contract)}`);
-                cleanupAndAction(resolve, contractDetails.contract);
+                // IBKR's own contract month rides along (see futuresContractLabel).
+                cleanupAndAction(resolve, contractDetails.contractMonth ? { ...contractDetails.contract, contractMonth: contractDetails.contractMonth } : contractDetails.contract);
             }
         };
 
@@ -301,6 +302,19 @@ async function validateContract(contract, taskId, cancellationSignal = null, bro
     });
 }
 
+
+/**
+ * The month a futures contract is stored under (yyyyMM): IBKR's contract
+ * month. It used to be the month of the last trading day
+ * (lastTradeDateOrContractMonth), which is the month before for crude oil
+ * (CL December stops trading on 19 November), so CL and MCL were stored a
+ * month early; database.js moved their stored months on once.
+ */
+function futuresContractLabel(contract) {
+    const month = String(contract?.contractMonth || '');
+    if (/^\d{6}$/.test(month)) return month;
+    return String(contract?.lastTradeDateOrContractMonth || '').substring(0, 6) || null;
+}
 
 // requiredStartDate can be as far back as MAX_LOOKBACK_DURATION (100 years,
 // see historical-data-service.js) when a symbol's history isn't capped — but
@@ -423,16 +437,13 @@ async function generateContractChain(symbol, exchange, requiredStartDate, taskId
              throw new Error(`Task ${taskId} cancelled during contract validation.`);
         }
 
-        const sortedContracts = Array.from(foundContracts.values()).sort((a, b) => {
-            const monthA = a.lastTradeDateOrContractMonth.substring(0, 6);
-            const monthB = b.lastTradeDateOrContractMonth.substring(0, 6);
-            return monthA.localeCompare(monthB);
-        });
+        const sortedContracts = Array.from(foundContracts.values()).sort((a, b) =>
+            futuresContractLabel(a).localeCompare(futuresContractLabel(b)));
 
         logger.debug(`[populate][${taskId}] Found ${sortedContracts.length} relevant contracts for ${symbol}.`);
         return sortedContracts.map(c => ({
             ...c,
-            contractMonth: c.lastTradeDateOrContractMonth.substring(0, 6)
+            contractMonth: futuresContractLabel(c)
         }));
 
     } catch (error) {
@@ -449,6 +460,7 @@ async function generateContractChain(symbol, exchange, requiredStartDate, taskId
 
 // Export all the utility functions
 module.exports = {
+    futuresContractLabel,
     delay,
     timeout,
     withRetries,

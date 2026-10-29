@@ -73,6 +73,12 @@ async function triggerTaskProcessor() {
 
   // Run indefinitely, checking for tasks
   while (true) {
+    // Nothing touches the price data while the database's startup setup
+    // runs (it can move stored bars, see database.js).
+    if (!db.getIsConnected()) {
+      await new Promise(resolve => setTimeout(resolve, 5000));
+      continue;
+    }
     try {
       await historicalDataService.runPendingContinuousRebuilds(hasQueuedTasksFor, wss);
     } catch (err) {
@@ -537,6 +543,8 @@ const CRON_RECHECK_THROTTLE_MINUTES = {
 };
 
 cron.schedule('*/30 * * * *', async () => {
+  // Not before the database's startup setup is done (see triggerTaskProcessor).
+  if (!db.getIsConnected()) return;
   const cronRunId = uuidv4();
   logger.info(`[Cron:${cronRunId}] Background data fetch triggered.`);
   try {
