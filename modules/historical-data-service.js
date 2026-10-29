@@ -1275,7 +1275,7 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
          WHERE futures_setting_id = $1 AND (contract_month = $2 OR ($2 IS NULL AND contract_month IS NULL)) AND timeframe = $3`,
         [futuresSettingId, specificContractMonth, timeframe]
     );
-    const recordedBound = recordedRow ? DateTime.fromJSDate(recordedRow.earliest_available, { zone: 'utc' }) : null;
+    let recordedBound = recordedRow ? DateTime.fromJSDate(recordedRow.earliest_available, { zone: 'utc' }) : null;
     if (knownBound && knownBound > fetchLowerBound) {
         logger.debug(`[populate][${taskId}] Clamping fetch lower bound for ${contractDesc} to previously-confirmed IBKR limit ${knownBound.toISO()} (was ${fetchLowerBound.toISO()}).`);
         fetchLowerBound = knownBound;
@@ -1353,7 +1353,9 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
 
         // Recency gap
         if (!isExpired && latestSpecificIBKRLuxon < fetchUpperBound) {
-            rangesToFetch.push({ start: latestSpecificIBKRLuxon, end: fetchUpperBound });
+            // Newer than stored bars: an empty chunk here is a stretch
+            // without trades, never the start of the contract's history.
+            rangesToFetch.push({ start: latestSpecificIBKRLuxon, end: fetchUpperBound, recency: true });
             logger.debug(`[populate][${taskId}] Recency update needed for ${contractDesc}. Planning fetch from ${latestSpecificIBKRLuxon.toISO()} to ${fetchUpperBound.toISO()}.`);
         }
     }
@@ -1392,6 +1394,8 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
     let firstEmptyChunkEnd = null;
 
     for (const range of rangesToFetch) {
+        emptyChunksInARow = 0;
+        firstEmptyChunkEnd = null;
         try {
             // We loop BACKWARDS from range.end to range.start in chunks
             let currentChunkEnd = range.end;
@@ -1429,7 +1433,9 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
                 logger.info(`[populate][${taskId}] Fetching CHUNK for ${contractDesc}. Range: ${currentChunkStart.toISO()} to ${currentChunkEnd.toISO()}. IBKR Request: ${ibkrDurationString}`);
                 setChunkProgress(taskId, validatedContract.symbol, timeframe, specificContractMonth, currentChunkStart, currentChunkEnd);
 
-            const bars = await withRetries(() => fetchHistoricalDataFromIBKR(
+            let bars;
+            try {
+            bars = await withRetries(() => fetchHistoricalDataFromIBKR(
                 validatedContract,
                 ibkrDurationString,
                 barSizeMap[timeframe],
@@ -1441,10 +1447,24 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
                 broadcastStatus
             ), {
                     taskName: `IBKR fetch chunk for ${contractDesc}`,
-                retries: 2,
+                // Once after an empty chunk: a timeout there is the answer (below).
+                retries: emptyChunksInARow > 0 ? 1 : 2,
                 taskId: taskId,
                 cancellationSignal
             });
+            } catch (err) {
+                // IBKR doesn't answer at all for some instruments before their
+                // first bar (ETFC and ETFD: every request before their listing
+                // timed out), so after an empty chunk a timeout is the second
+                // empty one. Without this the 30-day re-check never recorded
+                // its limit and ran again every cycle, 10 minutes each time.
+                if (emptyChunksInARow > 0 && /timed out/.test(err.message) && !(cancellationSignal && cancellationSignal.aborted)) {
+                    logger.info(`[populate][${taskId}] IBKR has no data before ${firstEmptyChunkEnd.toISO()} for ${contractDesc} (an empty chunk, then no answer for the one before). Recording as the confirmed limit.`);
+                    await recordIbkrDataBound(client, futuresSettingId, specificContractMonth, timeframe, firstEmptyChunkEnd);
+                    break;
+                }
+                throw err;
+            }
 
                 // Only bars from the chunk's end on (IBKR dates a daily bar by
                 // its trading day, so asking for the day before the oldest stored
@@ -1468,6 +1488,7 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
                     if (recordedBound && oldestHere && oldestHere < recordedBound) {
                         logger.info(`[populate][${taskId}] IBKR has bars before the recorded limit ${recordedBound.toISO()} for ${contractDesc}: limit removed.`);
                         await clearIbkrDataBound(client, futuresSettingId, specificContractMonth, timeframe);
+                        recordedBound = null;
                     }
                     // The re-check probe found bars older than what's stored:
                     // there's more history, so the walk goes on (until two
@@ -1499,7 +1520,7 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
                     earliestFetchTime = earliestTime;
                 }
                     }
-                } else if (hasFetchedAnyBarsForThisContract && currentChunkEnd < nowInExchangeTimezone.minus({ days: IBKR_BOUND_MIN_AGE_DAYS })) {
+                } else if (!range.recency && hasFetchedAnyBarsForThisContract && currentChunkEnd < nowInExchangeTimezone.minus({ days: IBKR_BOUND_MIN_AGE_DAYS })) {
                     // (Also for a chunk with only bars from its end on: see nothingOlder.)
                     // IBKR returned zero bars (not "trimmed to zero" — that's the
                     // `bars.length > 0` branch above, which can legitimately empty
