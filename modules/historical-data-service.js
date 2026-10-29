@@ -1065,7 +1065,7 @@ async function fetchHistoricalDataFromIBKR(validatedContract, duration, barSize,
             logger.error(`[Historical][${taskId}] Error in fetchHistoricalDataFromIBKR for conId ${validatedContract?.conId}: ${err.message}`);
         }
         // A task we cancelled ourselves says nothing about IBKR's health.
-        if (!(cancellationSignal && cancellationSignal.aborted)) ibkrDataStatus.recordFailure(err.message);
+        if (!(cancellationSignal && cancellationSignal.aborted)) ibkrDataStatus.recordFailure(err.message, `${validatedContract?.conId}|${barSize}|${duration}|${endDateTime}`);
         // Check for error codes or messages that indicate a disconnect
         const errStr = err.message.toLowerCase();
         const disconnectIndicators = ["connection broken", "socket closed", "not connected", "connection reset", "connectivity between IBKR and TWS has been lost"];

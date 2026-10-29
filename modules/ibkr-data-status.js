@@ -26,6 +26,8 @@ const status = {
   lastError: null,
   consecutiveFailures: 0,
 };
+// The request that failed last (see recordFailure).
+let lastFailedRequest = null;
 
 const connect = {
   failingSince: null, // ms; first failed connect since the last one that worked
@@ -37,11 +39,22 @@ const connect = {
 function recordSuccess() {
   status.lastSuccessAt = new Date().toISOString();
   status.consecutiveFailures = 0;
+  lastFailedRequest = null;
 }
 
-function recordFailure(message) {
+/**
+ * @param {string} message
+ * @param {string} [requestKey] Identifies the request (contract, range, bar
+ *   size): a retry of the request that failed last isn't counted again. One
+ *   request IBKR never answers (ETFC before its listing timed out on both
+ *   attempts) said nothing about the gateway, yet counted as two failures
+ *   in a row and had it reconnected and restarted about 13 times a day.
+ */
+function recordFailure(message, requestKey = null) {
   status.lastFailureAt = new Date().toISOString();
   status.lastError = String(message || 'Unknown error').slice(0, 300);
+  if (requestKey !== null && requestKey === lastFailedRequest) return;
+  lastFailedRequest = requestKey;
   status.consecutiveFailures += 1;
   // Two in a row is past a one-off; ask the gateway to reconnect its data
   // connections, and restart it if that doesn't help (only does anything

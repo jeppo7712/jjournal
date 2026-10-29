@@ -49,6 +49,28 @@ test('no RECONNECTDATA or RESTART while connects fail', (t) => {
     dataStatus.recordSuccess();
 });
 
+test('a retry of the same failed request is not a second failure', (t) => {
+    const calls = [];
+    t.mock.method(gatewayCommand, 'requestDataReconnect', async (reason) => { calls.push(reason); });
+
+    // One request IBKR never answers, asked twice: not the gateway.
+    dataStatus.recordFailure('timed out', '745200069|1 hour|2 Y|20231127-23:00:00');
+    dataStatus.recordFailure('timed out', '745200069|1 hour|2 Y|20231127-23:00:00');
+    assert.equal(dataStatus.getStatus().consecutiveFailures, 1);
+    assert.equal(calls.length, 0);
+
+    // A different request failing too is.
+    dataStatus.recordFailure('timed out', '745200069|1 hour|3 D|20261029-08:51:44');
+    assert.equal(dataStatus.getStatus().consecutiveFailures, 2);
+    assert.equal(calls.length, 1);
+
+    // After a success the same request counts again.
+    dataStatus.recordSuccess();
+    dataStatus.recordFailure('timed out', '745200069|1 hour|3 D|20261029-08:51:44');
+    assert.equal(dataStatus.getStatus().consecutiveFailures, 1);
+    dataStatus.recordSuccess();
+});
+
 test('RESTART is held on Sunday between 01:00 and 18:00 US/Eastern', () => {
     const held = (iso) => gatewayCommand.restartHoldReason(new Date(iso)) !== null;
     // Summer time (EDT, UTC-4).
