@@ -8,7 +8,8 @@ import styles from './Dialogs.module.css';
 //   the wording decides (an error message reads like one).
 // - confirmDialog(message, options?): resolves true or false.
 // - promptDialog(message, defaultValue?, options?): resolves the text, or
-//   null when cancelled.
+//   null when cancelled. options.inputMode 'decimal' for an amount (a
+//   phone's number pad); text otherwise.
 // - choiceDialog(message, { title, choices }): more than one way forward
 //   (e.g. Save / Don't save); resolves the chosen value, or null when
 //   cancelled. choices: [{ value, label, kind: 'primary' | 'danger' }].
@@ -69,13 +70,14 @@ export function confirmDialog(message, { title, confirmLabel, danger } = {}) {
   });
 }
 
-export function promptDialog(message, defaultValue = '', { title, confirmLabel } = {}) {
+export function promptDialog(message, defaultValue = '', { title, confirmLabel, inputMode = 'text' } = {}) {
   return openDialog({
     type: 'prompt',
     message: String(message),
     title: title || 'Enter a value',
     confirmLabel: confirmLabel || 'OK',
     defaultValue: defaultValue == null ? '' : String(defaultValue),
+    inputMode,
   });
 }
 
@@ -141,7 +143,7 @@ function Dialog({ dialog }) {
             className={styles.input}
             value={value}
             onChange={e => setValue(e.target.value)}
-            inputMode="decimal"
+            inputMode={dialog.inputMode}
           />
         )}
         <div className={styles.actions}>

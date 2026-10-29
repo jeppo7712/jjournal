@@ -326,7 +326,7 @@ const Capital = () => {
   });
 
   const redeemHolding = async (holding) => {
-    const input = await promptDialog(`Redemption amount for "${holding.name}" (${holding.currency}):`, holding.face_value, { title: "Redeem holding", confirmLabel: "Redeem" });
+    const input = await promptDialog(`Redemption amount for "${holding.name}" (${holding.currency}):`, holding.face_value, { title: "Redeem holding", confirmLabel: "Redeem", inputMode: "decimal" });
     if (input === null) return;
     const amount = Number(input);
     if (!amount || amount <= 0) { notify('Enter a positive amount.'); return; }
