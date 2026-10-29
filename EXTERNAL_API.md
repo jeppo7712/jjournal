@@ -64,7 +64,7 @@ The cash ledger for one account — deposits, withdrawals, transfers, currency e
 
 | Param | Type | Description |
 |---|---|---|
-| `from` / `to` | ISO date/time | Filters on `date_time`. |
+| `from` / `to` | ISO date/time | Filters on `date_time`. A date-only `to` (e.g. `2026-05-12`) includes that whole day (UTC). |
 | `limit` | int | Default 200, max 1000. |
 | `offset` | int | Default 0. |
 
