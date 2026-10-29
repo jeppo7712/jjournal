@@ -355,7 +355,9 @@ async function generateContractChain(symbol, exchange, requiredStartDate, taskId
         // the backward search already covers this one, expired or not (a
         // crude oil month stops trading in the month before, so without
         // includeExpired this month's contract wasn't found and warned on
-        // every run).
+        // every run). With includeExpired too: next month's crude oil
+        // contract also stops trading this month (CL November on 20 October),
+        // and from then on it wasn't found and warned on every run as well.
         let forwardDate = now.startOf('month').plus({ months: 1 });
         const forwardLimit = now.plus({ months: 6 });
         while (forwardDate <= forwardLimit) {
@@ -367,6 +369,7 @@ async function generateContractChain(symbol, exchange, requiredStartDate, taskId
                     exchange: exchange.toUpperCase(),
                     lastTradeDateOrContractMonth: contractMonthStr,
                     currency,
+                    includeExpired: true
                 }, taskId, cancellationSignal, broadcastStatus));
             }
             forwardDate = forwardDate.plus({ months: 1 });
