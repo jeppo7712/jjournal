@@ -886,6 +886,8 @@ ON trades (symbol, type, contract_month);
       logger.info('✅ Created default account');
     }
 
+    await relabelEnergyContractMonths(client);
+
     await client.query('COMMIT');
     client.release();
     client = null;
@@ -1086,6 +1088,72 @@ async function buildBackgroundIndexes() {
     } catch (err) {
       logger.warn(`[Database] Could not build index ${name}: ${err.message}`);
     }
+  }
+}
+
+// Crude oil's stored contract months (CL, MCL) were the month of the
+// contract's last trading day, which for crude oil is the month before the
+// contract month (CL December stops trading on 19 November): every one was
+// a month early. New bars are stored under IBKR's contract month (see
+// futuresContractLabel in utils.js); this moves the stored ones on to match,
+// once (data_migrations), in the startup transaction: nothing fetches bars
+// until it has committed (see triggerTaskProcessor in server.js), and a
+// failure leaves everything as it was. Newest month first, so a month never
+// moves onto one that hasn't moved yet (the unique index includes it).
+async function relabelEnergyContractMonths(client) {
+  await client.query(`CREATE TABLE IF NOT EXISTS data_migrations (name TEXT PRIMARY KEY, done_at TIMESTAMPTZ NOT NULL DEFAULT NOW())`);
+  const { rowCount } = await client.query(
+    `INSERT INTO data_migrations (name) VALUES ('energy-contract-months') ON CONFLICT (name) DO NOTHING`
+  );
+  if (rowCount === 0) return;
+  const { rows: settings } = await client.query(`SELECT id, symbol FROM futures_settings WHERE type = 'FUT' AND symbol IN ('CL', 'MCL')`);
+  const nextMonth = (month) => {
+    const year = Number(month.slice(0, 4));
+    const m = Number(month.slice(4, 6));
+    return m === 12 ? `${year + 1}01` : `${year}${String(m + 1).padStart(2, '0')}`;
+  };
+  for (const setting of settings) {
+    // Every stored month without reading the bars: a skip scan over
+    // historical_data_unique_idx (futures_setting_id, contract month, ...).
+    const { rows } = await client.query(
+      `WITH RECURSIVE months AS (
+         (SELECT COALESCE(contract_month, '') AS cm FROM historical_data
+          WHERE futures_setting_id = $1 AND COALESCE(contract_month, '') > ''
+          ORDER BY COALESCE(contract_month, '') LIMIT 1)
+         UNION ALL
+         SELECT (SELECT COALESCE(h.contract_month, '') FROM historical_data h
+                 WHERE h.futures_setting_id = $1 AND COALESCE(h.contract_month, '') > months.cm
+                 ORDER BY COALESCE(h.contract_month, '') LIMIT 1)
+         FROM months WHERE months.cm IS NOT NULL
+       )
+       SELECT cm FROM months WHERE cm IS NOT NULL`,
+      [setting.id]
+    );
+    const { rows: boundRows } = await client.query(
+      `SELECT DISTINCT contract_month AS cm FROM historical_data_bounds WHERE futures_setting_id = $1 AND contract_month IS NOT NULL`,
+      [setting.id]
+    );
+    const months = [...new Set([...rows, ...boundRows].map(r => r.cm))].filter(m => /^\d{6}$/.test(m)).sort().reverse();
+    let moved = 0;
+    for (const month of months) {
+      const to = nextMonth(month);
+      const bars = await client.query(
+        `UPDATE historical_data SET contract_month = $3 WHERE futures_setting_id = $1 AND COALESCE(contract_month, '') = $2`,
+        [setting.id, month, to]
+      );
+      await client.query(
+        `UPDATE historical_data_bounds SET contract_month = $3 WHERE futures_setting_id = $1 AND contract_month = $2`,
+        [setting.id, month, to]
+      );
+      await client.query(
+        `UPDATE futures_rollover_overrides SET from_contract_month = CASE WHEN from_contract_month = $2 THEN $3 ELSE from_contract_month END,
+                to_contract_month = CASE WHEN to_contract_month = $2 THEN $3 ELSE to_contract_month END
+         WHERE futures_setting_id = $1 AND (from_contract_month = $2 OR to_contract_month = $2)`,
+        [setting.id, month, to]
+      );
+      moved += bars.rowCount;
+    }
+    logger.info(`[Database] ${setting.symbol}: contract months moved on by one month (${months.length} months, ${moved} bars).`);
   }
 }
 
