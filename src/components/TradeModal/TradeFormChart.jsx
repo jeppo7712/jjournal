@@ -112,7 +112,8 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
   // 1-minute data), then a wider (but still bounded — see BARS_PADDING_FULL)
   // background fetch that arrives after and merges in — giving room to
   // scroll out further without ever blocking on the initial, fast render.
-  const fetchChartDataLogic = useCallback(async (isInitialLoad) => {
+  // storedOnly: see the WebSocket handler below.
+  const fetchChartDataLogic = useCallback(async (isInitialLoad, { storedOnly = false } = {}) => {
     if (!symbol) return;
 
     if (isInitialLoad) {
@@ -129,7 +130,7 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
     const centerMax = maxActionTime ?? DateTime.now().toSeconds();
     const startDate = DateTime.fromSeconds(centerMin - paddingSecs).toISO();
     const endDate = DateTime.fromSeconds(centerMax + paddingSecs).toISO();
-    const url = `${process.env.REACT_APP_API_URL}/api/historical/db?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&timeframe=${timeframe}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
+    const url = `${process.env.REACT_APP_API_URL}/api/historical/db?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&timeframe=${timeframe}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}${storedOnly ? '&noRefresh=true' : ''}`;
 
     const controller = requestControllerRef.current;
     try {
@@ -236,7 +237,9 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
           data.symbol.toUpperCase() === symbol.toUpperCase() &&
           data.timeframe === timeframe
         ) {
-          fetchChartDataLogic(!initialDataLoaded);
+          // Once it has bars: they're stored already, so no Yahoo/IBKR
+          // check for every bar of a live feed (see TradeView).
+          fetchChartDataLogic(!initialDataLoaded, { storedOnly: initialDataLoaded });
         }
       } catch (err) {
         console.error('[TradeFormChart] Error parsing WebSocket message:', err);
@@ -275,24 +278,11 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
       height: chartContainerRef.current.clientHeight,
       layout: { background: { color: '#13161F' }, textColor: '#8B93A3' },
       grid: { vertLines: { color: '#141822' }, horzLines: { color: '#141822' }, horzLinesVisible: false, vertLinesVisible: false },
-      timeScale: {
-        timeVisible: true,
-        tickMarkFormatter: (timestamp) => {
-          const dt = DateTime.fromSeconds(timestamp, { zone });
-          return timeframe === '1D' || timeframe === '1W' ? dt.toFormat("d LLL ''yy") : dt.toFormat('HH:mm');
-        },
-      },
+      // Labels: see the effect below.
+      timeScale: { timeVisible: true },
       rightPriceScale: { borderColor: '#141822' },
       crosshair: { mode: 0 },
       autoSize: true,
-    });
-    chart.applyOptions({
-      localization: {
-        timeFormatter: (timestamp) => {
-          const dt = DateTime.fromSeconds(timestamp, { zone });
-          return dt.toFormat("d LLL ''yy HH:mm");
-        },
-      },
     });
     const series = chart.addCandlestickSeries({
       upColor: '#22C55E',
@@ -313,14 +303,22 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
     };
   }, []);
 
-  // Price axis and crosshair label in the number format setting, with the
-  // symbol's precision (which can change after the chart was created).
+  // Axis and crosshair labels follow the current timeframe, zone and the
+  // symbol's precision (in the number format setting). The formatters given
+  // at creation keep the values of that moment: the default 1m timeframe
+  // left a daily chart's axis reading 00:00, and a timezone picked after
+  // opening the chart didn't reach its labels.
   useEffect(() => {
     if (!chartRef.current) return;
+    const daily = timeframe === '1D' || timeframe === '1W';
     chartRef.current.applyOptions({
-      localization: { priceFormatter: (price) => formatNumber(price, pricePrecision) },
+      timeScale: { tickMarkFormatter: (timestamp) => DateTime.fromSeconds(timestamp, { zone }).toFormat(daily ? "d LLL ''yy" : 'HH:mm') },
+      localization: {
+        timeFormatter: (timestamp) => DateTime.fromSeconds(timestamp, { zone }).toFormat(daily ? "d LLL ''yy" : "d LLL ''yy HH:mm"),
+        priceFormatter: (price) => formatNumber(price, pricePrecision),
+      },
     });
-  }, [pricePrecision]);
+  }, [zone, timeframe, pricePrecision]);
 
   // Push data + markers whenever bars, the zone, or the draft actions change.
   useEffect(() => {

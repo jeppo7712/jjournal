@@ -498,7 +498,9 @@ const [dataVersion, setDataVersion] = useState(0);
   const DEBOUNCE_DELAY = 3000;
 
 
-  const fetchChartDataLogic = useCallback(async (isInitialLoad = false) => {
+  // storedOnly: read what's stored without asking the server to check
+  // Yahoo/IBKR for newer bars (see the WebSocket handler below).
+  const fetchChartDataLogic = useCallback(async (isInitialLoad = false, { storedOnly = false } = {}) => {
     if (!showChart || !trade?.symbol || !chartContainerRef.current) {
       return;
     }
@@ -513,6 +515,7 @@ const [dataVersion, setDataVersion] = useState(0);
 
     let url = `${process.env.REACT_APP_API_URL}/api/historical/db?symbol=${encodeURIComponent(trade.symbol)}&type=${encodeURIComponent(trade.type)}&timeframe=${timeframe}`;
     if (useTradedContractSeries) url += `&contractMonth=${encodeURIComponent(tradedContract)}`;
+    if (storedOnly) url += '&noRefresh=true';
 
     // --- New logic to define the prioritized window ---
     if (isInitialLoad) {
@@ -1066,8 +1069,14 @@ const [dataVersion, setDataVersion] = useState(0);
           data.timeframe === timeframe
         ) {
           // If initial data hasn't been loaded yet (e.g., was awaiting data), treat this as initial load
-          // Otherwise, treat as full history update
-                fetchChartDataLogic(!initialDataLoaded);
+          // Otherwise, treat as full history update. The new bars are
+          // stored already: without noRefresh, every bar of a live feed
+          // (TradingView's 1m, once a minute) had the server queue a Yahoo
+          // and an IBKR check for this symbol and interrupt the background
+          // fetch running for another one, for as long as the chart was open.
+          // Still waiting for its first bars, it asks as before (an empty
+          // stored-only answer would end the wait too early).
+          fetchChartDataLogic(!initialDataLoaded, { storedOnly: initialDataLoaded });
         }
       } catch (err) {
         console.error('[TradeView] Error parsing WebSocket message:', err);
