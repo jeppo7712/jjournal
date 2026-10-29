@@ -2643,7 +2643,14 @@ async function getMergedHistoricalSeries({ futuresSettingId, type, contractMonth
             processedBars = yahooBars;
         } else {
             const lastIbkrTimeStr = ibkrBars[ibkrBars.length - 1].time;
-            const yahooExtension = yahooBars.filter(bar => bar.time > lastIbkrTimeStr);
+            // A daily (weekly) bar is stamped at the day's local midnight by
+            // IBKR but at the market's open by Yahoo, hours later: Yahoo's
+            // bar for IBKR's last day came after it and was added as a second
+            // candle for that day (ETFC.DE: IBKR 27 Oct 23:00 UTC and Yahoo
+            // 28 Oct 08:00 UTC, both 28 October). The next day's is a day on.
+            const sameBarWithinMs = timeframe === '1D' ? 20 * 3600000 : timeframe === '1W' ? 6 * 86400000 : 0;
+            const extendFromMs = Date.parse(lastIbkrTimeStr) + sameBarWithinMs;
+            const yahooExtension = yahooBars.filter(bar => bar.time > lastIbkrTimeStr && Date.parse(bar.time) >= extendFromMs);
             processedBars = [...ibkrBars, ...yahooExtension];
         }
     }
