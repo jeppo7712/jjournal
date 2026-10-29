@@ -391,9 +391,25 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
         const barIntervalDuration = getTimeframeDuration(timeframe); // Your existing helper
         const toleranceDuration = Duration.fromMillis(barIntervalDuration.toMillis() * DURATION_MET_TOLERANCE_BARS);
 
-        const isDurationMet = earliestTimeInDb
+        let isDurationMet = earliestTimeInDb
             ? earliestTimeInDb <= yahooRequiredStartDate.plus(toleranceDuration) // Check if earliestTimeInDb is within tolerance
             : false;
+        // Yahoo's daily and weekly history has no known limit to aim for, so
+        // the target was the nominal century back, which no symbol reaches:
+        // every run counted as "too short" and downloaded Yahoo's whole
+        // history again (PL=F daily: some 6000 bars, every few hours, for
+        // every symbol). Yahoo answers with all it has at once, so once its
+        // bars are stored, that download has been done.
+        if (!isDurationMet && earliestTimeInDb && yahooMaxLookbackDaysForTf == null) {
+            const { rows: yahooRows } = await db.getPool().query(
+                `SELECT 1 FROM historical_data
+                 WHERE futures_setting_id = $1 AND timeframe = $2 AND NOT is_continuous AND source = 'Yahoo'
+                   AND COALESCE(contract_month, '') = COALESCE($3::varchar, '')
+                 LIMIT 1`,
+                [futuresSettingId, timeframe, contractMonth]
+            );
+            if (yahooRows.length > 0) isDurationMet = true;
+        }
 
         let reasonToFetch = "Reason to fetch: ";
         // Determine if Yahoo fetch is needed based on overall data status and phase
