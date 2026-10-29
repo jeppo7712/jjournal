@@ -108,6 +108,20 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
             const { rows: accountRows } = await db.getPool().query('SELECT id FROM accounts WHERE id = $1', [accountId]);
             if (accountRows.length === 0) return res.status(404).json({ error: 'Account not found' });
 
+            // In SQL: date_time comes back as a Date, and comparing that with
+            // the query's string in JS was always false, so any from/to
+            // returned nothing. A date-only `to` means through the end of
+            // that day (UTC), as in GET /trades.
+            if ([from, to].some(d => d && Number.isNaN(Date.parse(d)))) {
+                return res.status(400).json({ error: 'from and to must be ISO dates or times' });
+            }
+            const params = [accountId];
+            const conditions = [];
+            if (from) { params.push(from); conditions.push(`ct.date_time >= $${params.length}::timestamptz`); }
+            if (to) {
+                params.push(/^\d{4}-\d{2}-\d{2}$/.test(to) ? `${to}T23:59:59.999Z` : to);
+                conditions.push(`ct.date_time <= $${params.length}::timestamptz`);
+            }
             const { rows } = await db.getPool().query(
                 `WITH RECURSIVE descendants AS (
                     SELECT id FROM accounts WHERE id = $1
@@ -117,17 +131,13 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
                 SELECT ct.*, a.name AS account_name
                 FROM cash_transactions ct
                 JOIN accounts a ON a.id = ct.account_id
-                WHERE ct.account_id IN (SELECT id FROM descendants)
+                WHERE ct.account_id IN (SELECT id FROM descendants)${conditions.map(c => ` AND ${c}`).join('')}
                 ORDER BY ct.date_time DESC, ct.id DESC`,
-                [accountId]
+                params
             );
 
-            let filtered = rows;
-            if (from) filtered = filtered.filter(r => r.date_time >= from);
-            if (to) filtered = filtered.filter(r => r.date_time <= to);
-
-            const total = filtered.length;
-            const page = filtered.slice(offset, offset + limit);
+            const total = rows.length;
+            const page = rows.slice(offset, offset + limit);
             res.json({ total, limit, offset, cash_transactions: page });
         } catch (err) {
             logger.error('[External API] Error fetching cash transactions:', err);
