@@ -90,7 +90,12 @@ module.exports = (db, taskManager, historicalDataService, broadcastStatus, uuidv
             // actively (re)fetched, which is the point of disabling it.
             const timeframeEnabled = getEnabledTimeframes(futuresSetting.timeframe_settings).includes(requestedTimeframe);
 
-            if (!noRefreshFlag && timeframeEnabled) {
+            // A live TradingView feed already has the newest bars: no refresh
+            // (see hasLiveTradingViewFeed), and an empty window is an answer,
+            // not "tasks queued" (none were).
+            const liveFeed = !noRefreshFlag && timeframeEnabled && !contractMonth
+                && await historicalDataService.hasLiveTradingViewFeed(futuresSettingId, requestedTimeframe);
+            if (!noRefreshFlag && timeframeEnabled && !liveFeed) {
                 // --- Task Management Logic on New User Request ---
                 // The PENDING QUEUE only ever loses *foreground* tasks (priority
                 // 10/20 — tied to a chart the user was just looking at) for some
@@ -162,7 +167,7 @@ module.exports = (db, taskManager, historicalDataService, broadcastStatus, uuidv
                 endDate,
             });
 
-            if (processedBars.length > 0 || noRefreshFlag) {
+            if (processedBars.length > 0 || noRefreshFlag || liveFeed) {
                 logger.debug(`[Historical/DB] Returning ${processedBars.length} existing bars for ${requestedSymbol} (${requestedTimeframe})`);
                 if (!res.headersSent) res.json(processedBars);
             } else {

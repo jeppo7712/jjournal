@@ -493,6 +493,9 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
 
     // --- Historical & current prices ---
 
+    // When GET /historical last queued a refresh, per series (see there).
+    const apiRefreshQueuedAt = new Map();
+
     router.get('/historical', async (req, res) => {
         try {
             const { symbol, type = 'FUT', timeframe, contract_month, from, to } = req.query;
@@ -523,24 +526,38 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
                 return res.status(404).json({ error: `No symbol settings found for ${upperSymbol} (${upperType})` });
             }
 
-            // Opportunistically queue a background refresh for this
-            // symbol/timeframe — this response still returns whatever's
-            // currently in the database immediately (no added latency here),
-            // but a gap noticed now may well be filled by the next call. Same
-            // cooldown key/mechanism the app's own charts use (so the two
-            // don't double-trigger), but deliberately WITHOUT the internal
-            // endpoint's "cancel whatever's running for other symbols" step —
-            // that's meant for "a human is actively looking at this specific
-            // chart right now", which doesn't fit a tool that might be
-            // scanning many symbols in a loop and would otherwise keep
-            // interrupting its own previous requests.
-            if (historicalDataService.getEnabledTimeframes(fsRows[0].timeframe_settings).includes(timeframe)) {
-                const COOLDOWN_PERIOD_MS = 60000;
+            // A background refresh for this symbol/timeframe, queued as a side
+            // effect: this response still returns whatever's in the database
+            // right away, and a later call sees what the refresh found. Not
+            // the internal chart endpoint's "cancel whatever's running for
+            // other symbols" step, which is for a person looking at a chart
+            // now, not for a tool polling or scanning many symbols.
+            // - Not while TradingView delivers this series live (see
+            //   hasLiveTradingViewFeed): its bars are newer than anything a
+            //   refresh brings.
+            // - At most once per apiRefreshIntervalMs (10 minutes, or a bar
+            //   for coarser timeframes): IBKR's bars are about ten minutes
+            //   late, so polling every minute had IBKR asked every two
+            //   minutes for nothing. A series without data refreshes on the
+            //   first call (nothing to wait for).
+            //   The interval counts from the last refresh this endpoint queued
+            //   too, not only from the last one that completed: refreshes
+            //   that keep failing (Yahoo unreachable, gateway logged out)
+            //   are retried at that pace, not on every call.
+            const liveFeed = !contract_month && await historicalDataService.hasLiveTradingViewFeed(fsRows[0].id, timeframe);
+            let refreshQueued = false;
+            if (!liveFeed && historicalDataService.getEnabledTimeframes(fsRows[0].timeframe_settings).includes(timeframe)) {
                 const requestIdBase = `external_api_${upperSymbol}_${timeframe}`;
-                const lastActivity = taskManager.getRecentCompletions().get(`${upperSymbol}-${timeframe}-user_initiated_fg`);
-                if (!lastActivity || (Date.now() - lastActivity > COOLDOWN_PERIOD_MS)) {
-                    taskManager.addTask(upperSymbol, timeframe, 'yahoo_only', taskManager.PRIORITY.USER_FOREGROUND_YAHOO, `${requestIdBase}_yahoo_prio`, contract_month || null, upperType);
-                    taskManager.addTask(upperSymbol, timeframe, 'ibkr_only', taskManager.PRIORITY.USER_FOREGROUND_IBKR, `${requestIdBase}_ibkr_prio`, contract_month || null, upperType);
+                const refreshKey = `${upperSymbol}|${upperType}|${timeframe}|${contract_month || ''}`;
+                const lastActivity = Math.max(
+                    taskManager.getRecentCompletions().get(`${upperSymbol}-${timeframe}-user_initiated_fg`) || 0,
+                    apiRefreshQueuedAt.get(refreshKey) || 0
+                );
+                if (Date.now() - lastActivity > historicalDataService.apiRefreshIntervalMs(timeframe)) {
+                    apiRefreshQueuedAt.set(refreshKey, Date.now());
+                    const yahooAdded = taskManager.addTask(upperSymbol, timeframe, 'yahoo_only', taskManager.PRIORITY.USER_FOREGROUND_YAHOO, `${requestIdBase}_yahoo_prio`, contract_month || null, upperType);
+                    const ibkrAdded = taskManager.addTask(upperSymbol, timeframe, 'ibkr_only', taskManager.PRIORITY.USER_FOREGROUND_IBKR, `${requestIdBase}_ibkr_prio`, contract_month || null, upperType);
+                    refreshQueued = !!(yahooAdded || ibkrAdded);
                     triggerTaskProcessor();
                 }
             }
@@ -567,6 +584,12 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
                 contract_month: contract_month || null,
                 adjustment: upperType === 'FUT' && !contract_month ? adjust : null,
                 rolls,
+                // How fresh the data is: the newest bar returned and where it
+                // came from, and whether TradingView delivers this series in
+                // real time (IBKR's and Yahoo's bars are delayed).
+                latest_bar: bars.length ? { time: bars[bars.length - 1].time, source: bars[bars.length - 1].source || null } : null,
+                live_feed: !!liveFeed,
+                refresh_queued: refreshQueued,
                 bar_count: bars.length,
                 bars,
             });
