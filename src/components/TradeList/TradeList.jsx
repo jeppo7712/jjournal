@@ -414,9 +414,11 @@ const TradeList = ({ onViewTrade, onEditTrade, onViewDayNote }) => {
                     <div className={styles.cellBottom}>
                       {item.entry !== undefined && item.entry !== null
                         ? formatMoney(item.entry, item.currency, item.pricePrecision || 2)
-                        : '-'} - {item.exit !== undefined && item.exit !== null
-                          ? formatMoney(item.exit, item.currency, item.pricePrecision || 2)
-                          : '-'}
+                        : '-'}
+                      {/* No exit yet (an open trade): the entry alone, not "€10,00 - -". */}
+                      {item.exit !== undefined && item.exit !== null
+                        ? ` - ${formatMoney(item.exit, item.currency, item.pricePrecision || 2)}`
+                        : ''}
                     </div>
                   </div>
                   <div className={styles.cellColumn}>
