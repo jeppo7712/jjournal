@@ -387,11 +387,15 @@ Instrument settings — currency, tick size/value, fees, margins, exchange, and 
 
 ## GET /historical
 
-Historic OHLCV price bars for a symbol — the same data the app's own charts use, including the IBKR/Yahoo merge (IBKR data preferred, extended with more-recent Yahoo data where IBKR hasn't caught up; see `modules/historical-data-service.js` for the exact provenance rules).
+Historic OHLCV price bars for a symbol — the same data the app's own charts use: IBKR's bars where IBKR has them, extended with newer TradingView (live webhook) or Yahoo bars where IBKR hasn't caught up yet (see `modules/historical-data-service.js` for the exact provenance rules).
 
-### Gaps get filled in the background, not before this response
+### How fresh the bars are, and background refreshes
 
-This endpoint always responds immediately from whatever is already in the database — it never blocks the request to backfill first. If the returned bars have a gap (e.g. the enabled timeframe hasn't been fetched recently, or IBKR/Yahoo were briefly unreachable), a background refresh for that exact `symbol`/`timeframe`/`type` is queued automatically as a side effect of the request, the same priority-boosted fetch the app's own UI triggers when you open a chart. A gap-filling background sweep also now runs every 30 minutes for all configured symbols independently of API access. Either way: **the fix generally isn't visible on this same response — call `GET /historical` again a short while later (seconds to low tens of seconds, depending on source) and the gap should be filled.** Repeated calls within 60 seconds for the same symbol/timeframe won't queue duplicate fetches.
+This endpoint always answers immediately from what is already in the database; it never waits for a fetch.
+
+- **Real time only comes from TradingView.** A series that a TradingView alert delivers live (a 1-minute futures chart, for example) has its newest bars from that feed, at most a bar or two old. IBKR's bars reach the journal about 10 minutes late, and Yahoo's futures bars are delayed too. The response says which case you're in: `live_feed` (`true` while TradingView delivers this series in real time) and `latest_bar` (time and source of the newest bar returned). If your tool needs real-time bars (e.g. a price watch on 1-minute data), act only while `live_feed` is `true`, and treat `false` as "delayed, possibly 10+ minutes behind".
+- **Background refresh as a side effect.** A request may queue a refresh of that `symbol`/`timeframe`/`type` from Yahoo and IBKR (`refresh_queued: true`). What it finds shows up on a later call, not on this one. To keep the system light, a series is refreshed **at most once every 10 minutes** (once per bar for timeframes longer than that: 15 minutes for `15M`, an hour for `1H`, and so on), and **never while `live_feed` is `true`**, since nothing a refresh brings is newer than the live feed. A series with no data yet is refreshed on the first call. Polling more often than that is fine, but it doesn't make the data any fresher.
+- **History and gaps** are also filled by a background run every 30 minutes for all configured symbols, independently of API calls.
 
 ### Query parameters
 
@@ -418,6 +422,9 @@ The rolls of the continuous series come with the bars, oldest first, whatever `a
   "rolls": [
     { "time": "2026-09-14T05:00:00.000Z", "from": "202609", "to": "202612", "gap": 297.25, "ratio": 1.0102, "method": "same bar" }
   ],
+  "latest_bar": { "time": "2026-05-12T00:00:00.000Z", "source": "IBKR" },
+  "live_feed": false,
+  "refresh_queued": false,
   "bar_count": 750,
   "bars": [
     {
@@ -431,6 +438,10 @@ The rolls of the continuous series come with the bars, oldest first, whatever `a
   ]
 }
 ```
+
+- `latest_bar`: the newest bar in this response (`time`, `source`: `TradingView`, `IBKR` or `Yahoo`), or `null` when there are no bars. With `to` in the past it's the newest bar up to `to`.
+- `live_feed`: `true` while TradingView delivers this series in real time (its newest TradingView bar is at most three bars old). Always `false` with `contract_month` (the live feed is the front-month series).
+- `refresh_queued`: `true` when this call queued (or brought forward) a background refresh; see above for when that happens.
 
 `404` if no symbol settings exist for that `symbol`/`type` combination (add the symbol in the app first — Settings → Symbols).
 

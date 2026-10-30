@@ -2518,6 +2518,34 @@ async function rebuildContinuousSeriesForSymbol(symbol, type) {
 }
 
 
+// How often a series an API client keeps asking for may be refreshed from
+// Yahoo/IBKR: IBKR's bars come about ten minutes late, so refreshing more
+// often brings nothing new, and a coarser bar can't change before it
+// closes. A client polling every minute asked IBKR again every two.
+const API_REFRESH_MIN_MS = 10 * 60 * 1000;
+function apiRefreshIntervalMs(timeframe) {
+    return Math.max(API_REFRESH_MIN_MS, getTimeframeDuration(timeframe).toMillis());
+}
+
+// Whether TradingView is delivering a symbol's bars live in this timeframe:
+// its newest front-month bar is at most LIVE_FEED_MAX_AGE_BARS bars old.
+// A chart or API request then needs no Yahoo/IBKR refresh: the live bars
+// are already stored (and IBKR's come about ten minutes late anyway), so
+// asking again on every request only loaded IBKR for nothing. The
+// 30-minute background fetch still fills IBKR's history and any gap, and
+// once the feed stops (market closed, alert off) requests refresh again.
+const LIVE_FEED_MAX_AGE_BARS = 3;
+async function hasLiveTradingViewFeed(futuresSettingId, timeframe) {
+    const { rows: [row] } = await db.getPool().query(
+        `SELECT MAX(time) AS last FROM historical_data
+         WHERE futures_setting_id = $1 AND timeframe = $2 AND source = 'TradingView'
+           AND NOT is_continuous AND COALESCE(contract_month, '') = ''`,
+        [futuresSettingId, timeframe]
+    );
+    if (!row || !row.last) return false;
+    return Date.now() - new Date(row.last).getTime() <= LIVE_FEED_MAX_AGE_BARS * getTimeframeDuration(timeframe).toMillis();
+}
+
 /**
  * Returns the merged historical price series for a symbol/timeframe — IBKR
  * data (the continuous series for a null contractMonth, or a specific
@@ -2773,6 +2801,8 @@ module.exports = {
     DEFAULT_TIMEFRAME_SETTINGS,
     getEnabledTimeframes,
     getMergedHistoricalSeries,
+    hasLiveTradingViewFeed,
+    apiRefreshIntervalMs,
     getYahooMaxLookbackDays,
     getIbkrDataBound,
     getActiveChunkProgress,
