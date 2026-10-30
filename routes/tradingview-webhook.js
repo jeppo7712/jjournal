@@ -1,5 +1,15 @@
+const crypto = require('crypto');
 const express = require('express');
 const router = express.Router();
+
+// The secret compared in constant time: this endpoint is the one reachable
+// from the internet, and a plain !== answers sooner the earlier a guess
+// goes wrong.
+function secretMatches(given, expected) {
+    const a = crypto.createHash('sha256').update(String(given ?? '')).digest();
+    const b = crypto.createHash('sha256').update(String(expected)).digest();
+    return crypto.timingSafeEqual(a, b);
+}
 const { logger } = require('../modules/logger.js');
 const tradingViewStatus = require('../modules/tradingview-status.js');
 
@@ -31,7 +41,7 @@ module.exports = (db, configManager, broadcastStatus, uuidv4, wss, WebSocket) =>
                 logger.error('[TradingView webhook] Rejected: no tradingViewWebhookSecret configured on the server.');
                 return res.status(503).json({ error: 'Webhook not configured' });
             }
-            if (!req.body || req.body.secret !== expectedSecret) {
+            if (!req.body || !secretMatches(req.body.secret, expectedSecret)) {
                 logger.warn('[TradingView webhook] Rejected: missing or incorrect secret.');
                 return res.status(401).json({ error: 'Unauthorized' });
             }
