@@ -43,7 +43,7 @@ import {
   computeHoldings,
 } from './statsUtils';
 import styles from './Stats.module.css';
-import { currencyMark } from '../../utils/formatMoney';
+import { markAmount, currencyMark } from '../../utils/formatMoney';
 import { formatNumber, formatNumberText } from '../../utils/numberFormat';
 import ChartCard from './ChartCard';
 import TagStats from './TagStats';
@@ -834,7 +834,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
               <div className={styles.statsGrid}>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Expectancy</div>
-                  <div className={`${styles.statValue} ${toneClass('Expectancy', computedStats.expectancy)}`} title="Avg Win Rate * Avg Win - Loss Rate * Avg Loss">{currencyMark(activeCurrency)}{formatNumberText(computedStats.expectancy)}</div>
+                  <div className={`${styles.statValue} ${toneClass('Expectancy', computedStats.expectancy)}`} title="Avg Win Rate * Avg Win - Loss Rate * Avg Loss">{markAmount(currencyMark(activeCurrency), formatNumberText(computedStats.expectancy))}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Risk/Reward Ratio</div>
@@ -854,11 +854,11 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Win Size</div>
-                  <div className={`${styles.statValue} ${toneClass('Avg Win Size')}`}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.avgWinLoss.avgWin)}</div>
+                  <div className={`${styles.statValue} ${toneClass('Avg Win Size')}`}>{markAmount(currencyMark(activeCurrency), formatNumberText(computedStats.avgWinLoss.avgWin))}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Loss Size</div>
-                  <div className={`${styles.statValue} ${toneClass('Avg Loss Size')}`}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.avgWinLoss.avgLoss)}</div>
+                  <div className={`${styles.statValue} ${toneClass('Avg Loss Size')}`}>{markAmount(currencyMark(activeCurrency), formatNumberText(computedStats.avgWinLoss.avgLoss))}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Consecutive Wins</div>
@@ -878,15 +878,15 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Best Daily P&L</div>
-                  <div className={`${styles.statValue} ${toneClass('Best Daily P&L')}`}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.dailyPnLStats.bestDailyPnL)}</div>
+                  <div className={`${styles.statValue} ${toneClass('Best Daily P&L')}`}>{markAmount(currencyMark(activeCurrency), formatNumberText(computedStats.dailyPnLStats.bestDailyPnL))}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Worst Daily P&L</div>
-                  <div className={`${styles.statValue} ${toneClass('Worst Daily P&L')}`}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.dailyPnLStats.worstDailyPnL)}</div>
+                  <div className={`${styles.statValue} ${toneClass('Worst Daily P&L')}`}>{markAmount(currencyMark(activeCurrency), formatNumberText(computedStats.dailyPnLStats.worstDailyPnL))}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Daily P&L</div>
-                  <div className={`${styles.statValue} ${toneClass('Avg Daily P&L', computedStats.dailyPnLStats.avgDailyPnL)}`}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.dailyPnLStats.avgDailyPnL)}</div>
+                  <div className={`${styles.statValue} ${toneClass('Avg Daily P&L', computedStats.dailyPnLStats.avgDailyPnL)}`}>{markAmount(currencyMark(activeCurrency), formatNumberText(computedStats.dailyPnLStats.avgDailyPnL))}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Best Trading Day</div>
@@ -894,7 +894,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Best Day P&L</div>
-                  <div className={`${styles.statValue} ${toneClass('Best Day P&L')}`}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.bestWorstDays.bestAmount)}</div>
+                  <div className={`${styles.statValue} ${toneClass('Best Day P&L')}`}>{markAmount(currencyMark(activeCurrency), formatNumberText(computedStats.bestWorstDays.bestAmount))}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Worst Trading Day</div>
@@ -902,7 +902,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Worst Day P&L</div>
-                  <div className={`${styles.statValue} ${toneClass('Worst Day P&L')}`}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.bestWorstDays.worstAmount)}</div>
+                  <div className={`${styles.statValue} ${toneClass('Worst Day P&L')}`}>{markAmount(currencyMark(activeCurrency), formatNumberText(computedStats.bestWorstDays.worstAmount))}</div>
                 </div>
               </div>
               
@@ -1222,7 +1222,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                         <tr key={`win-${idx}`}>
                           <td>Win</td>
                           <td>{trade.symbol}</td>
-                          <td>{currencyMark(activeCurrency)}{formatNumber(trade.return, 2)}</td>
+                          <td>{markAmount(currencyMark(activeCurrency), formatNumber(trade.return, 2))}</td>
                           <td>{trade.date}</td>
                         </tr>
                       ))}
@@ -1230,7 +1230,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                         <tr key={`loss-${idx}`}>
                           <td>Loss</td>
                           <td>{trade.symbol}</td>
-                          <td>{currencyMark(activeCurrency)}{formatNumber(trade.return, 2)}</td>
+                          <td>{markAmount(currencyMark(activeCurrency), formatNumber(trade.return, 2))}</td>
                           <td>{trade.date}</td>
                         </tr>
                       ))}
@@ -1247,11 +1247,11 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
               <div className={styles.statsGrid}>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Total Fees</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.feeAnalysis?.totalFees || '0.00')}</div>
+                  <div className={styles.statValue}>{markAmount(currencyMark(activeCurrency), formatNumberText(computedStats.feeAnalysis?.totalFees || '0.00'))}</div>
                 </div>
                 <div className={styles.statBox}>
                   <div className={styles.statLabel}>Avg Fees per Trade</div>
-                  <div className={styles.statValue}>{currencyMark(activeCurrency)}{formatNumberText(computedStats.feeAnalysis?.avgFeesPerTrade || '0.00')}</div>
+                  <div className={styles.statValue}>{markAmount(currencyMark(activeCurrency), formatNumberText(computedStats.feeAnalysis?.avgFeesPerTrade || '0.00'))}</div>
                 </div>
               </div>
               <div className={styles.tableSection}>
@@ -1268,7 +1268,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                       {Object.entries(computedStats.feeAnalysis.feesPerMonth).sort().map(([month, fees]) => (
                         <tr key={month}>
                           <td>{month}</td>
-                          <td>{currencyMark(activeCurrency)}{formatNumber(fees, 2)}</td>
+                          <td>{markAmount(currencyMark(activeCurrency), formatNumber(fees, 2))}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1291,7 +1291,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                       {Object.entries(computedStats.feeAnalysis.feesPerSymbol).map(([symbol, fees]) => (
                         <tr key={symbol}>
                           <td>{symbol}</td>
-                          <td>{currencyMark(activeCurrency)}{formatNumber(fees, 2)}</td>
+                          <td>{markAmount(currencyMark(activeCurrency), formatNumber(fees, 2))}</td>
                         </tr>
                       ))}
                     </tbody>
@@ -1433,7 +1433,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                       </div>
                       <div className={styles.headerRight}>
                         <span className={`${styles.pnlBadge} ${trade.return >= 0 ? styles.win : styles.loss}`}>
-                          {currencyMark(activeCurrency)}{formatNumber((Math.abs(trade.return) || 0), 2)}
+                          {markAmount(currencyMark(activeCurrency), formatNumber((Math.abs(trade.return) || 0), 2))}
                         </span>
                         <span className={styles.dateBadge}>{trade.openDate}</span>
                       </div>
