@@ -1,4 +1,5 @@
 import React, { useContext, useState, useEffect, useCallback, useRef } from 'react';
+import { DateTime } from 'luxon';
 import { TradeContext } from '../../context/TradeContext';
 import styles from './Capital.module.css';
 import { formatNumber } from '../../utils/numberFormat';
@@ -36,12 +37,14 @@ function todayISO() {
   return new Date().toISOString().slice(0, 10);
 }
 
-// 'YYYY-MM-DD' -> locale date, without going through UTC midnight (which
-// shows the previous day west of Greenwich).
+// 'YYYY-MM-DD' -> dd/MM/yyyy like the rest of the app (the browser's own
+// format put the month first in a US-English browser: 3/4/2026 for
+// 4 March), without going through UTC midnight (which shows the
+// previous day west of Greenwich).
 function formatISODate(iso) {
   if (!iso) return '—';
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString();
+  const date = DateTime.fromISO(String(iso).slice(0, 10));
+  return date.isValid ? date.toFormat('dd/MM/yyyy') : '—';
 }
 
 const EMPTY_DIVIDEND_FORM = {
@@ -779,7 +782,7 @@ const Capital = () => {
                         </tr>
                       )}
                       <tr>
-                        <td>{new Date(tx.date_time).toLocaleDateString()}</td>
+                        <td>{DateTime.fromJSDate(new Date(tx.date_time)).toFormat('dd/MM/yyyy')}</td>
                         {hasChildAccounts && <td className={!isOwnAccount ? styles.mutedCell : undefined}>{tx.account_name}</td>}
                         <td>{TYPE_LABELS[tx.type] || tx.type}</td>
                         <td className={Number(tx.amount) >= 0 ? styles.positive : styles.negative}>
@@ -911,8 +914,8 @@ const Capital = () => {
                     {hasChildAccounts && <td className={!isOwnAccount ? styles.mutedCell : undefined}>{h.account_name}</td>}
                     <td>{h.type}</td>
                     <td>{formatNumber(Number(h.face_value), 2)} {h.currency}</td>
-                    <td>{new Date(h.purchase_date).toLocaleDateString()}</td>
-                    <td>{h.maturity_date ? new Date(h.maturity_date).toLocaleDateString() : '—'}</td>
+                    <td>{formatISODate(h.purchase_date)}</td>
+                    <td>{formatISODate(h.maturity_date)}</td>
                     <td>{h.status}</td>
                     <td>
                       {isOwnAccount ? (

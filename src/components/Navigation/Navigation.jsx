@@ -1,4 +1,5 @@
 import React, { useContext, useState, useEffect, useRef } from 'react';
+import { DateTime } from 'luxon';
 import { TradeContext, getRealisedPnL, getTickMultiplier } from '../../context/TradeContext';
 import { useStatus } from '../../context/StatusContext';
 import { useBrokerAlerts } from '../../context/BrokerAlertsContext';
@@ -615,7 +616,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
               [...allLogs].reverse().map((log, index) => (
               <div key={log.id || index} className={`${styles.fullLogItem} ${log.type === 'error' ? styles.logError : log.type === 'warning' ? styles.logWarning : ''}`}>
                 <span className={styles.fullLogTimestamp}>
-                  {new Date(log.timestamp).toLocaleString()}
+                  {DateTime.fromJSDate(new Date(log.timestamp)).toFormat('dd/MM/yyyy, HH:mm:ss')}
                 </span>
                 <span className={styles.fullLogMessage}>{log.status}</span>
               </div>
