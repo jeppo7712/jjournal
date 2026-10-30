@@ -234,6 +234,17 @@ function createConnection({ name, clientId, resolveAddresses, health = null }) {
                   logger.debug(`${tag} ${err.message} (ReqId: ${localRequestId})`);
                   return;
                 }
+                // 165 is the historical data service reporting its own
+                // connection ("disconnect occurred. Attempting reconnection",
+                // "connection was successful"): status, not an error, and not
+                // one to show as "IBKR Connection Error" in the app. A request
+                // it breaks reports that itself.
+                if (code === 165) {
+                  const text = String(err?.message || '');
+                  if (/successful/i.test(text)) logger.info(`${tag} ${text}`);
+                  else logger.warn(`${tag} ${text}`);
+                  return;
+                }
                 const errSourceId = localRequestId || requestId || `ibkr-${name}`;
                 logger.error(`${tag} [Persistent Error Handler] Error: ${err.message} (Code: ${code}, ReqId: ${localRequestId})`);
                 broadcastStatus(errSourceId, `IBKR Connection Error: ${err.message} (Code: ${code})`, 'error');

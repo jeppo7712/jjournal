@@ -209,6 +209,9 @@ function formatDurationForIBKR(duration) {
 // itself is gone or unusable: 502 couldn't connect, 504 not connected,
 // 1100 connectivity between TWS and IBKR lost, 1300 socket port reset.
 const CONNECTION_LOST_CODES = new Set([502, 504, 1100, 1300]);
+// How long a finished contract lookup still owns its request ID (see
+// cleanupAndAction in validateContract).
+const SELF_REPORTED_GRACE_MS = 2 * 60 * 1000;
 
 async function validateContract(contract, taskId, cancellationSignal = null, broadcastStatus, accept = null) {
     return new Promise((resolve, reject) => {
@@ -229,7 +232,10 @@ async function validateContract(contract, taskId, cancellationSignal = null, bro
         const cleanupAndAction = (action, value) => {
             if (resolvedOrRejected) return;
             resolvedOrRejected = true;
-            ibkr.releaseSelfReportedErrors(ibReqId);
+            // A while later, not now: after a timeout IBKR can still answer
+            // "No security definition" a minute on (a futures chain search
+            // logged nine such errors at once), which is no error either.
+            setTimeout(() => ibkr.releaseSelfReportedErrors(ibReqId), SELF_REPORTED_GRACE_MS).unref?.();
 
             clearTimeout(validationTimeout);
             if (cancellationSignal) {
