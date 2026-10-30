@@ -333,8 +333,26 @@ function futuresContractLabel(contract) {
 // contract-chain generation for no benefit.
 const CONTRACT_CHAIN_MAX_LOOKBACK_YEARS = 30;
 
+// A symbol's contract chain, kept CONTRACT_CHAIN_CACHE_MS: building it asks
+// IBKR for every month of the search (some 120 lookups for a quarterly
+// future over 30 years), and every futures task needed it, so a series
+// fetched every few minutes cost IBKR thousands of lookups an hour for a
+// list that changes when a contract is listed, a few times a year. Only a
+// complete search is kept (see generateContractChain); an hour also bounds
+// a contract IBKR wrongly said didn't exist, and a new listing shows up
+// within it. The key changes with the month anyway.
+const CONTRACT_CHAIN_CACHE_MS = 60 * 60 * 1000;
+const contractChainCache = new Map(); // key -> { at, contracts }
+
 async function generateContractChain(symbol, exchange, requiredStartDate, taskId, broadcastStatus, cancellationSignal, rolloverMonths, currency = 'USD') {
     const searchFloor = DateTime.max(requiredStartDate, DateTime.now().minus({ years: CONTRACT_CHAIN_MAX_LOOKBACK_YEARS }));
+    const cacheKey = [symbol, exchange, currency, [...rolloverMonths].sort((a, b) => a - b).join(','), searchFloor.toFormat('yyyyMM'), DateTime.now().toFormat('yyyyMM')]
+        .map(v => String(v).toUpperCase()).join('|');
+    const cached = contractChainCache.get(cacheKey);
+    if (cached && Date.now() - cached.at < CONTRACT_CHAIN_CACHE_MS) {
+        logger.debug(`[populate][${taskId}] Contract chain for ${symbol} from the cache (${cached.contracts.length} contracts).`);
+        return cached.contracts.map(c => ({ ...c }));
+    }
     logger.debug(`[populate][${taskId}] Starting contract chain generation for ${symbol} from ${searchFloor.toISODate()} with rollover months: [${rolloverMonths.join(', ')}]`);
 
     // FIX: Helper for running promises in sequential batches to avoid overwhelming the API
@@ -405,6 +423,11 @@ async function generateContractChain(symbol, exchange, requiredStartDate, taskId
         // The connection can go mid-search (the gateway's nightly restart):
         // every month left fails the same way, so that's said once.
         let notConnected = 0;
+        // A month whose answer isn't known (a timeout or another error, not
+        // "no such contract"): the chain may be missing it, so it isn't
+        // cached. Past months don't count: their contracts are expired and
+        // either stored already or never answered at all.
+        let currentMonthUnknown = false;
         for (const result of settledResults) {
             if (cancellationSignal?.aborted) break;
 
@@ -420,7 +443,11 @@ async function generateContractChain(symbol, exchange, requiredStartDate, taskId
                 
                 const isPastContract = contractMonthStr !== "unknown" && DateTime.fromFormat(contractMonthStr, 'yyyyMM') < now.startOf('month');
 
-                if (error.message === 'IBKR API is not connected.') {
+                if (!isPastContract && !String(error.message).includes('No security definition has been found')) {
+                    currentMonthUnknown = true;
+                }
+                if (error.message === 'IBKR API is not connected.'
+                    || [...CONNECTION_LOST_CODES].some(code => String(error.message).endsWith(`(code ${code})`))) {
                     notConnected += 1;
                 } else if (error.message.includes("No security definition has been found")) {
                     if (isPastContract) {
@@ -447,10 +474,14 @@ async function generateContractChain(symbol, exchange, requiredStartDate, taskId
             futuresContractLabel(a).localeCompare(futuresContractLabel(b)));
 
         logger.debug(`[populate][${taskId}] Found ${sortedContracts.length} relevant contracts for ${symbol}.`);
-        return sortedContracts.map(c => ({
+        const contracts = sortedContracts.map(c => ({
             ...c,
             contractMonth: futuresContractLabel(c)
         }));
+        if (contracts.length > 0 && notConnected === 0 && !currentMonthUnknown) {
+            contractChainCache.set(cacheKey, { at: Date.now(), contracts });
+        }
+        return contracts.map(c => ({ ...c }));
 
     } catch (error) {
         // A cancellation must reach the caller as one, not as "no
@@ -467,6 +498,8 @@ async function generateContractChain(symbol, exchange, requiredStartDate, taskId
 // Export all the utility functions
 module.exports = {
     futuresContractLabel,
+    // Tests only.
+    _contractChainCache: contractChainCache,
     delay,
     timeout,
     withRetries,
