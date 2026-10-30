@@ -1,4 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
+import { DateTime } from 'luxon';
 import capitalStyles from './Capital.module.css';
 import styles from './BrokerActivity.module.css';
 import { formatNumber } from '../../utils/numberFormat';
@@ -26,10 +27,11 @@ const MODES = [
   { key: 'AUTO', label: 'Automatic', hint: 'New IBKR activity is added to the ledger by itself; you can still delete any entry.' },
 ];
 
+// dd/MM/yyyy like the rest of the app, not the browser's own order.
 function formatISODate(iso) {
   if (!iso) return '—';
-  const [y, m, d] = iso.split('-').map(Number);
-  return new Date(y, m - 1, d).toLocaleDateString();
+  const date = DateTime.fromISO(String(iso).slice(0, 10));
+  return date.isValid ? date.toFormat('dd/MM/yyyy') : '—';
 }
 
 // "2 Oct": the statement day, short enough for a figure's label.
@@ -183,7 +185,7 @@ const BrokerActivity = ({ accountId, accounts, onLedgerChange }) => {
 
       <p className={capitalStyles.hint} style={{ margin: '-8px 0 14px' }}>
         {MODES.find(m => m.key === mode)?.hint}{' '}
-        {mode !== 'OFF' && account.broker_synced_at && <>Last synced {new Date(account.broker_synced_at).toLocaleString()}.</>}
+        {mode !== 'OFF' && account.broker_synced_at && <>Last synced {DateTime.fromISO(account.broker_synced_at).toFormat('dd/MM/yyyy, HH:mm')}.</>}
       </p>
 
       {/* The opening balance holds all earlier activity; reading from before
