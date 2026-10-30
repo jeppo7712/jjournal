@@ -39,15 +39,22 @@ export function currencyMark(currency) {
   return CURRENCY_SYMBOLS[code] || `${code} `;
 }
 
+// An amount behind its currency mark, with a minus in front of the mark:
+// "-$1,234.50", not "$-1,234.50". `text` is an already formatted number.
+export function markAmount(mark, text) {
+  const value = String(text);
+  return value.startsWith('-') ? `-${mark}${value.slice(1)}` : `${mark}${value}`;
+}
+
 // formatMoney(12.5, 'EUR') -> "€12.50" (grouping per the number format setting)
 // formatMoney(12.5)        -> "$12.50"   (USD default, matches previous behaviour)
 //
-// Does not apply a sign: call sites pass Math.abs() and colour the value,
-// which is the convention already used throughout the trade views.
+// Most call sites pass Math.abs() and colour the value, the convention
+// throughout the trade views; a negative amount reads "-$12.50".
 export function formatMoney(amount, currency = 'USD', decimals = 2) {
   const n = Number(amount);
   if (!Number.isFinite(n)) return '-';
-  return `${currencyMark(currency)}${formatNumber(n, decimals)}`;
+  return markAmount(currencyMark(currency), formatNumber(n, decimals));
 }
 
 // For the "amount then code" style used where several currencies are listed

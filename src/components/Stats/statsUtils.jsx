@@ -1,5 +1,5 @@
 import { DateTime } from 'luxon';
-import { currencyMark } from '../../utils/formatMoney';
+import { markAmount, currencyMark } from '../../utils/formatMoney';
 import { formatNumber, formatNumberText } from '../../utils/numberFormat';
 import { matchLotsFIFO, getTickMultiplier } from '../../context/TradeContext';
 
@@ -88,11 +88,11 @@ export const computeGeneralStats = (trades) => {
     { label: 'Losses', value: lossTrades },
     { label: 'Win Rate', value: `${formatNumberText(winRate)}%` },
     { label: 'Profit Factor', value: formatNumberText(profitFactor) },
-    { label: 'Total P&L', value: `${markFor(trades)}${formatNumber(totalPnl, 2)}` },
-    { label: 'Avg P&L per Trade', value: `${markFor(trades)}${formatNumberText(avgPnl)}` },
-    { label: 'Total Fees', value: `${markFor(trades)}${formatNumberText(totalFees)}` },
+    { label: 'Total P&L', value: markAmount(markFor(trades), formatNumber(totalPnl, 2)) },
+    { label: 'Avg P&L per Trade', value: markAmount(markFor(trades), formatNumberText(avgPnl)) },
+    { label: 'Total Fees', value: markAmount(markFor(trades), formatNumberText(totalFees)) },
     ...(Math.abs(partialPnl) > 1e-9
-      ? [{ label: 'P&L from Partial Sells', value: `${markFor(trades)}${formatNumber(partialPnl, 2)}` }]
+      ? [{ label: 'P&L from Partial Sells', value: markAmount(markFor(trades), formatNumber(partialPnl, 2)) }]
       : []),
   ];
 };
@@ -105,7 +105,7 @@ export const computeRiskMetrics = (trades) => {
   const sortinoRatio = computeSortinoRatio(closedTrades);
 
   return [
-    { label: 'Max Drawdown', value: `${markFor(trades)}${formatNumber(maxDrawdown, 2)}` },
+    { label: 'Max Drawdown', value: markAmount(markFor(trades), formatNumber(maxDrawdown, 2)) },
     { label: 'Sharpe Ratio', value: formatNumberText(sharpeRatio) },
     { label: 'Sortino Ratio', value: formatNumberText(sortinoRatio) },
   ];
@@ -122,8 +122,8 @@ export const computeTradeAnalysis = (trades) => {
   return [
     { label: 'Avg Holding Time', value: avgHoldTime },
     { label: 'Avg Trades per Day', value: formatNumberText(tradesPerDay) },
-    { label: 'Best Trade', value: `${markFor(trades)}${formatNumber(bestTrade, 2)}` },
-    { label: 'Worst Trade', value: `${markFor(trades)}${formatNumber(worstTrade, 2)}` },
+    { label: 'Best Trade', value: markAmount(markFor(trades), formatNumber(bestTrade, 2)) },
+    { label: 'Worst Trade', value: markAmount(markFor(trades), formatNumber(worstTrade, 2)) },
     { label: 'Win Streak', value: winStreak },
     { label: 'Loss Streak', value: lossStreak },
   ];
@@ -146,9 +146,9 @@ export const computeSymbolStats = (trades) => {
     return {
       symbol,
       stats: [
-        { label: 'Total P&L', value: `${markFor(trades)}${formatNumber(totalPnl, 2)}` },
+        { label: 'Total P&L', value: markAmount(markFor(trades), formatNumber(totalPnl, 2)) },
         { label: 'Win Rate', value: `${formatNumberText(winRate)}%` },
-        { label: 'Total Fees', value: `${markFor(trades)}${formatNumberText(totalFees)}` },
+        { label: 'Total Fees', value: markAmount(markFor(trades), formatNumberText(totalFees)) },
       ],
     };
   });
@@ -303,8 +303,8 @@ export const computeOpenTradeStats = (trades) => {
 
   return [
     { label: 'Total Open Trades', value: formatNumberText(totalOpenTrades) },
-    { label: 'Total Open P&L', value: `${markFor(trades)}${formatNumber(totalOpenPnl, 2)}` },
-    { label: 'Avg Open P&L per Trade', value: `${markFor(trades)}${formatNumberText(avgOpenPnl)}` },
+    { label: 'Total Open P&L', value: markAmount(markFor(trades), formatNumber(totalOpenPnl, 2)) },
+    { label: 'Avg Open P&L per Trade', value: markAmount(markFor(trades), formatNumberText(avgOpenPnl)) },
   ];
 };
 
@@ -319,8 +319,8 @@ export const computeOpenSymbolStats = (trades) => {
     return {
       symbol,
       stats: [
-        { label: 'Total Open P&L', value: `${markFor(trades)}${formatNumber(totalOpenPnl, 2)}` },
-        { label: 'Avg Open P&L per Trade', value: `${markFor(trades)}${formatNumberText(avgOpenPnl)}` },
+        { label: 'Total Open P&L', value: markAmount(markFor(trades), formatNumber(totalOpenPnl, 2)) },
+        { label: 'Avg Open P&L per Trade', value: markAmount(markFor(trades), formatNumberText(avgOpenPnl)) },
       ],
     };
   });
