@@ -521,6 +521,10 @@ apiRouter.post('/config', async (req, res) => {
 
 // Mount API routes
 app.use('/api', apiRouter);
+// An /api path no route answered: a 404, not the web app's index.html (with
+// a 200) from the catch-all below, which a script read as broken JSON. Here
+// rather than in apiRouter: its routes are added once the database is up.
+app.use('/api', (req, res) => res.status(404).json({ error: `No such API endpoint: ${req.method} ${req.originalUrl.split('?')[0]}` }));
 
 function logCronOutcome(requestId, status, message) {
   cronLogger.info(`${status}: ${message} (requestId: ${requestId})`);
