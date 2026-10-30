@@ -720,6 +720,13 @@
     color: var(--ui-muted, #8B93A3);
   }
 
+  /* The size and the entry - exit prices wrap rather than being cut off: a
+     futures range ($21.000,25 - $21.050,75) is wider than a third of a
+     phone. Ellipsis can't help, a flex container doesn't show one. */
+  .cellColumn:nth-child(-n+2) .cellBottom {
+    white-space: normal;
+  }
+
   .cellColumn:first-child .cellTop {
     gap: 8px;
   }
