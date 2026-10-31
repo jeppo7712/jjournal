@@ -124,7 +124,10 @@ async function pullStatements(config, set) {
       // Real and paper never mix: a statement of the other kind is ignored.
       statements.push(...result.statements.filter(s => isPaperIbkrAccountId(s.accountId) === (set === 'Paper')));
     } catch (err) {
-      logger.warn(`[BrokerFills] ${set.toLowerCase()} Flex query ${q.id} failed: ${err.message}`);
+      // A paused query was announced once when it paused (ibkrFlex.js).
+      const line = `[BrokerFills] ${set.toLowerCase()} Flex query ${q.id} failed: ${err.message}`;
+      if (/paused until/.test(err.message)) logger.debug(line);
+      else logger.warn(line);
     }
   }
   return statements;
