@@ -1229,6 +1229,29 @@ async function clearIbkrDataBound(client, futuresSettingId, contractMonth, timef
 // and going away in pg@9 (surfaced as a DeprecationWarning in the logs).
 // Each contract's fetch now gets its own connection, genuinely independent
 // of the others running alongside it.
+/**
+ * Whether a contract needs a recency fetch from IBKR: its newest stored
+ * bar is older than the last bar the market can have finished, i.e. one
+ * bar before the completion time (now while the exchange is open, its last
+ * trading moment while closed; see populateHistoricalData). Without the
+ * completion time this compared with now, which is always later on a
+ * closed market: every 30-minute run asked IBKR for a day of bars for
+ * every contract all weekend and every night. Without a usable completion
+ * time it still compares with the upper bound (now or the contract's end).
+ *
+ * @param {DateTime} latestStored newest stored bar's start
+ * @param {DateTime} fetchUpperBound now, or the contract's expiry
+ * @param {DateTime|null} completionCheckTime
+ * @param {string} timeframe
+ */
+function ibkrRecencyNeeded(latestStored, fetchUpperBound, completionCheckTime, timeframe) {
+    let target = fetchUpperBound;
+    if (completionCheckTime && completionCheckTime.isValid) {
+        target = DateTime.min(target, completionCheckTime.minus(getTimeframeDuration(timeframe)));
+    }
+    return latestStored < target;
+}
+
 async function fetchAndStoreIBKRContractData(futuresSettingId, validatedContract, timeframe, exchangeTimezone, cancellationSignal, broadcastStatus, taskId, completionCheckTime, requiredConfig) {
     const client = await db.getPool().connect();
     try {
@@ -1373,7 +1396,7 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
         }
 
         // Recency gap
-        if (!isExpired && latestSpecificIBKRLuxon < fetchUpperBound) {
+        if (!isExpired && ibkrRecencyNeeded(latestSpecificIBKRLuxon, fetchUpperBound, completionCheckTime, timeframe)) {
             // Newer than stored bars: an empty chunk here is a stretch
             // without trades, never the start of the contract's history.
             rangesToFetch.push({ start: latestSpecificIBKRLuxon, end: fetchUpperBound, recency: true });
@@ -2433,8 +2456,11 @@ async function getLastTradingDay(currentTime, exchangeName, exchangeTimezone) {
             const checkHalfHour = (checkHour * 2) + (checkMinute >= 30 ? 1 : 0);
 
             if (openingHours[checkDay][checkHalfHour]) {
-                // Found the last open slot
-                return checkTime.startOf('minute');
+                // The last open slot: the market closed at its end (16:00
+                // for a CME Friday), not at some minute inside it. Bars up to
+                // the close are complete and expected (see ibkrRecencyNeeded).
+                const slotStart = checkTime.set({ minute: checkTime.minute >= 30 ? 30 : 0, second: 0, millisecond: 0 });
+                return DateTime.min(slotStart.plus({ minutes: 30 }), exchangeTime.startOf('minute'));
             }
         }
 
@@ -2809,6 +2835,8 @@ module.exports = {
     hasLiveTradingViewFeed,
     apiRefreshIntervalMs,
     clearExchangeInfoCache,
+    ibkrRecencyNeeded,
+    getLastTradingDay,
     getYahooMaxLookbackDays,
     getIbkrDataBound,
     getActiveChunkProgress,
