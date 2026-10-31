@@ -1,7 +1,7 @@
 const express = require('express');
 const router = express.Router();
 const { logger } = require('../modules/logger.js');
-const { DEFAULT_TIMEFRAME_SETTINGS } = require('../modules/historical-data-service.js');
+const { DEFAULT_TIMEFRAME_SETTINGS, clearExchangeInfoCache } = require('../modules/historical-data-service.js');
 const { resolveTradeCurrency, getFuturesSetting } = require('../modules/tradeCalculations.js');
 const { resettleTrades } = require('../modules/tradeSettlement.js');
 
@@ -287,6 +287,15 @@ return res.status(400).json({ error: 'Initial margin is required for futures con
     const validTimezone = (zone) => {
         try { new Intl.DateTimeFormat('en-US', { timeZone: String(zone) }); return true; } catch { return false; }
     };
+
+    // Any change to an exchange: the data service's cached hours and
+    // timezone go (clearExchangeInfoCache), so it applies right away.
+    router.use('/exchanges', (req, res, next) => {
+        if (req.method !== 'GET') {
+            res.on('finish', () => { if (res.statusCode < 400) clearExchangeInfoCache(); });
+        }
+        next();
+    });
 
     router.post('/exchanges', async (req, res) => {
         const { name, timezone, opening_hours } = req.body;

@@ -7,7 +7,7 @@ import TagSettings from './TagSettings';
 import IconButton, { ACTION_COLORS } from '../common/IconButton';
 import { useStatus } from '../../context/StatusContext';
 import { DateTime } from 'luxon';
-import { findExchangePreset, findFuturesPreset } from '../../data/marketReference';
+import { findExchangePreset, findFuturesPreset, matchesExchangePreset } from '../../data/marketReference';
 import { NUMBER_FORMATS, getNumberFormat, setNumberFormat } from '../../utils/numberFormat';
 import HistoricalDataSummary from './HistoricalDataSummary';
 import FlexGuide from './FlexGuide';
@@ -2294,7 +2294,7 @@ export default function Settings() {
                   <tr>
                     <th>Name</th>
                     <th>Timezone</th>
-                    <th>Open Slots</th>
+                    <th>Hours</th>
                     <th className={styles.actionsCell} aria-label="Actions" />
                   </tr>
                 </thead>
@@ -2305,7 +2305,18 @@ export default function Settings() {
                       <tr key={exchange.id}>
                         <td className={styles.primaryCell}>{exchange.name}</td>
                         <td>{exchange.timezone}</td>
-                        <td>{exchange.opening_hours.flat().filter(h => h).length}</td>
+                        <td>
+                          {/* Known exchanges have standard hours (marketReference.js):
+                              say when the stored ones differ, the mistake the
+                              hand-filled grid made easy. */}
+                          {(() => {
+                            const preset = findExchangePreset(exchange.name);
+                            if (!preset) return 'Own hours';
+                            return matchesExchangePreset(exchange, preset)
+                              ? 'Standard'
+                              : <span className={styles.warningText} title="Open it to use the standard hours">Differs from the standard hours</span>;
+                          })()}
+                        </td>
                         <td className={styles.actionsCell}>
                           <span className={styles.rowActions}>
                             <IconButton size="small" icon="pencil" label={`Edit ${exchange.name}`} onClick={() => openExchangeModal(exchange)} />
@@ -2732,6 +2743,28 @@ export default function Settings() {
           {exchangeAutoFillNote && (
             <p className={`${styles.windowHint} ${styles.windowHintAccent}`}>{exchangeAutoFillNote}</p>
           )}
+          {(() => {
+            // An exchange with known standard hours whose form differs from
+            // them: offer them (the user decides; an exchange can change its
+            // hours, and holidays aren't in a weekly grid).
+            const preset = findExchangePreset(exchangeForm.name);
+            if (!preset || matchesExchangePreset(exchangeForm, preset)) return null;
+            return (
+              <p className={`${styles.windowHint} ${styles.windowHintAccent}`}>
+                These hours differ from {exchangeForm.name}'s standard hours ({preset.timezone}).{' '}
+                <button
+                  type="button"
+                  className={styles.linkButton}
+                  onClick={() => {
+                    setExchangeForm(prev => ({ ...prev, timezone: preset.timezone, opening_hours: preset.opening_hours.map(day => [...day]) }));
+                    setExchangeAutoFillNote(`Standard hours for ${exchangeForm.name} filled in. Save to keep them.`);
+                  }}
+                >
+                  Use standard hours
+                </button>
+              </p>
+            );
+          })()}
           <div className={styles.formGrid}>
             <div className={styles.formField}>
               <label htmlFor="name">Exchange Name</label>

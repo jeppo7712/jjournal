@@ -8,11 +8,12 @@
 // stays a normal editable field afterward — this is a starting point, not
 // a lock.
 //
-// The exchange grids below aren't invented from a schedule description —
-// they're reverse-derived from this app's own already-correct, in-use
-// configuration (verified to reproduce the exact stored opening_hours grids
-// byte-for-byte) via buildWeeklyGrid, so there's no risk of a transcription
-// error in the 7x48 boolean matrix itself.
+// The exchange grids below are the exchanges' published regular hours, in
+// each exchange's own timezone (they used to be copied from a stored
+// configuration that had the CME group's hours in New York time under a
+// Chicago timezone, one hour late). Holidays and early closes aren't in a
+// weekly grid. Settings shows when a stored exchange differs from these and
+// offers to use them (see Settings.jsx).
 
 // --- Opening-hours grid builder -------------------------------------------
 
@@ -57,19 +58,19 @@ function weekdaySessionGrid(start, end) {
 // the same daily maintenance halt, just listing different product groups).
 export const EXCHANGE_PRESETS = {
   CME: {
-    aliases: ['CME', 'CBOT', 'NYMEX', 'COMEX', 'GLOBEX', 'CME GLOBEX'],
+    // CME Globex: equity index, metals (COMEX) and energy (NYMEX) futures.
+    // Not CBOT: its grain futures trade different hours.
+    aliases: ['CME', 'NYMEX', 'COMEX', 'GLOBEX', 'CME GLOBEX'],
     timezone: 'America/Chicago',
-    // Mon-Thu: open all day except the 17:00-18:00 CT daily maintenance
-    // break. Fri: open until 17:00 CT (closed for the weekend). Sun: reopens
-    // 18:00 CT.
+    // Sunday 17:00 to Friday 16:00 CT, with a daily break 16:00-17:00 CT.
     opening_hours: buildWeeklyGrid({
-      mon: [['00:00', '17:00'], ['18:00', '24:00']],
-      tue: [['00:00', '17:00'], ['18:00', '24:00']],
-      wed: [['00:00', '17:00'], ['18:00', '24:00']],
-      thu: [['00:00', '17:00'], ['18:00', '24:00']],
-      fri: [['00:00', '17:00']],
+      mon: [['00:00', '16:00'], ['17:00', '24:00']],
+      tue: [['00:00', '16:00'], ['17:00', '24:00']],
+      wed: [['00:00', '16:00'], ['17:00', '24:00']],
+      thu: [['00:00', '16:00'], ['17:00', '24:00']],
+      fri: [['00:00', '16:00']],
       sat: 'closed',
-      sun: [['18:00', '24:00']],
+      sun: [['17:00', '24:00']],
     }),
   },
   NYSE: {
@@ -80,8 +81,8 @@ export const EXCHANGE_PRESETS = {
   NASDAQ: {
     aliases: ['NASDAQ'],
     timezone: 'America/New_York',
-    // Includes pre/post market (4:00-20:00 ET), matching this app's own
-    // existing NASDAQ configuration.
+    // With pre- and after-market (4:00-20:00 ET): the journal's IBKR bars
+    // include extended hours.
     opening_hours: weekdaySessionGrid('04:00', '20:00'),
   },
   EURONEXT: {
@@ -90,14 +91,29 @@ export const EXCHANGE_PRESETS = {
     opening_hours: weekdaySessionGrid('09:00', '17:30'),
   },
   XETRA: {
-    aliases: ['XETRA'],
+    aliases: ['XETRA', 'IBIS'],
     timezone: 'Europe/Berlin',
     opening_hours: weekdaySessionGrid('09:00', '17:30'),
   },
   SBF: {
     aliases: ['SBF', 'EURONEXT PARIS'],
     timezone: 'Europe/Paris',
-    opening_hours: weekdaySessionGrid('09:00', '18:00'),
+    opening_hours: weekdaySessionGrid('09:00', '17:30'),
+  },
+  LSE: {
+    aliases: ['LSE', 'LSEETF', 'LONDON'],
+    timezone: 'Europe/London',
+    opening_hours: weekdaySessionGrid('08:00', '16:30'),
+  },
+  CRYPTO: {
+    // Crypto exchanges trade around the clock.
+    aliases: ['BYBIT', 'BINANCE', 'COINBASE', 'KRAKEN', 'BITSTAMP', 'PAXOS'],
+    timezone: 'UTC',
+    opening_hours: buildWeeklyGrid({
+      mon: [['00:00', '24:00']], tue: [['00:00', '24:00']], wed: [['00:00', '24:00']],
+      thu: [['00:00', '24:00']], fri: [['00:00', '24:00']], sat: [['00:00', '24:00']],
+      sun: [['00:00', '24:00']],
+    }),
   },
 };
 
@@ -106,6 +122,15 @@ const EXCHANGE_ALIAS_MAP = Object.entries(EXCHANGE_PRESETS).reduce((map, [key, p
   preset.aliases.forEach(alias => { map[alias.toUpperCase()] = key; });
   return map;
 }, {});
+
+// Whether an exchange's stored timezone and hours are this preset's.
+export function matchesExchangePreset(exchange, preset) {
+  if (!exchange || !preset) return false;
+  if (exchange.timezone !== preset.timezone) return false;
+  const hours = exchange.opening_hours;
+  return Array.isArray(hours) && hours.length === 7
+    && hours.every((day, d) => Array.isArray(day) && day.length === 48 && day.every((open, i) => !!open === preset.opening_hours[d][i]));
+}
 
 export function findExchangePreset(name) {
   if (!name) return null;
