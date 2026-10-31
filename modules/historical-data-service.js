@@ -167,6 +167,11 @@ const barIntervalUnitMap = {
 };
 // OPTIMIZATION: Cache for exchange details to reduce DB queries
 const exchangeInfoCache = new Map();
+// Settings changed an exchange: its hours and timezone are read again on
+// next use. Without this an edit only applied after a restart.
+function clearExchangeInfoCache() {
+    exchangeInfoCache.clear();
+}
 
 // In-memory (not persisted, cleared on restart) snapshot of what each active
 // IBKR contract fetch is currently doing, purely to surface "what is it
@@ -2803,6 +2808,7 @@ module.exports = {
     getMergedHistoricalSeries,
     hasLiveTradingViewFeed,
     apiRefreshIntervalMs,
+    clearExchangeInfoCache,
     getYahooMaxLookbackDays,
     getIbkrDataBound,
     getActiveChunkProgress,

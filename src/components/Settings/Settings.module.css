@@ -858,6 +858,22 @@ select.inputBubble {
   color: #60A5FA;
 }
 
+/* An exchange whose hours differ from its standard ones (Exchanges tab). */
+.warningText {
+  color: #F59E0B;
+}
+
+/* A button that reads as a link inside a hint. */
+.linkButton {
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
 .divider {
   height: 1px;
   margin: 22px 0 16px;
