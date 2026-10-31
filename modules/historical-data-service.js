@@ -542,7 +542,7 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
             logger.debug(`[populate][${taskId}] Yahoo effective fetch range: ${yahooEffectiveStartDate.toISO()} to ${nowInExchangeTimezone.toISO()}`);
 
             try {
-                let yahooBars = await fetchYahooHistoricalData(symbol, timeframe, taskId, exchangeTimezone, yahooEffectiveStartDate, nowInExchangeTimezone, type, broadcastStatus, 2, completionCheckTime);
+                let yahooBars = await fetchYahooHistoricalData(symbol, timeframe, taskId, exchangeTimezone, yahooEffectiveStartDate, nowInExchangeTimezone, type, broadcastStatus, 2, completionCheckTime, isMarketCurrentlyOpen);
                 if (cancellationSignal.aborted) throw new Error(`Task ${taskId} cancelled during Yahoo processing.`);
 
                 if (yahooBars.length > 0) {
@@ -748,7 +748,8 @@ async function populateHistoricalData(task, broadcastStatus, wss) { // Task obje
                                     broadcastStatus,
                                     taskId,
                                     completionCheckTime,
-                                    requiredConfig
+                                    requiredConfig,
+                                    isMarketCurrentlyOpen
                                 );
                             };
                         });
@@ -1252,16 +1253,35 @@ function ibkrRecencyNeeded(latestStored, fetchUpperBound, completionCheckTime, t
     return latestStored < target;
 }
 
-async function fetchAndStoreIBKRContractData(futuresSettingId, validatedContract, timeframe, exchangeTimezone, cancellationSignal, broadcastStatus, taskId, completionCheckTime, requiredConfig) {
+/**
+ * Bars starting after the returned time are still forming and aren't stored
+ * (the "remove incomplete bars" filters of the IBKR and Yahoo fetches).
+ * While the market is open that's one bar before now. Once it has been
+ * closed for SESSION_SETTLE_MS, every bar that began before the close is
+ * finished, also the session's last one, which is shorter than a full bar
+ * (Friday's daily bar, a 15:00-16:00 4-hour bar): taking one bar before the
+ * close dropped it, so it was never stored and every run fetched it again
+ * all weekend. Right after the close the old rule stays: IBKR's bars come
+ * about ten minutes late, so its last bar then still lacks minutes.
+ */
+const SESSION_SETTLE_MS = 20 * 60 * 1000;
+function unfinishedBarThreshold(completionCheckTime, timeframe, marketOpen, now = DateTime.now()) {
+    if (marketOpen === false && now.toMillis() - completionCheckTime.toMillis() >= SESSION_SETTLE_MS) {
+        return completionCheckTime.minus({ milliseconds: 1 });
+    }
+    return completionCheckTime.minus(getTimeframeDuration(timeframe));
+}
+
+async function fetchAndStoreIBKRContractData(futuresSettingId, validatedContract, timeframe, exchangeTimezone, cancellationSignal, broadcastStatus, taskId, completionCheckTime, requiredConfig, marketOpen = true) {
     const client = await db.getPool().connect();
     try {
-        return await fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId, validatedContract, timeframe, exchangeTimezone, cancellationSignal, broadcastStatus, taskId, completionCheckTime, requiredConfig);
+        return await fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId, validatedContract, timeframe, exchangeTimezone, cancellationSignal, broadcastStatus, taskId, completionCheckTime, requiredConfig, marketOpen);
     } finally {
         client.release();
     }
 }
 
-async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId, validatedContract, timeframe, exchangeTimezone, cancellationSignal, broadcastStatus, taskId, completionCheckTime, requiredConfig) {
+async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId, validatedContract, timeframe, exchangeTimezone, cancellationSignal, broadcastStatus, taskId, completionCheckTime, requiredConfig, marketOpen = true) {
     const specificContractMonth = validatedContract.secType === 'FUT' ? futuresContractLabel(validatedContract) : null;
     const contractDesc = `${validatedContract.symbol} (${timeframe}, contract: ${specificContractMonth || 'N/A'}, conId: ${validatedContract.conId})`;
 
@@ -1544,8 +1564,7 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
                     }
                     // Filter incomplete bars if this is the most recent chunk
                     if (completionCheckTime && completionCheckTime.isValid && currentChunkEnd >= completionCheckTime) {
-                const barDuration = getTimeframeDuration(timeframe);
-                const threshold = completionCheckTime.minus(barDuration);
+                const threshold = unfinishedBarThreshold(completionCheckTime, timeframe, marketOpen);
                 while (bars.length > 0) {
                     const lastBar = bars[bars.length - 1];
                     const lastBarStart = DateTime.fromISO(lastBar.time, { zone: exchangeTimezone });
@@ -2200,7 +2219,7 @@ function runContinuousSeriesRebuild(futuresSettingId, timeframe, rolloverMonths,
     });
 }
 
-async function fetchYahooHistoricalData(symbol, timeframe, requestId, timezone, startDate, endDate, type = 'STK', broadcastStatus, retries = 3, completionCheckTime) {
+async function fetchYahooHistoricalData(symbol, timeframe, requestId, timezone, startDate, endDate, type = 'STK', broadcastStatus, retries = 3, completionCheckTime, marketOpen = true) {
     let yahooSymbol = symbol;
     if (type === 'FUT' && !yahooSymbol.endsWith('=F')) {
         yahooSymbol = `${yahooSymbol}=F`;
@@ -2334,7 +2353,13 @@ async function fetchYahooHistoricalData(symbol, timeframe, requestId, timezone, 
                 // becomes a permanent extra "flat" bar on the chart: its off-boundary
                 // timestamp never collides with the real bar for that same minute in
                 // the DB's uniqueness check, so both end up stored side by side.
-                if (['1M', '5M', '15M', '1H'].includes(timeframe)) {
+                // Daily and weekly too: the current session's bar of a future
+                // comes stamped at its last trade (20:59:59), and once that
+                // session is history Yahoo returns it again at the day's start,
+                // so storing it gave the day two candles. (The trim below used
+                // to drop it by accident; it keeps a closed session's last bar
+                // now, see unfinishedBarThreshold.)
+                {
                     const dt = DateTime.fromISO(bar.time, { zone: timezone });
                     if (dt.second !== 0 || dt.millisecond !== 0) {
                         logger.debug(`[Yahoo] Skipping off-boundary snapshot bar for ${yahooSymbol} (${timeframe}) at ${bar.time} (likely a live quote, not a closed candle): ${JSON.stringify(bar)}`);
@@ -2350,7 +2375,7 @@ async function fetchYahooHistoricalData(symbol, timeframe, requestId, timezone, 
             // Remove all incomplete bars from the end
             const barDuration = getTimeframeDuration(timeframe);
             if (completionCheckTime && completionCheckTime.isValid) {
-                const threshold = completionCheckTime.minus(barDuration);
+                const threshold = unfinishedBarThreshold(completionCheckTime, timeframe, marketOpen);
                 while (bars.length > 0) {
                     const lastBar = bars[bars.length - 1];
                     const lastBarStart = DateTime.fromISO(lastBar.time, { zone: timezone });
@@ -2836,6 +2861,7 @@ module.exports = {
     apiRefreshIntervalMs,
     clearExchangeInfoCache,
     ibkrRecencyNeeded,
+    unfinishedBarThreshold,
     getLastTradingDay,
     getYahooMaxLookbackDays,
     getIbkrDataBound,
