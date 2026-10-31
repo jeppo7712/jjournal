@@ -60,3 +60,24 @@ test('the last trading moment of a closed market is its close', async (t) => {
   assert.equal(await last('2026-10-29T16:40'), '2026-10-29T16:00:00');  // in the daily break
   assert.equal(await last('2026-10-29T10:17'), '2026-10-29T10:17:00');  // open: now
 });
+
+test('unfinished bars: the session\'s last, shorter bar counts as finished once the close has settled', () => {
+  const { unfinishedBarThreshold } = require('../modules/historical-data-service.js');
+  const close = at('2026-10-30T16:00');
+  const kept = (barStart, timeframe, marketOpen, now) => !(at(barStart) > unfinishedBarThreshold(close, timeframe, marketOpen, at(now)));
+  // Saturday: Friday's daily bar and the 15:00-16:00 4-hour bar are final.
+  assert.equal(kept('2026-10-30T00:00', '1D', false, '2026-10-31T01:23'), true);
+  assert.equal(kept('2026-10-30T15:00', '4H', false, '2026-10-31T01:23'), true);
+  assert.equal(kept('2026-10-30T15:59', '1M', false, '2026-10-31T01:23'), true);
+  // Right after the close IBKR's bars are still ~10 minutes behind: not yet.
+  assert.equal(kept('2026-10-30T00:00', '1D', false, '2026-10-30T16:05'), false);
+  assert.equal(kept('2026-10-30T15:00', '4H', false, '2026-10-30T16:05'), false);
+  assert.equal(kept('2026-10-30T15:59', '1M', false, '2026-10-30T16:05'), true);
+  // Market open: the forming bar is dropped as before.
+  const now = at('2026-10-29T10:17');
+  const open = (barStart, timeframe) => !(at(barStart) > unfinishedBarThreshold(now, timeframe, true, now));
+  assert.equal(open('2026-10-29T10:16', '1M'), true);
+  assert.equal(open('2026-10-29T10:17', '1M'), false);
+  assert.equal(open('2026-10-29T00:00', '1D'), false);
+  assert.equal(open('2026-10-28T00:00', '1D'), true);
+});
