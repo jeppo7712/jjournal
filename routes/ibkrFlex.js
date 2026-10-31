@@ -39,10 +39,19 @@ function formatFlexDateTime(raw) {
 
 // Runs the SendRequest → GetStatement flow and returns the statement(s): one
 // per IBKR account the query covers, every section as parsed.
-// IBKR's answers that mean "not now, ask again shortly" rather than a
-// failure: the statement still being generated, a busy server, too many
-// requests at once.
-const FLEX_TRY_AGAIN = /not yet available|generation in progress|try again shortly|heavy load|too many requests/i;
+// IBKR's answers that mean "not now" rather than a failure:
+// - FLEX_BUSY: a busy server or a second request at once. Asked again in
+//   a few seconds, within the same pull.
+// - FLEX_NOT_READY: the statement is still being generated ("Statement is
+//   incomplete at this time. Please try again shortly."), which takes
+//   minutes: asking again within seconds only counted as failed attempts.
+//   The query is paused instead (see getFlexStatements).
+// - FLEX_LOCKED: IBKR stopped answering this query after too many failed
+//   attempts. Paused too, longer; every attempt meanwhile counts again.
+const FLEX_BUSY = /heavy load|too many requests/i;
+const FLEX_NOT_READY = /not yet available|generation in progress|incomplete|try again shortly/i;
+const FLEX_LOCKED = /too many failed attempts/i;
+const FLEX_TRY_AGAIN = new RegExp(`${FLEX_BUSY.source}|${FLEX_NOT_READY.source}`, 'i');
 const SEND_ATTEMPTS = 3;
 const SEND_RETRY_MS = 10000;
 
@@ -57,7 +66,7 @@ async function requestFlexStatement(token, queryId) {
     sendParsed = new XMLParser().parse(await sendRes.text());
     if (sendParsed?.FlexStatementResponse?.Status === 'Success') break;
     const errMsg = sendParsed?.FlexStatementResponse?.ErrorMessage || 'Unknown Flex error';
-    if (attempt >= SEND_ATTEMPTS || !FLEX_TRY_AGAIN.test(String(errMsg))) {
+    if (attempt >= SEND_ATTEMPTS || !FLEX_BUSY.test(String(errMsg))) {
       throw new Error(`Flex request failed for query ${queryId}: ${errMsg}`);
     }
     logger.debug(`[Flex] query ${queryId}: ${errMsg} — trying again in ${SEND_RETRY_MS / 1000} s`);
@@ -159,6 +168,32 @@ const inFlight = new Map();
  * One Flex query's statements, from the cache while fresh.
  * @returns {Promise<{ statements: object[], type: string|null, fetchedAt: number, fromCache: boolean }>}
  */
+// A query IBKR answered "not ready yet" or "too many failed attempts" is
+// paused: no request for it until `until`, doubling while it keeps
+// happening, cleared by a statement. Every caller (the fills scan every 15
+// minutes, the cash sync, the import window) goes through here, so none of
+// them asks meanwhile. A statement still being generated got six requests
+// in eight minutes (three per scan, ten seconds apart) and IBKR locked the
+// query; the scans every 15 minutes then kept it locked.
+const PAUSE_NOT_READY_MS = 30 * 60 * 1000;
+const PAUSE_NOT_READY_MAX_MS = 4 * 60 * 60 * 1000;
+const PAUSE_LOCKED_MS = 60 * 60 * 1000;
+const PAUSE_LOCKED_MAX_MS = 12 * 60 * 60 * 1000;
+const queryPauses = new Map(); // queryId -> { until, ms, reason }
+
+function pauseAfter(queryId, message, now = Date.now()) {
+  const text = String(message || '');
+  const locked = FLEX_LOCKED.test(text);
+  if (!locked && !FLEX_NOT_READY.test(text)) return null;
+  const [first, max] = locked ? [PAUSE_LOCKED_MS, PAUSE_LOCKED_MAX_MS] : [PAUSE_NOT_READY_MS, PAUSE_NOT_READY_MAX_MS];
+  const previous = queryPauses.get(queryId);
+  const ms = previous ? Math.min(Math.max(previous.ms * 2, first), max) : first;
+  const pause = { until: now + ms, ms, reason: text };
+  queryPauses.set(queryId, pause);
+  logger.warn(`[Flex] query ${queryId} paused for ${Math.round(ms / 60000)} min after IBKR answered: ${text}`);
+  return pause;
+}
+
 async function getFlexStatements(token, queryId, { forceRefresh = false } = {}) {
   const cached = statementCache.get(queryId);
   if (cached && !forceRefresh && Date.now() - cached.fetchedAt < CACHE_TTL_MS) {
@@ -166,12 +201,21 @@ async function getFlexStatements(token, queryId, { forceRefresh = false } = {}) 
     return { ...cached, fromCache: true };
   }
   if (inFlight.has(queryId)) return inFlight.get(queryId);
+  const pause = queryPauses.get(queryId);
+  if (pause && Date.now() < pause.until) {
+    const at = new Date(pause.until).toISOString().slice(11, 16);
+    throw new Error(`Flex query ${queryId} paused until ${at} UTC (IBKR: ${pause.reason})`);
+  }
   const pull = (async () => {
     try {
       const { statements, type } = await requestFlexStatement(token, queryId);
       const entry = { statements, type, fetchedAt: Date.now() };
       statementCache.set(queryId, entry);
+      queryPauses.delete(queryId);
       return { ...entry, fromCache: false };
+    } catch (err) {
+      pauseAfter(queryId, err.message);
+      throw err;
     } finally {
       inFlight.delete(queryId);
     }
@@ -355,4 +399,4 @@ async function fetchFlexExecutions(token, queryIds, symbol, effectiveType, opts 
   return { executions, fetchedAt, fromCache, stale: !!stale, failedQueryIds: failedQueryIds || [] };
 }
 
-module.exports = { fetchFlexExecutions, isPaperIbkrAccountId, getFlexStatements, sectionRows, formatFlexDateTime };
+module.exports = { fetchFlexExecutions, isPaperIbkrAccountId, getFlexStatements, sectionRows, formatFlexDateTime, _queryPauses: queryPauses };
