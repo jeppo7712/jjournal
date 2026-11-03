@@ -1460,6 +1460,7 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
     for (const range of rangesToFetch) {
         emptyChunksInARow = 0;
         firstEmptyChunkEnd = null;
+        let limitRecorded = false;
         try {
             // We loop BACKWARDS from range.end to range.start in chunks
             let currentChunkEnd = range.end;
@@ -1525,6 +1526,7 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
                 if (emptyChunksInARow > 0 && /timed out/.test(err.message) && !(cancellationSignal && cancellationSignal.aborted)) {
                     logger.info(`[populate][${taskId}] IBKR has no data before ${firstEmptyChunkEnd.toISO()} for ${contractDesc} (an empty chunk, then no answer for the one before). Recording as the confirmed limit.`);
                     await recordIbkrDataBound(client, futuresSettingId, specificContractMonth, timeframe, firstEmptyChunkEnd);
+                    limitRecorded = true;
                     break;
                 }
                 throw err;
@@ -1607,6 +1609,7 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
                     if (emptyChunksInARow >= 2) {
                         logger.info(`[populate][${taskId}] IBKR has no data before ${firstEmptyChunkEnd.toISO()} for ${contractDesc} (two chunks in a row). Recording as the confirmed limit.`);
                         await recordIbkrDataBound(client, futuresSettingId, specificContractMonth, timeframe, firstEmptyChunkEnd);
+                        limitRecorded = true;
                         break;
                     }
                     logger.debug(`[populate][${taskId}] IBKR returned no bars before ${currentChunkEnd.toISO()} for ${contractDesc}; trying one chunk further back before taking it as the limit.`);
@@ -1616,7 +1619,19 @@ async function fetchAndStoreIBKRContractDataWithClient(client, futuresSettingId,
                 currentChunkEnd = currentChunkStart;
                 
                 // Optional: Short delay to be nice to IBKR pacing violator
-                await new Promise(resolve => setTimeout(resolve, 200)); 
+                await new Promise(resolve => setTimeout(resolve, 200));
+            }
+
+            // The walk reached the bottom of its window (the contract's first
+            // months, the configured lookback, or a recorded limit) with only
+            // empty chunks since the last bars: there's no chunk left to ask
+            // a second time, so that's the limit. Without this a range under
+            // two chunks long — the days between a recorded limit and the
+            // oldest stored bar, or a contract's first weeks — was asked again
+            // on every run (~100 empty requests a run, Nov 2026).
+            if (!limitRecorded && !range.recency && emptyChunksInARow > 0) {
+                logger.info(`[populate][${taskId}] IBKR has no data before ${firstEmptyChunkEnd.toISO()} for ${contractDesc} (empty down to the start of the window). Recording as the confirmed limit.`);
+                await recordIbkrDataBound(client, futuresSettingId, specificContractMonth, timeframe, firstEmptyChunkEnd);
             }
 
         } catch (err) {
@@ -2873,4 +2888,6 @@ module.exports = {
     // only on the client/params passed to it, which is what makes running it
     // in a separate worker thread (with its own DB connection) safe.
     _buildAndStoreContinuousSeries,
+    // Exported for tests (test/ibkrBackfillLimit.test.js) only.
+    _fetchAndStoreIBKRContractDataWithClient: fetchAndStoreIBKRContractDataWithClient,
 };
