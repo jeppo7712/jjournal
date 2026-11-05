@@ -12,6 +12,7 @@ import { NUMBER_FORMATS, getNumberFormat, setNumberFormat } from '../../utils/nu
 import HistoricalDataSummary from './HistoricalDataSummary';
 import FlexGuide from './FlexGuide';
 import ChartViewer from './ChartViewer';
+import OpeningHoursGrid from './OpeningHoursGrid';
 import { FaSlidersH, FaListUl, FaTerminal, FaWallet, FaTasks, FaTags, FaPlug, FaGlobeAmericas, FaChartLine, FaDatabase, FaChartBar, FaPlus, FaSyncAlt, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { notify, confirmDialog } from '../common/Dialogs';
 import { timeframeLabel } from '../../utils/timeframeLabel';
@@ -220,9 +221,6 @@ export default function Settings() {
   const [exchangeAutoFillNote, setExchangeAutoFillNote] = useState('');
   const [newIbkrFlexTokenReal, setNewIbkrFlexTokenReal] = useState('');
   const [newIbkrFlexTokenPaper, setNewIbkrFlexTokenPaper] = useState('');
-  const [isDragging, setIsDragging] = useState(false);
-  const [dragStart, setDragStart] = useState(null);
-  const [dragEnd, setDragEnd] = useState(null);
 
   const [serverLogs, setServerLogs] = useState('');
   const [logsLoading, setLogsLoading] = useState(false);
@@ -750,73 +748,6 @@ export default function Settings() {
     );
   };
 
-  const toggleOpeningHour = (day, slot) => {
-    setExchangeForm(prev => {
-      const newOpeningHours = prev.opening_hours.map((d, i) =>
-        i === day ? d.map((h, j) => (j === slot ? !h : h)) : d
-      );
-      return { ...prev, opening_hours: newOpeningHours };
-    });
-  };
-
-  const handleDragStart = (day, slot) => {
-    setIsDragging(true);
-    setDragStart({ day, slot });
-    setDragEnd({ day, slot });
-  };
-
-  const handleDragMove = (day, slot) => {
-    if (isDragging) {
-      setDragEnd({ day, slot });
-    }
-  };
-
-  const handleDragEnd = () => {
-    if (isDragging && dragStart && dragEnd) {
-      setExchangeForm(prev => {
-        const newOpeningHours = prev.opening_hours.map((daySlots, dayIndex) =>
-          daySlots.map((slotValue, slotIndex) => {
-            const minDay = Math.min(dragStart.day, dragEnd.day);
-            const maxDay = Math.max(dragStart.day, dragEnd.day);
-            const minSlot = Math.min(dragStart.slot, dragEnd.slot);
-            const maxSlot = Math.max(dragStart.slot, dragEnd.slot);
-            if (dayIndex >= minDay && dayIndex <= maxDay && slotIndex >= minSlot && slotIndex <= maxSlot) {
-              return !prev.opening_hours[dragStart.day][dragStart.slot];
-            }
-            return slotValue;
-          })
-        );
-        return { ...prev, opening_hours: newOpeningHours };
-      });
-    }
-    setIsDragging(false);
-    setDragStart(null);
-    setDragEnd(null);
-  };
-
-  const isCellSelected = (day, slot) => {
-    if (!isDragging || !dragStart || !dragEnd) return false;
-    const minDay = Math.min(dragStart.day, dragEnd.day);
-    const maxDay = Math.max(dragStart.day, dragEnd.day);
-    const minSlot = Math.min(dragStart.slot, dragEnd.slot);
-    const maxSlot = Math.max(dragStart.slot, dragEnd.slot);
-    return day >= minDay && day <= maxDay && slot >= minSlot && slot <= maxSlot;
-  };
-
-  useEffect(() => {
-    const handleGlobalMouseUp = () => {
-      setIsDragging(false);
-      setDragStart(null);
-      setDragEnd(null);
-    };
-    if (isDragging) {
-      window.addEventListener('mouseup', handleGlobalMouseUp);
-    }
-    return () => {
-      window.removeEventListener('mouseup', handleGlobalMouseUp);
-    };
-  }, [isDragging]);
-
   const saveFuturesSetting = async () => {
     const { symbol, type, tickSize, tickValue, fee, exchange, currency, rolloverMonths, initialMargin, timeframeSettings, ibkrSymbol, ibkrExchange } = form;
 
@@ -1009,12 +940,6 @@ export default function Settings() {
         notify('Error deleting exchange: ' + err.message);
       }
     }
-  };
-
-  const slotToTime = (slot) => {
-    const hour = Math.floor(slot / 2);
-    const minute = slot % 2 === 0 ? '00' : '30';
-    return `${hour.toString().padStart(2, '0')}:${minute}`;
   };
 
   // Define exchange options for the dropdown
@@ -2795,76 +2720,11 @@ export default function Settings() {
             </div>
           </div>
           <div className={styles.formField}>
-            <label>Opening Hours (Click to toggle or drag to select multiple)</label>
-            <div
-              className={styles.openingHoursMatrix}
-              onMouseLeave={handleDragEnd}
-              style={{ userSelect: 'none' }}
-            >
-              <div style={{ display: 'flex', marginBottom: 4 }}>
-                <div style={{ width: 44 }}></div>
-                {Array(48).fill().map((_, slotIdx) =>
-                  slotIdx % 4 === 0 ? (
-                    <div
-                      key={slotIdx}
-                      className={styles.matrixHeader}
-                      style={{ width: 20, textAlign: 'center' }}
-                    >
-                      {slotToTime(slotIdx)}
-                    </div>
-                  ) : (
-                    <div key={slotIdx} style={{ width: 20 }} />
-                  )
-                )}
-              </div>
-              {exchangeForm.opening_hours.map((slots, dayIdx) => (
-                <div key={dayIdx} style={{ display: 'flex' }}>
-                  <div
-                    className={styles.matrixHeader}
-                    style={{ width: 44, textAlign: 'right', marginRight: 2 }}
-                  >
-                    {['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dayIdx]}
-                  </div>
-                  {slots.map((slotValue, slotIdx) => (
-                    <div
-                      key={slotIdx}
-                      className={[
-                        styles.matrixCell,
-                        slotValue ? styles.active : '',
-                        isCellSelected(dayIdx, slotIdx) ? styles.selected : ''
-                      ].join(' ')}
-                      title={`${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dayIdx]} ${slotToTime(slotIdx)}`}
-                      onMouseDown={e => {
-                        e.preventDefault();
-                        setDragStart({ day: dayIdx, slot: slotIdx });
-                        setDragEnd({ day: dayIdx, slot: slotIdx });
-                        setIsDragging(true);
-                      }}
-                      onMouseEnter={() => {
-                        if (isDragging) setDragEnd({ day: dayIdx, slot: slotIdx });
-                      }}
-                      onMouseUp={e => {
-                        if (
-                          dragStart &&
-                          dragStart.day === dayIdx &&
-                          dragStart.slot === slotIdx &&
-                          (!dragEnd ||
-                            (dragEnd.day === dayIdx && dragEnd.slot === slotIdx))
-                        ) {
-                          toggleOpeningHour(dayIdx, slotIdx);
-                          setIsDragging(false);
-                          setDragStart(null);
-                          setDragEnd(null);
-                        } else {
-                          handleDragEnd();
-                        }
-                      }}
-                      aria-label={`Toggle ${['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][dayIdx]} ${slotToTime(slotIdx)}`}
-                    />
-                  ))}
-                </div>
-              ))}
-            </div>
+            <label>Opening hours ({exchangeForm.timezone || 'exchange time'})</label>
+            <OpeningHoursGrid
+              value={exchangeForm.opening_hours}
+              onChange={hours => setExchangeForm(prev => ({ ...prev, opening_hours: hours }))}
+            />
           </div>
         </AppWindow>
       )}

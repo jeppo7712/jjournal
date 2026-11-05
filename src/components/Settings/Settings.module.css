@@ -908,49 +908,6 @@ select.inputBubble {
   color: var(--s-text-2);
 }
 
-/* Exchange opening hours: click or drag over half-hour slots */
-.openingHoursMatrix {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  padding: 10px;
-  background: var(--s-input);
-  border: 1px solid var(--s-border);
-  border-radius: 12px;
-  overflow-x: auto;
-}
-
-.matrixHeader {
-  font-size: 0.75em;
-  color: var(--s-muted);
-  text-align: center;
-}
-
-.matrixCell {
-  width: 20px;
-  height: 20px;
-  background: #232938;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background 0.15s;
-}
-
-.matrixCell.active {
-  background: var(--s-accent);
-}
-
-.matrixCell:hover {
-  background: #4B9BFF;
-}
-
-.matrixCell.selected {
-  background: #6B7280;
-}
-
-.matrixCell.active.selected {
-  background: #1E40AF;
-}
-
 /* ---------- Smaller screens ---------- */
 
 /* Tablets: the menu becomes a scrolling bar above the content */
@@ -1039,15 +996,6 @@ select.inputBubble {
   .sectionAction > *,
   .histSymbolSelect {
     width: 100%;
-  }
-
-  .matrixHeader {
-    font-size: 0.68em;
-  }
-
-  .matrixCell {
-    min-width: 15px;
-    height: 15px;
   }
 
   .logLine {
