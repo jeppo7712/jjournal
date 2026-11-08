@@ -45,6 +45,8 @@ cloudflared tunnel run jjournal-webhook
 
 Your public webhook URL is now `https://tv-webhook.yourdomain.com/api/webhooks/tradingview-bar` — nothing else on your network is reachable through it.
 
+If you also use the relay in section 5, let the tunnel pass that path too, e.g. `path: ^/api/webhooks/(tradingview-bar|kate)$`.
+
 (No domain on Cloudflare? A [Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) — `cloudflared tunnel --url http://192.168.1.50:3999` — gets you a temporary `*.trycloudflare.com` URL with no DNS setup, good for testing before committing to the config above.)
 
 ## 3. The TradingView alert
@@ -84,3 +86,21 @@ One alert per symbol+timeframe you want live-fed.
 ## 4. Verify it's working
 
 Watch the server log (`GET /api/config/logs` or the Settings page's log viewer) for `[TradingView webhook]` lines after the next bar closes. A `401` means the secret in the alert message doesn't match `config.json`; a `404` means the symbol isn't set up in Settings yet.
+
+## 5. Optional: push events to an external listener
+
+Instead of polling the journal for new bars, another service (for example an agent on the same network) can be told about them. Two `config.json` keys turn this on; no restart needed:
+
+```json
+{
+  "kateEventsUrl": "http://listener-host:port/api/journal-event",
+  "kateEventsToken": "the-listener's-bearer-token"
+}
+```
+
+With both set, the journal sends `POST <kateEventsUrl>` with `Authorization: Bearer <kateEventsToken>` and a JSON body `{"event": "...", "data": {...}}`:
+
+- **`bar`** — after every bar stored by `/api/webhooks/tradingview-bar`; `data` is the alert body as received, minus `secret`.
+- **`tradingview`** — for every alert sent to the relay route `POST /api/webhooks/kate`. It uses the same `tradingViewWebhookSecret` check as the bar feed (401 wrong secret, 503 none configured), removes `secret`, forwards the rest untouched and answers `200 {"success": true}`. The journal doesn't validate or store these messages, so a new kind of alert needs no journal change.
+
+Delivery is fire and forget: one attempt, 3 s timeout, no retries, bodies over 16 KB are dropped. Failures (and answers other than `202`) are logged as `[Kate events]` at most once a minute and never affect the bar insert or the reply to TradingView. Either key unset: nothing is sent — leave them unset on a second (dev) copy fed by the same alerts, or the listener sees every bar twice.
