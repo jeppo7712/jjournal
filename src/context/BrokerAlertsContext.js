@@ -1,5 +1,6 @@
 import React, { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { TradeContext } from './TradeContext';
+import { setAppBadge, APP_BADGE_PERMISSION_EVENT } from '../utils/appBadge';
 
 // What IBKR has waiting for the user, over all accounts: on the Capital page
 // (cash items for the inbox, cash that differs from IBKR's —
@@ -7,7 +8,9 @@ import { TradeContext } from './TradeContext';
 // (routes/brokerFills.js). The menu shows it per page and per account, the
 // Dashboard lists the fills. Refreshed every few minutes, when the Capital
 // page changes something ('broker-activity-changed') and when the trades
-// change (a saved trade takes its fills out).
+// change (a saved trade takes its fills out). The total over all accounts
+// is also shown on the app's icon when the journal runs as an installed web
+// app (utils/appBadge.js).
 const BrokerAlertsContext = createContext({
   capital: { total: 0, accounts: [] },
   fills: [],
@@ -72,6 +75,19 @@ export function BrokerAlertsProvider({ children }) {
     for (const f of fills) entry(f.account_id).fills += 1;
     return counts;
   }, [capital, fills]);
+
+  // Everything the menu badges count, over all accounts in the list.
+  const total = useMemo(() => (accounts || []).reduce((n, a) => {
+    const c = countsByAccount[String(a.id)];
+    return c ? n + c.capital + c.fills : n;
+  }, 0), [accounts, countsByAccount]);
+
+  useEffect(() => {
+    const apply = () => setAppBadge(total);
+    apply();
+    window.addEventListener(APP_BADGE_PERMISSION_EVENT, apply);
+    return () => window.removeEventListener(APP_BADGE_PERMISSION_EVENT, apply);
+  }, [total]);
 
   const dismissFills = useCallback(async (ids) => {
     await fetch(`${process.env.REACT_APP_API_URL}/api/broker-fills/dismiss`, {
