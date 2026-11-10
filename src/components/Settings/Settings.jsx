@@ -16,6 +16,7 @@ import OpeningHoursGrid from './OpeningHoursGrid';
 import { FaSlidersH, FaListUl, FaTerminal, FaWallet, FaTasks, FaTags, FaPlug, FaGlobeAmericas, FaChartLine, FaDatabase, FaChartBar, FaPlus, FaSyncAlt, FaEye, FaEyeSlash } from 'react-icons/fa';
 import { notify, confirmDialog } from '../common/Dialogs';
 import { timeframeLabel } from '../../utils/timeframeLabel';
+import { appBadgeState, requestAppBadgePermission } from '../../utils/appBadge';
 
 // The sections of the Settings page, in menu order, in two groups: what
 // applies to the account open in the menu bar only, and what the whole
@@ -64,6 +65,39 @@ function parseLogLines(text) {
 function StatusPill({ ok, okText, badText, neutral }) {
   const tone = neutral ? styles.pillNeutral : ok ? styles.pillOk : styles.pillBad;
   return <span className={`${styles.statusPill} ${tone}`}><span className={styles.pillDot} />{ok ? okText : badText}</span>;
+}
+
+// The count of what's waiting (the menu's badges, all accounts) on the app's
+// icon when the journal is installed as a web app (Safari: File → Add to
+// Dock). Per browser, so this shows what this one allows.
+const APP_BADGE_TEXT = {
+  ready: { ok: true, pill: 'On', text: 'The app icon shows how many things are waiting, while the app is open (also minimised or in the background).' },
+  'needs-permission': { ok: false, pill: 'Off', text: 'Safari only shows the count once notifications are allowed. The journal sends none; it only sets the count.' },
+  denied: { ok: false, pill: 'Blocked', text: 'Notifications are blocked for this app. Allow them in System Settings → Notifications (or the browser\'s site settings), then reopen the app.' },
+  insecure: { ok: false, pill: 'Unavailable', text: 'Browsers only allow an icon count on HTTPS pages. Open the journal through an HTTPS address and add that one to the Dock.' },
+  unsupported: { ok: false, pill: 'Unavailable', text: 'This browser can\'t put a count on the app icon. Safari 17+ (Add to Dock) and Chrome/Edge (Install) can.' },
+};
+
+function AppBadgeCard() {
+  const [state, setState] = useState(appBadgeState);
+  const info = APP_BADGE_TEXT[state];
+  return (
+    <section className={styles.card}>
+      <div className={styles.cardHeader}>
+        <div>
+          <h3>App icon badge</h3>
+          <p>When the journal is installed as an app (Safari: File → Add to Dock), its icon can show the count of the menu's badges.</p>
+        </div>
+        <StatusPill ok={info.ok} okText={info.pill} badText={info.pill} neutral={!info.ok && state !== 'denied'} />
+      </div>
+      <p className={styles.fieldHint}>{info.text}</p>
+      {state === 'needs-permission' && (
+        <div>
+          <BubbleButton onClick={async () => setState(await requestAppBadgePermission())}>Allow the icon badge</BubbleButton>
+        </div>
+      )}
+    </section>
+  );
 }
 
 // Must match VALID_TIMEFRAMES / DEFAULT_TIMEFRAME_SETTINGS in
@@ -1562,6 +1596,8 @@ export default function Settings() {
                 </div>
               </div>
             </section>
+
+            <AppBadgeCard />
 
           </div>
         )}
