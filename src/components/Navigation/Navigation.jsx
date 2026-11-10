@@ -114,9 +114,10 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   const [ibkrDataStatus, setIbkrDataStatus] = useState(null);
   // What IBKR has waiting (BrokerAlertsContext). For the open account: a
   // badge next to Capital (cash items, cash that differs from IBKR's) and
-  // next to Dashboard (fills not in the journal). For the other accounts: a
-  // mark on each in the account list, and a badge next to its label.
-  const { capital: brokerPending, rootOf, countsByAccount } = useBrokerAlerts();
+  // next to Dashboard (fills not in the journal). Per account: a mark on each
+  // in the account list; the badge next to its label is the total over all
+  // accounts (same number as the app icon's).
+  const { capital: brokerPending, rootOf, countsByAccount, total: alertsTotal } = useBrokerAlerts();
 
   useEffect(() => {
     // WebSocket connection is handled by StatusProvider.
@@ -317,8 +318,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   const currentRoot = rootOf(currentAccountId);
   const currentAlerts = countsByAccount[currentRoot] || { capital: 0, fills: 0 };
   const currentCapital = (brokerPending.accounts || []).find(a => String(a.id) === currentRoot);
-  const otherAlerts = safeAccounts.filter(a => String(a.id) !== currentRoot && countsByAccount[String(a.id)]);
-  const otherAlertsCount = otherAlerts.reduce((n, a) => n + countsByAccount[String(a.id)].capital + countsByAccount[String(a.id)].fills, 0);
+  const alertAccounts = safeAccounts.filter(a => countsByAccount[String(a.id)]);
 
   const currentAccountCashBalances = (safeAccounts.find(a => String(a.id) === String(currentAccountId))?.cash_balances) || [];
   const cashByCurrency = sumByCurrency(currentAccountCashBalances, b => b.balance, b => b.currency);
@@ -388,13 +388,13 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
     <div className={styles.accountInfo}>
       <span className={styles.accountLabel}>
         Account
-        {otherAlertsCount > 0 && (
+        {alertsTotal > 0 && (
           <span
             className={styles.accountBadge}
-            title={`Waiting on other accounts: ${otherAlerts.map(a => a.name).join(', ')}`}
-            aria-label={`${otherAlertsCount} thing${otherAlertsCount > 1 ? 's' : ''} waiting on other accounts`}
+            title={`Waiting: ${alertAccounts.map(a => `${a.name} ${countsByAccount[String(a.id)].capital + countsByAccount[String(a.id)].fills}`).join(', ')}`}
+            aria-label={`${alertsTotal} thing${alertsTotal > 1 ? 's' : ''} waiting over all accounts`}
           >
-            {otherAlertsCount > 99 ? '99+' : otherAlertsCount}
+            {alertsTotal > 99 ? '99+' : alertsTotal}
           </span>
         )}
       </span>

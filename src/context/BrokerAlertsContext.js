@@ -16,6 +16,7 @@ const BrokerAlertsContext = createContext({
   fills: [],
   rootOf: () => null,
   countsByAccount: {},
+  total: 0,
   refresh: () => {},
   dismissFills: async () => {},
 });
@@ -99,8 +100,8 @@ export function BrokerAlertsProvider({ children }) {
   }, [currentAccountId, refresh]);
 
   const value = useMemo(
-    () => ({ capital, fills, rootOf, countsByAccount, refresh, dismissFills }),
-    [capital, fills, rootOf, countsByAccount, refresh, dismissFills]
+    () => ({ capital, fills, rootOf, countsByAccount, total, refresh, dismissFills }),
+    [capital, fills, rootOf, countsByAccount, total, refresh, dismissFills]
   );
   return <BrokerAlertsContext.Provider value={value}>{children}</BrokerAlertsContext.Provider>;
 }
