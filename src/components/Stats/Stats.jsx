@@ -1012,9 +1012,17 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                   </div>
                 ) : (
                   <p className={styles.chartEmpty}>
-                    {trades.length > 0 && cashFlows.length === 0
-                      ? `Record this account's deposits in ${activeCurrency} on the Capital page to see the return on them.`
-                      : 'No valid data available for the return percentage chart.'}
+                    {(() => {
+                      if (!(trades.length > 0 && cashFlows.length === 0)) return 'No valid data available for the return percentage chart.';
+                      // A sub-account's money sits in its main account: a
+                      // deposit here would count it twice, a transfer moves it.
+                      const account = (accounts || []).find(a => String(a.id) === String(currentAccountId));
+                      const parent = account?.parent_account_id
+                        && (accounts || []).find(a => String(a.id) === String(account.parent_account_id));
+                      return parent
+                        ? `${account.name} has no capital of its own yet. On ${parent.name}'s Capital page, transfer the ${activeCurrency} set aside for it (Transfer tab) to see the return on it.`
+                        : `Record this account's deposits in ${activeCurrency} on the Capital page to see the return on them.`;
+                    })()}
                   </p>
                 )}
               </ChartCard>
