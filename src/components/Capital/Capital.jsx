@@ -331,7 +331,9 @@ const Capital = () => {
   const redeemHolding = async (holding) => {
     const input = await promptDialog(`Redemption amount for "${holding.name}" (${holding.currency}):`, holding.face_value, { title: "Redeem holding", confirmLabel: "Redeem", inputMode: "decimal" });
     if (input === null) return;
-    const amount = Number(input);
+    // A decimal comma as in the trade form ("1000,50"): a phone's decimal
+    // keypad types the locale's mark. Grouped input stays an error.
+    const amount = Number(String(input).trim().replace(',', '.'));
     if (!amount || amount <= 0) { notify('Enter a positive amount.'); return; }
     try {
       const res = await fetch(`${apiBaseUrl}/api/holdings/${holding.id}/redeem`, {
