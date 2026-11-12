@@ -7,7 +7,7 @@
   border-radius: 999px;
   border: 1px solid color-mix(in srgb, var(--tag-color) 35%, transparent);
   background: color-mix(in srgb, var(--tag-color) 16%, transparent);
-  color: color-mix(in srgb, var(--tag-color) 55%, #ffffff);
+  color: color-mix(in srgb, var(--tag-color) 55%, var(--ui-chip-mix));
   font: inherit;
   font-size: 12px;
   font-weight: 600;
@@ -31,13 +31,13 @@
 /* Pickable but not picked: quiet, so the picked ones stand out. */
 .off {
   background: transparent;
-  border-color: rgba(255, 255, 255, 0.14);
-  color: #9CA3AF;
+  border-color: rgba(var(--ui-ink-rgb), 0.14);
+  color: var(--text-secondary);
 }
 
 .off:hover {
   border-color: color-mix(in srgb, var(--tag-color) 50%, transparent);
-  color: color-mix(in srgb, var(--tag-color) 55%, #ffffff);
+  color: color-mix(in srgb, var(--tag-color) 55%, var(--ui-chip-mix));
 }
 
 .on,
@@ -48,9 +48,9 @@
 }
 
 .exclude {
-  background: rgba(239, 68, 68, 0.12);
-  border-color: rgba(239, 68, 68, 0.6);
-  color: #FCA5A5;
+  background: rgba(var(--ui-red-rgb), 0.12);
+  border-color: rgba(var(--ui-red-rgb), 0.6);
+  color: var(--ui-red-text);
   text-decoration: line-through;
 }
 
@@ -60,6 +60,6 @@
 }
 
 .clickable:focus-visible {
-  outline: 2px solid rgba(59, 130, 246, 0.7);
+  outline: 2px solid rgba(var(--ui-accent-rgb), 0.7);
   outline-offset: 1px;
 }

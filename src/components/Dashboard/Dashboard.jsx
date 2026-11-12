@@ -17,6 +17,8 @@ import { formatNumber } from '../../utils/numberFormat';
 import { DateTime } from 'luxon';
 import { getRealisedPnL } from '../../context/TradeContext';
 import UnenteredFills from './UnenteredFills';
+import useTheme from '../../utils/useTheme';
+import { themeColor } from '../../utils/theme';
 
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
@@ -93,6 +95,9 @@ const ringFontSize = (text) => {
 };
 
 const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, customFilterDate, customFilterWeek }) => {
+  // Colours drawn in JavaScript (the chart, the tiles' rings) come from the
+  // theme's tokens; a theme change re-renders with the new ones.
+  useTheme();
   const {
     stats,
     toggleFilter,
@@ -244,7 +249,7 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
   // their own. A single-currency account still renders exactly one line, in
   // the original blue, so nothing changes visually until a second currency
   // actually exists.
-  const CHART_SERIES_COLORS = ['#3B82F6', '#F59E0B', '#A855F7', '#14B8A6', '#EC4899'];
+  const CHART_SERIES_COLORS = [themeColor('--ui-accent'), '#F59E0B', '#A855F7', '#14B8A6', '#EC4899'];
   const tradeCurrency = t => String(t.currency || 'USD').toUpperCase();
   // Only currencies that have actually realised something get a line. A
   // currency whose positions are all still open has no realised curve to
@@ -293,7 +298,7 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
         label: chartCurrencies.length > 1 ? `Realised P&L (${code})` : 'Realised P&L',
         data,
         borderColor: CHART_SERIES_COLORS[i % CHART_SERIES_COLORS.length],
-        backgroundColor: i === 0 ? 'rgba(59, 130, 246, 0.1)' : 'transparent',
+        backgroundColor: i === 0 ? `rgba(${themeColor('--ui-accent-rgb')}, 0.1)` : 'transparent',
         tension: 0.3,
         fill: i === 0,
         pointRadius: 0,
@@ -402,8 +407,8 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
           ? `Unrealised P&L (${activeUnrealisedCurrency})`
           : 'Unrealised P&L',
         data: unrealisedByCurrency[activeUnrealisedCurrency] || [],
-        borderColor: '#EF4444',
-        backgroundColor: 'rgba(239, 68, 68, 0.1)',
+        borderColor: themeColor('--accent-red'),
+        backgroundColor: `rgba(${themeColor('--ui-red-rgb')}, 0.1)`,
         tension: 0.3,
         fill: true,
         pointRadius: 0,
@@ -444,7 +449,7 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
       y: {
         display: true,
         ticks: {
-          color: '#6B7280',
+          color: themeColor('--ui-faint'),
           maxTicksLimit: 4,
           font: {
             size: 11
@@ -454,7 +459,7 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
           callback: value => signedMoney(value, displayedChartCurrency),
         },
         grid: {
-          color: 'rgba(255, 255, 255, 0.04)',
+          color: `rgba(${themeColor('--ui-ink-rgb')}, 0.04)`,
         },
         border: { display: false },
       },
@@ -509,12 +514,12 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
         ctx.moveTo(xPos, chartArea.top);
         ctx.lineTo(xPos, chartArea.bottom);
         ctx.lineWidth = 1;
-        ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)'; // Line color
+        ctx.strokeStyle = `rgba(${themeColor('--ui-ink-rgb')}, 0.5)`; // Line color
         ctx.stroke();
 
         // Configure text properties
         ctx.font = '11px Arial';
-        ctx.fillStyle = '#F3F4F6'; // Text color
+        ctx.fillStyle = themeColor('--text-primary'); // Text color
         ctx.textAlign = isRightEdge ? 'left' : 'center';
         const textXPos = isRightEdge ? xPos - 10 : xPos; // Adjust text X position based on alignment
 
@@ -574,8 +579,8 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
 
   const signColour = (totals) => {
     const sign = totalsSign(totals);
-    if (sign === 'mixed') return '#A5ADBA';
-    return sign === 'positive' ? '#22C55E' : '#EF4444';
+    if (sign === 'mixed') return themeColor('--ui-text-3');
+    return sign === 'positive' ? themeColor('--ui-green-2') : themeColor('--accent-red');
   };
 
   const lineCountOf = (stat) => toTotalsList(stat.totals || {}).length;
@@ -625,7 +630,7 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
           // AVG W / AVG L are not sign-coloured: their colour says "win" or
           // "loss", so it stays fixed.
           const ownColor = stat.signColored
-            ? (amount >= 0 ? '#22C55E' : '#EF4444')
+            ? (amount >= 0 ? themeColor('--ui-green-2') : themeColor('--accent-red'))
             : undefined;
           if (!stat.onCurrency) return <span key={currency} style={ownColor ? { color: ownColor } : undefined}>{text}</span>;
           // Each figure charts its own currency. Dimming the ones that are
@@ -652,16 +657,16 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
   // (they add up to 100%); OPEN/WASH are each a share of all trades.
   const statGrid = [
     [
-      { label: 'WINS', value: stats.wins, pct: stats.winRate + '%', color: '#22C55E', onClick: () => toggleFilter('WIN'), filterValue: 'WIN' },
-      { label: 'LOSSES', value: stats.losses, pct: (stats.lossRate ?? 0) + '%', color: '#EF4444', onClick: () => toggleFilter('LOSS'), filterValue: 'LOSS' },
+      { label: 'WINS', value: stats.wins, pct: stats.winRate + '%', color: themeColor('--ui-green-2'), onClick: () => toggleFilter('WIN'), filterValue: 'WIN' },
+      { label: 'LOSSES', value: stats.losses, pct: (stats.lossRate ?? 0) + '%', color: themeColor('--accent-red'), onClick: () => toggleFilter('LOSS'), filterValue: 'LOSS' },
     ],
     [
-      { label: 'OPEN', value: stats.open, pct: stats.totalTrades ? Math.round((stats.open / stats.totalTrades) * 100) + '%' : '0%', color: '#60A5FA', onClick: () => toggleFilter('OPEN'), filterValue: 'OPEN' },
-      { label: 'WASH', value: stats.wash, pct: stats.totalTrades ? Math.round((stats.wash / stats.totalTrades) * 100) + '%' : '0%', color: '#A5ADBA', onClick: () => toggleFilter('WASH'), filterValue: 'WASH' },
+      { label: 'OPEN', value: stats.open, pct: stats.totalTrades ? Math.round((stats.open / stats.totalTrades) * 100) + '%' : '0%', color: themeColor('--ui-accent-2'), onClick: () => toggleFilter('OPEN'), filterValue: 'OPEN' },
+      { label: 'WASH', value: stats.wash, pct: stats.totalTrades ? Math.round((stats.wash / stats.totalTrades) * 100) + '%' : '0%', color: themeColor('--ui-text-3'), onClick: () => toggleFilter('WASH'), filterValue: 'WASH' },
     ],
     [
-      { label: 'AVG W', value: formatTotals(stats.avgWinByCurrency, { decimals: 0, abs: true, emptyCurrency: displayedChartCurrency }), totals: stats.avgWinByCurrency, decimals: 0, abs: true, pct: (stats.avgWinPct ?? 0).toFixed(0) + '%', color: '#22C55E' },
-      { label: 'AVG L', value: formatTotals(stats.avgLossByCurrency, { decimals: 0, abs: true, emptyCurrency: displayedChartCurrency }), totals: stats.avgLossByCurrency, decimals: 0, abs: true, pct: (stats.avgLossPct ?? 0).toFixed(0) + '%', color: '#EF4444' },
+      { label: 'AVG W', value: formatTotals(stats.avgWinByCurrency, { decimals: 0, abs: true, emptyCurrency: displayedChartCurrency }), totals: stats.avgWinByCurrency, decimals: 0, abs: true, pct: (stats.avgWinPct ?? 0).toFixed(0) + '%', color: themeColor('--ui-green-2') },
+      { label: 'AVG L', value: formatTotals(stats.avgLossByCurrency, { decimals: 0, abs: true, emptyCurrency: displayedChartCurrency }), totals: stats.avgLossByCurrency, decimals: 0, abs: true, pct: (stats.avgLossPct ?? 0).toFixed(0) + '%', color: themeColor('--accent-red') },
     ],
   ].map((row) => {
     // Every row is one side-by-side pair, so both boxes in it share a line
@@ -884,7 +889,7 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
         {ring && stat.pct !== undefined && (
           <div className={styles.statPctContainer}>
             <svg className={styles.progressRing} width="30" height="30" viewBox="0 0 30 30">
-              <circle stroke="rgba(255,255,255,0.08)" strokeWidth="3" fill="transparent" r="12" cx="15" cy="15" />
+              <circle stroke={`rgba(${themeColor('--ui-ink-rgb')}, 0.08)`} strokeWidth="3" fill="transparent" r="12" cx="15" cy="15" />
               <circle
                 stroke={stat.color}
                 strokeWidth="3"

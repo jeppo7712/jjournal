@@ -37,7 +37,7 @@ test('styles.css: the light theme overrides every colour token of :root', () => 
     return css.slice(start, css.indexOf('}', start));
   };
   const names = (text) => new Set([...text.matchAll(/(--[\w-]+)\s*:\s*([^;]+);/g)]
-    .filter(([, , value]) => /#|rgba?\(/.test(value))
+    .filter(([, name, value]) => /#|rgba?\(|^\d+,\s*\d+,\s*\d+$/.test(value.trim()) || name === '--ui-shadow-k')
     .map(([, name]) => name));
   const dark = names(block(':root'));
   const light = names(block(':root[data-theme="light"]'));

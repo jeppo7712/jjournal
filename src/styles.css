@@ -31,6 +31,50 @@
   --ui-red: #F87171;
   --ui-radius: 16px;
   --ui-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.03), 0 10px 28px rgba(0, 0, 0, 0.16);
+  /* More of the look, for the light theme: each dark value is the colour
+     the stylesheets used directly before. */
+  --ui-strong: #FFFFFF;          /* headings, values, hovered items */
+  --ui-text-3: #A5ADBA;
+  --ui-dim: #5F6778;             /* section labels */
+  --ui-popover: #1B1F2C;         /* menus, pop-ups, the account card */
+  --ui-sidebar-top: #171A24;
+  --ui-sidebar-bottom: #141720;
+  --ui-sidebar-ring: #151821;    /* a badge's ring, the sidebar's colour */
+  --ui-scroll: #3A4152;          /* scrollbar thumbs */
+  --ui-bar: rgba(20, 23, 32, 0.96); /* the phone's bottom bar */
+  --ui-border-strong: #3A4258;   /* a hovered card's border */
+  --ui-hover-bg: #181D29;
+  --ui-pressed: #232838;
+  --ui-popover-glass: rgba(27, 31, 44, 0.97);
+  --ui-backdrop: rgba(5, 7, 12, 0.62); /* behind a pop-up window */
+  --ui-red-text: #FCA5A5;
+  --ui-faint-2: #4B5266;
+  --ui-text-soft: #D1D5DB;
+  --ui-violet-rgb: 139, 92, 246;  /* the tag filter */
+  --ui-violet-text: #C4B5FD;
+  --ui-violet-3: #EDE9FE;
+  --ui-chip-mix: #ffffff;        /* a tag chip's text: its colour mixed with this */
+  --ui-accent-text: #93C5FD;     /* blue text and icons on dark tints */
+  --ui-accent-2: #60A5FA;
+  --ui-accent-3: #DBEAFE;
+  --ui-amber: #F59E0B;
+  --ui-amber-text: #FCD34D;
+  --ui-warn-text: #FBBF24;
+  --ui-warn-2: #B45309;
+  --ui-err-2: #B91C1C;
+  --ui-green-2: #22C55E;
+  /* Channels for tints, as rgba(var(--ui-ink-rgb), 0.06): "ink" is white
+     on the dark theme (a light wash) and slate on the light one. */
+  --ui-ink-rgb: 255, 255, 255;
+  --ui-accent-rgb: 59, 130, 246;
+  --ui-accent-2-rgb: 96, 165, 250;
+  --ui-amber-rgb: 245, 158, 11;
+  --ui-red-rgb: 239, 68, 68;
+  --ui-green-rgb: 34, 197, 94;
+  /* Shadows and dimming overlays: rgba(var(--ui-shadow-rgb),
+     calc(0.5 * var(--ui-shadow-k))). Lighter on the light theme. */
+  --ui-shadow-rgb: 0, 0, 0;
+  --ui-shadow-k: 1;
   /* Space taken by the iPhone status bar / home indicator (0 elsewhere);
      needs viewport-fit=cover in public/index.html. */
   --safe-top: env(safe-area-inset-top, 0px);
@@ -75,6 +119,44 @@
   --ui-green: #16A34A;
   --ui-red: #DC2626;
   --ui-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 6px 18px rgba(15, 23, 42, 0.06);
+  --ui-strong: #0F172A;
+  --ui-text-3: #475569;
+  --ui-dim: #94A3B8;
+  --ui-popover: #FFFFFF;
+  --ui-sidebar-top: #FFFFFF;
+  --ui-sidebar-bottom: #FFFFFF;
+  --ui-sidebar-ring: #FFFFFF;
+  --ui-scroll: #CBD5E1;
+  --ui-bar: rgba(255, 255, 255, 0.96);
+  --ui-border-strong: #C7CED9;
+  --ui-hover-bg: #EEF2F8;
+  --ui-pressed: #E8EDF5;
+  --ui-popover-glass: rgba(255, 255, 255, 0.97);
+  --ui-backdrop: rgba(15, 23, 42, 0.35);
+  --ui-red-text: #B91C1C;
+  --ui-faint-2: #CBD5E1;
+  --ui-text-soft: #374151;
+  --ui-violet-rgb: 124, 58, 237;
+  --ui-violet-text: #6D28D9;
+  --ui-violet-3: #4C1D95;
+  --ui-chip-mix: #1E293B;
+  --ui-accent-text: #1D4ED8;
+  --ui-accent-2: #2563EB;
+  --ui-accent-3: #1E3A8A;
+  --ui-amber: #D97706;
+  --ui-amber-text: #B45309;
+  --ui-warn-text: #B45309;
+  --ui-warn-2: #92400E;
+  --ui-err-2: #991B1B;
+  --ui-green-2: #16A34A;
+  --ui-ink-rgb: 15, 23, 42;
+  --ui-accent-rgb: 37, 99, 235;
+  --ui-accent-2-rgb: 37, 99, 235;
+  --ui-amber-rgb: 217, 119, 6;
+  --ui-red-rgb: 220, 38, 38;
+  --ui-green-rgb: 22, 163, 74;
+  --ui-shadow-rgb: 15, 23, 42;
+  --ui-shadow-k: 0.3;
   color-scheme: light;
 }
 
@@ -159,7 +241,7 @@ input, select, textarea {
 }
 
 ::selection {
-  background: rgba(59, 130, 246, 0.35);
+  background: rgba(var(--ui-accent-rgb), 0.35);
 }
 
 /* Slim, dark scrollbars everywhere (desktop browsers). */
@@ -190,7 +272,7 @@ input, select, textarea {
 
 /* Visible keyboard focus, without a ring on mouse clicks. */
 :focus-visible {
-  outline: 2px solid rgba(96, 165, 250, 0.65);
+  outline: 2px solid rgba(var(--ui-accent-2-rgb), 0.65);
   outline-offset: 2px;
 }
 
@@ -234,7 +316,7 @@ input::-webkit-date-and-time-value {
   left: 0;
   width: 100%;
   height: 100%;
-  background: rgba(0, 0, 0, 0.5);
+  background: rgba(var(--ui-shadow-rgb), calc(0.5 * var(--ui-shadow-k)));
   display: flex;
   justify-content: center;
   align-items: center;

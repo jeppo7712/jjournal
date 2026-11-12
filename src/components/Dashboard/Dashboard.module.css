@@ -48,8 +48,8 @@
   min-width: 0;
   min-height: 70px;
   padding: 11px 13px 12px;
-  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
-  border: 1px solid var(--ui-border, #2C3244);
+  background: linear-gradient(180deg, var(--ui-card-top) 0%, var(--ui-card) 100%);
+  border: 1px solid var(--ui-border);
   border-radius: 14px;
   box-shadow: var(--ui-shadow);
   box-sizing: border-box;
@@ -77,20 +77,20 @@
 
 @media (hover: hover) {
   .clickable:hover {
-    border-color: #3A4258;
+    border-color: var(--ui-border-strong);
     transform: translateY(-1px);
-    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.04), 0 14px 30px rgba(0, 0, 0, 0.25);
+    box-shadow: inset 0 1px 0 rgba(var(--ui-ink-rgb), 0.04), 0 14px 30px rgba(var(--ui-shadow-rgb), calc(0.25 * var(--ui-shadow-k)));
   }
 }
 
 .statBox.active {
-  border-color: rgba(59, 130, 246, 0.75);
-  box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.5), 0 10px 28px rgba(59, 130, 246, 0.16);
+  border-color: rgba(var(--ui-accent-rgb), 0.75);
+  box-shadow: 0 0 0 1px rgba(var(--ui-accent-rgb), 0.5), 0 10px 28px rgba(var(--ui-accent-rgb), 0.16);
 }
 
 .statBox.excluded {
-  border-color: rgba(239, 68, 68, 0.6);
-  box-shadow: 0 0 0 1px rgba(239, 68, 68, 0.35);
+  border-color: rgba(var(--ui-red-rgb), 0.6);
+  box-shadow: 0 0 0 1px rgba(var(--ui-red-rgb), 0.35);
 }
 
 .statBox.excluded .statValue {
@@ -100,7 +100,7 @@
 }
 
 .charted {
-  border-color: rgba(59, 130, 246, 0.45);
+  border-color: rgba(var(--ui-accent-rgb), 0.45);
 }
 
 .statLabel {
@@ -110,7 +110,7 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
   white-space: nowrap;
 }
 
@@ -192,7 +192,7 @@
   justify-content: center;
   font-size: 8.5px;
   font-weight: 700;
-  color: var(--ui-text-2, #C7CDD8);
+  color: var(--ui-text-2);
   font-variant-numeric: tabular-nums;
 }
 
@@ -207,21 +207,21 @@
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
-  background: rgba(239, 68, 68, 0.16);
-  color: #FCA5A5;
+  background: rgba(var(--ui-red-rgb), 0.16);
+  color: var(--ui-red-text);
 }
 
 .statFlagOn {
-  background: rgba(59, 130, 246, 0.18);
-  color: #93C5FD;
+  background: rgba(var(--ui-accent-rgb), 0.18);
+  color: var(--ui-accent-text);
 }
 
 /* ---------- P&L chart ---------- */
 .graphBubble {
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
-  border: 1px solid var(--ui-border, #2C3244);
+  background: linear-gradient(180deg, var(--ui-card-top) 0%, var(--ui-card) 100%);
+  border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius, 16px);
   box-shadow: var(--ui-shadow);
   padding: 12px 14px 6px;
@@ -247,13 +247,13 @@
   gap: 10px;
   font-size: 13.5px;
   font-weight: 600;
-  color: #fff;
+  color: var(--ui-strong);
 }
 
 .chartSubtitle {
   font-size: 12px;
   font-weight: 400;
-  color: var(--ui-faint, #6B7280);
+  color: var(--ui-faint);
 }
 
 .chartActions {
@@ -266,14 +266,14 @@
   display: inline-flex;
   padding: 3px;
   border-radius: 10px;
-  background: var(--ui-input, #141822);
-  border: 1px solid var(--ui-border, #2C3244);
+  background: var(--ui-input);
+  border: 1px solid var(--ui-border);
 }
 
 .segmented button {
   border: none;
   background: transparent;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
   font-size: 12px;
   font-weight: 600;
   padding: 4px 11px;
@@ -282,13 +282,13 @@
 }
 
 .segmented button:hover {
-  color: #fff;
+  color: var(--ui-strong);
 }
 
 .segmented .segmentOn,
 .segmented .segmentOn:hover {
-  background: rgba(59, 130, 246, 0.2);
-  color: #DBEAFE;
+  background: rgba(var(--ui-accent-rgb), 0.2);
+  color: var(--ui-accent-3);
 }
 
 .iconButton {
@@ -300,7 +300,7 @@
   border: 1px solid transparent;
   border-radius: 9px;
   background: transparent;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
   transition: background 0.15s, color 0.15s;
 }
 
@@ -310,8 +310,8 @@
 }
 
 .iconButton:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
+  background: rgba(var(--ui-ink-rgb), 0.06);
+  color: var(--ui-strong);
 }
 
 .graphArea {
@@ -339,7 +339,7 @@
   align-items: center;
   justify-content: center;
   gap: 10px;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
   font-size: 13px;
   font-weight: 500;
   pointer-events: none;
@@ -356,8 +356,8 @@
   width: 16px;
   height: 16px;
   box-sizing: border-box;
-  border: 2px solid rgba(96, 165, 250, 0.25);
-  border-top-color: #60A5FA;
+  border: 2px solid rgba(var(--ui-accent-2-rgb), 0.25);
+  border-top-color: var(--ui-accent-2);
   border-radius: 50%;
   animation: chartSpin 0.8s linear infinite;
 }
@@ -382,7 +382,7 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  color: var(--ui-faint, #6B7280);
+  color: var(--ui-faint);
   font-size: 13px;
 }
 
@@ -390,7 +390,7 @@
 .graphPopup {
   position: fixed;
   inset: 0;
-  background: rgba(5, 7, 12, 0.62);
+  background: var(--ui-backdrop);
   -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
   z-index: 2000;
@@ -413,11 +413,11 @@
   width: 100%;
   max-width: 900px;
   box-sizing: border-box;
-  background: linear-gradient(180deg, #1F2434 0%, #1B1F2C 120px);
-  border: 1px solid var(--ui-border, #2C3244);
+  background: linear-gradient(180deg, var(--ui-card-top) 0%, var(--ui-popover) 120px);
+  border: 1px solid var(--ui-border);
   border-radius: 18px;
   padding: 14px 14px 16px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55);
+  box-shadow: 0 30px 80px rgba(var(--ui-shadow-rgb), calc(0.55 * var(--ui-shadow-k)));
 }
 
 .graphPopupGrip {
@@ -452,15 +452,15 @@
   padding: 0;
   border: none;
   border-radius: 10px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--ui-muted, #8B93A3);
+  background: rgba(var(--ui-ink-rgb), 0.05);
+  color: var(--ui-muted);
   cursor: pointer;
 }
 
 @media (hover: hover) {
   .graphPopupClose:hover {
-    background: rgba(255, 255, 255, 0.1);
-    color: #fff;
+    background: rgba(var(--ui-ink-rgb), 0.1);
+    color: var(--ui-strong);
   }
 }
 
@@ -484,7 +484,7 @@
     height: 4px;
     margin: 0 auto 10px;
     border-radius: 4px;
-    background: rgba(255, 255, 255, 0.14);
+    background: rgba(var(--ui-ink-rgb), 0.14);
   }
 }
 
@@ -511,8 +511,8 @@
   padding: 3px;
   gap: 2px;
   border-radius: 11px;
-  background: var(--ui-input, #141822);
-  border: 1px solid var(--ui-border, #2C3244);
+  background: var(--ui-input);
+  border: 1px solid var(--ui-border);
 }
 
 .toggleButton,
@@ -525,7 +525,7 @@
   border: 1px solid transparent;
   border-radius: 8px;
   background: transparent;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
   font-size: 12.5px;
   font-weight: 600;
   white-space: nowrap;
@@ -540,16 +540,16 @@
 
 .toggleButton:hover,
 .chartToggle:hover {
-  color: #fff;
+  color: var(--ui-strong);
 }
 
 .toggleButton.active {
-  background: rgba(59, 130, 246, 0.18);
-  color: #DBEAFE;
+  background: rgba(var(--ui-accent-rgb), 0.18);
+  color: var(--ui-accent-3);
 }
 
 .toggleButton.excluded {
-  color: #5F6778;
+  color: var(--ui-dim);
 }
 
 .toggleButton.excluded .toggleText {
@@ -558,8 +558,8 @@
 
 /* Open positions: three states — off (plain), only (blue), hidden (red). */
 .openTradesButton.excluded {
-  background: rgba(239, 68, 68, 0.14);
-  color: #FCA5A5;
+  background: rgba(var(--ui-red-rgb), 0.14);
+  color: var(--ui-red-text);
 }
 
 .openTradesButton.excluded .toggleText {
@@ -569,15 +569,15 @@
 .chartToggle {
   margin-left: auto;
   height: 38px;
-  border-color: var(--ui-border, #2C3244);
-  background: var(--ui-input, #141822);
+  border-color: var(--ui-border);
+  background: var(--ui-input);
   border-radius: 11px;
 }
 
 .chartToggle.active {
-  color: #DBEAFE;
-  border-color: rgba(59, 130, 246, 0.45);
-  background: rgba(59, 130, 246, 0.12);
+  color: var(--ui-accent-3);
+  border-color: rgba(var(--ui-accent-rgb), 0.45);
+  background: rgba(var(--ui-accent-rgb), 0.12);
 }
 
 /* Time filter: one button (opens the menu, or clears an active filter)
@@ -599,11 +599,11 @@
   gap: 8px;
   height: 38px;
   padding: 0 12px;
-  border: 1px solid var(--ui-border, #2C3244);
+  border: 1px solid var(--ui-border);
   border-right: none;
   border-radius: 11px 0 0 11px;
-  background: var(--ui-input, #141822);
-  color: var(--ui-text-2, #C7CDD8);
+  background: var(--ui-input);
+  color: var(--ui-text-2);
   font-size: 12.5px;
   font-weight: 600;
   white-space: nowrap;
@@ -611,14 +611,14 @@
 }
 
 .timeFilterButton:hover {
-  color: #fff;
-  background: #181D29;
+  color: var(--ui-strong);
+  background: var(--ui-hover-bg);
 }
 
 .timeFilterButton.active {
-  border-color: rgba(59, 130, 246, 0.55);
-  background: rgba(59, 130, 246, 0.12);
-  color: #DBEAFE;
+  border-color: rgba(var(--ui-accent-rgb), 0.55);
+  background: rgba(var(--ui-accent-rgb), 0.12);
+  color: var(--ui-accent-3);
 }
 
 .timeFilterLabel {
@@ -629,7 +629,7 @@
   margin-left: 2px;
   font-size: 15px;
   line-height: 1;
-  color: #93C5FD;
+  color: var(--ui-accent-text);
 }
 
 .timeFilterMenu {
@@ -641,10 +641,10 @@
   grid-template-columns: 1fr 1fr;
   gap: 4px;
   padding: 6px;
-  background: #1B1F2C;
-  border: 1px solid var(--ui-border, #2C3244);
+  background: var(--ui-popover);
+  border: 1px solid var(--ui-border);
   border-radius: 14px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 18px 48px rgba(var(--ui-shadow-rgb), calc(0.5 * var(--ui-shadow-k)));
   z-index: 30;
   animation: panelIn 0.16s ease-out;
 }
@@ -652,7 +652,7 @@
 .timeFilterBox {
   padding: 8px 10px;
   border-radius: 9px;
-  color: var(--ui-text-2, #C7CDD8);
+  color: var(--ui-text-2);
   font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.02em;
@@ -661,19 +661,19 @@
 }
 
 .timeFilterBox:hover {
-  background: rgba(255, 255, 255, 0.05);
-  color: #fff;
+  background: rgba(var(--ui-ink-rgb), 0.05);
+  color: var(--ui-strong);
 }
 
 .timeFilterBox.active {
-  background: rgba(59, 130, 246, 0.18);
-  color: #DBEAFE;
+  background: rgba(var(--ui-accent-rgb), 0.18);
+  color: var(--ui-accent-3);
 }
 
 .timeFilterBox.custom {
   grid-column: 1 / -1;
   text-align: center;
-  border: 1px dashed var(--ui-border, #2C3244);
+  border: 1px dashed var(--ui-border);
 }
 
 .bullseyeButton {
@@ -682,22 +682,22 @@
   justify-content: center;
   width: 38px;
   height: 38px;
-  border: 1px solid var(--ui-border, #2C3244);
+  border: 1px solid var(--ui-border);
   border-radius: 0 11px 11px 0;
-  background: var(--ui-input, #141822);
-  color: var(--ui-muted, #8B93A3);
+  background: var(--ui-input);
+  color: var(--ui-muted);
   transition: background 0.15s, color 0.15s, border-color 0.15s;
 }
 
 .bullseyeButton:hover:not(.disabled) {
-  color: #fff;
-  background: #181D29;
+  color: var(--ui-strong);
+  background: var(--ui-hover-bg);
 }
 
 .bullseyeButton.active {
-  color: #93C5FD;
-  border-color: rgba(59, 130, 246, 0.55);
-  background: rgba(59, 130, 246, 0.12);
+  color: var(--ui-accent-text);
+  border-color: rgba(var(--ui-accent-rgb), 0.55);
+  background: rgba(var(--ui-accent-rgb), 0.12);
 }
 
 .bullseyeButton.disabled {
@@ -724,7 +724,7 @@
   left: 11px;
   width: 15px;
   height: 15px;
-  color: var(--ui-faint, #6B7280);
+  color: var(--ui-faint);
   pointer-events: none;
 }
 
@@ -732,10 +732,10 @@
   width: 100%;
   height: 38px;
   padding: 0 30px 0 33px;
-  border: 1px solid var(--ui-border, #2C3244);
+  border: 1px solid var(--ui-border);
   border-radius: 11px;
-  background: var(--ui-input, #141822);
-  color: #fff;
+  background: var(--ui-input);
+  color: var(--ui-strong);
   font-size: 13px;
   font-weight: 500;
   text-transform: uppercase;
@@ -744,18 +744,18 @@
 }
 
 .symbolFilterInput::placeholder {
-  color: var(--ui-faint, #6B7280);
+  color: var(--ui-faint);
   text-transform: none;
 }
 
 .symbolFilterInput:focus {
   outline: none;
-  border-color: rgba(59, 130, 246, 0.65);
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: rgba(var(--ui-accent-rgb), 0.65);
+  box-shadow: 0 0 0 3px rgba(var(--ui-accent-rgb), 0.15);
 }
 
 .symbolFilterInput.active {
-  border-color: rgba(59, 130, 246, 0.55);
+  border-color: rgba(var(--ui-accent-rgb), 0.55);
 }
 
 .clearSymbolFilter {
@@ -766,14 +766,14 @@
   border: none;
   border-radius: 7px;
   background: transparent;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
   font-size: 16px;
   line-height: 1;
 }
 
 .clearSymbolFilter:hover {
-  background: rgba(255, 255, 255, 0.06);
-  color: #fff;
+  background: rgba(var(--ui-ink-rgb), 0.06);
+  color: var(--ui-strong);
 }
 
 /* ---------- Date range picker ---------- */
@@ -783,39 +783,39 @@
   left: 0;
   z-index: 40;
   padding: 8px;
-  background: #1B1F2C;
-  border: 1px solid var(--ui-border, #2C3244);
+  background: var(--ui-popover);
+  border: 1px solid var(--ui-border);
   border-radius: 14px;
-  box-shadow: 0 18px 48px rgba(0, 0, 0, 0.5);
+  box-shadow: 0 18px 48px rgba(var(--ui-shadow-rgb), calc(0.5 * var(--ui-shadow-k)));
 }
 
 .datePickerCalendar {
   background: transparent !important;
   border: none !important;
   font-family: inherit !important;
-  color: var(--ui-text-2, #C7CDD8) !important;
+  color: var(--ui-text-2) !important;
 }
 
 .datePickerCalendar :global(.react-datepicker__header) {
   background: transparent !important;
-  border-bottom: 1px solid var(--ui-border, #2C3244) !important;
+  border-bottom: 1px solid var(--ui-border) !important;
   padding: 8px 0 !important;
 }
 
 .datePickerCalendar :global(.react-datepicker__current-month),
 .datePickerCalendar :global(.react-datepicker__day-name) {
-  color: #fff !important;
+  color: var(--ui-strong) !important;
   font-size: 12px !important;
 }
 
 .datePickerCalendar :global(.react-datepicker__day-name) {
-  color: var(--ui-faint, #6B7280) !important;
+  color: var(--ui-faint) !important;
   width: 30px !important;
   margin: 2px !important;
 }
 
 .datePickerCalendar :global(.react-datepicker__day) {
-  color: var(--ui-text, #E5E7EB) !important;
+  color: var(--ui-text) !important;
   font-size: 12px !important;
   width: 30px !important;
   height: 30px !important;
@@ -826,29 +826,29 @@
 
 .datePickerCalendar :global(.react-datepicker__day--in-range),
 .datePickerCalendar :global(.react-datepicker__day--in-selecting-range) {
-  background: rgba(59, 130, 246, 0.2) !important;
-  color: #fff !important;
+  background: rgba(var(--ui-accent-rgb), 0.2) !important;
+  color: var(--ui-strong) !important;
 }
 
 .datePickerCalendar :global(.react-datepicker__day--selected),
 .datePickerCalendar :global(.react-datepicker__day--range-start),
 .datePickerCalendar :global(.react-datepicker__day--range-end) {
-  background: #3B82F6 !important;
+  background: var(--ui-accent) !important;
   color: #fff !important;
 }
 
 .datePickerCalendar :global(.react-datepicker__day--today) {
   font-weight: 700 !important;
-  box-shadow: inset 0 0 0 1px rgba(96, 165, 250, 0.6);
+  box-shadow: inset 0 0 0 1px rgba(var(--ui-accent-2-rgb), 0.6);
 }
 
 .datePickerCalendar :global(.react-datepicker__day--outside-month) {
-  color: #4B5266 !important;
+  color: var(--ui-faint-2) !important;
 }
 
 .datePickerCalendar :global(.react-datepicker__day:hover) {
-  background: rgba(255, 255, 255, 0.08) !important;
-  color: #fff !important;
+  background: rgba(var(--ui-ink-rgb), 0.08) !important;
+  color: var(--ui-strong) !important;
 }
 
 .datePickerCalendar :global(.react-datepicker__navigation) {
