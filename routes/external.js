@@ -183,6 +183,12 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
         };
     }
 
+    // Date-only columns as the documented "2026-01-01": node-postgres turns a
+    // DATE into a Date at midnight, which went out as "2026-01-01T00:00:00.000Z"
+    // and could read as the day before in a client west of UTC. Listed after
+    // h.*, so these win over the raw columns of the same name.
+    const HOLDING_DATES = `to_char(h.purchase_date, 'YYYY-MM-DD') AS purchase_date, to_char(h.maturity_date, 'YYYY-MM-DD') AS maturity_date`;
+
     router.get('/holdings', async (req, res) => {
         try {
             const { account_id, status } = req.query;
@@ -199,7 +205,7 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
                         UNION
                         SELECT a.id FROM accounts a JOIN descendants d ON a.parent_account_id = d.id
                     )
-                    SELECT h.*, a.name AS account_name
+                    SELECT h.*, a.name AS account_name, ${HOLDING_DATES}
                     FROM holdings h
                     JOIN accounts a ON a.id = h.account_id
                     WHERE h.account_id IN (SELECT id FROM descendants)
@@ -209,7 +215,7 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
                 rows = result.rows;
             } else {
                 const result = await db.getPool().query(
-                    `SELECT h.*, a.name AS account_name
+                    `SELECT h.*, a.name AS account_name, ${HOLDING_DATES}
                      FROM holdings h
                      JOIN accounts a ON a.id = h.account_id
                      ORDER BY h.purchase_date DESC, h.id DESC`
@@ -413,18 +419,25 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
 
     // --- Day Notes ---
 
+    // `date` is the note's calendar day as "2026-05-12" (see HOLDING_DATES).
     router.get('/daynotes', async (req, res) => {
         try {
             const { account_id, from, to } = req.query;
+            // Bad input is a 400 that says so, not a database error (500).
+            const accountId = account_id ? Number(account_id) : null;
+            if (account_id && !Number.isInteger(accountId)) return res.status(400).json({ error: 'Invalid account_id' });
+            if ([from, to].some(d => d && Number.isNaN(Date.parse(d)))) {
+                return res.status(400).json({ error: 'from and to must be ISO dates or times' });
+            }
             const conditions = [];
             const params = [];
-            if (account_id) { params.push(parseInt(account_id, 10)); conditions.push(`dn.account_id = $${params.length}`); }
-            if (from) { params.push(from); conditions.push(`dn.date >= $${params.length}`); }
-            if (to) { params.push(to); conditions.push(`dn.date <= $${params.length}`); }
+            if (account_id) { params.push(accountId); conditions.push(`dn.account_id = $${params.length}`); }
+            if (from) { params.push(from); conditions.push(`dn.date >= $${params.length}::date`); }
+            if (to) { params.push(to); conditions.push(`dn.date <= $${params.length}::date`); }
             const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
 
             const { rows } = await db.getPool().query(`
-                SELECT dn.id, dn.account_id, acc.name AS account_name, dn.date, dn.mood, dn.market_condition,
+                SELECT dn.id, dn.account_id, acc.name AS account_name, to_char(dn.date, 'YYYY-MM-DD') AS date, dn.mood, dn.market_condition,
                        dn.market_volume, dn.summary, dn.notes_html, dn.created_at, dn.updated_at,
                        (
                            SELECT COALESCE(json_agg(json_build_object(
