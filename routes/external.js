@@ -22,10 +22,20 @@ const { latestStoredPrice } = require('../modules/storedPrice.js');
 const { computeTradeDerived, resolveTradeCurrency } = require('../modules/tradeCalculations.js');
 
 const API_VERSION = 'v1';
+// The database's symbol_type values (a trade's `type`).
+const SYMBOL_TYPES = ['STK', 'FUT', 'CRYPTO', 'CURRENCY'];
 
 module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, taskManager, triggerTaskProcessor) => {
 
     const attachmentUrl = (attachmentId) => `/api/external/${API_VERSION}/attachments/${attachmentId}`;
+
+    // Bad input is a 400 that says what's wrong, never a database error
+    // (500) or, worse, a silently wrong answer.
+    // Every :id is a whole number (trades, attachments, accounts).
+    router.param('id', (req, res, next, id) => (
+        /^\d+$/.test(id) ? next() : res.status(400).json({ error: 'Invalid id' })
+    ));
+    const isBadTime = (value) => value && Number.isNaN(Date.parse(value));
 
     // --- Discovery ---
 
@@ -316,10 +326,15 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
             const { account_id, symbol, type, status, from, to } = req.query;
             const limit = Math.min(Math.max(parseInt(req.query.limit, 10) || 200, 1), 1000);
             const offset = Math.max(parseInt(req.query.offset, 10) || 0, 0);
+            if (account_id && !/^\d+$/.test(account_id)) return res.status(400).json({ error: 'Invalid account_id' });
+            if (type && !SYMBOL_TYPES.includes(String(type).toUpperCase())) {
+                return res.status(400).json({ error: `type must be one of: ${SYMBOL_TYPES.join(', ')}` });
+            }
+            if (isBadTime(from) || isBadTime(to)) return res.status(400).json({ error: 'from and to must be ISO dates or times' });
 
             const conditions = [];
             const params = [];
-            if (account_id) { params.push(parseInt(account_id, 10)); conditions.push(`t.account_id = $${params.length}`); }
+            if (account_id) { params.push(Number(account_id)); conditions.push(`t.account_id = $${params.length}`); }
             if (symbol) { params.push(symbol.toUpperCase()); conditions.push(`t.symbol = $${params.length}`); }
             if (type) { params.push(type.toUpperCase()); conditions.push(`t.type = $${params.length}::symbol_type`); }
             const whereClause = conditions.length ? `WHERE ${conditions.join(' AND ')}` : '';
@@ -341,9 +356,13 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
             // the former is what "trades in this date range" usually means.
             // A date-only `to` means "through the end of that day" (UTC, like
             // first_action_at): compared as a plain string it excluded every
-            // trade opened on that day.
-            const toBound = to && /^\d{4}-\d{2}-\d{2}$/.test(to) ? `${to}T23:59:59.999Z` : to;
-            if (from) trades = trades.filter(t => t.first_action_at && t.first_action_at >= from);
+            // trade opened on that day. Both bounds are compared as UTC ISO
+            // strings like first_action_at, so one given with an offset
+            // ("+04:00") isn't compared character by character.
+            const toUtc = (value) => new Date(value).toISOString();
+            const fromBound = from && toUtc(from);
+            const toBound = to && toUtc(/^\d{4}-\d{2}-\d{2}$/.test(to) ? `${to}T23:59:59.999Z` : to);
+            if (fromBound) trades = trades.filter(t => t.first_action_at && t.first_action_at >= fromBound);
             if (toBound) trades = trades.filter(t => t.first_action_at && t.first_action_at <= toBound);
 
             const total = trades.length;
@@ -426,9 +445,7 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
             // Bad input is a 400 that says so, not a database error (500).
             const accountId = account_id ? Number(account_id) : null;
             if (account_id && !Number.isInteger(accountId)) return res.status(400).json({ error: 'Invalid account_id' });
-            if ([from, to].some(d => d && Number.isNaN(Date.parse(d)))) {
-                return res.status(400).json({ error: 'from and to must be ISO dates or times' });
-            }
+            if (isBadTime(from) || isBadTime(to)) return res.status(400).json({ error: 'from and to must be ISO dates or times' });
             const conditions = [];
             const params = [];
             if (account_id) { params.push(accountId); conditions.push(`dn.account_id = $${params.length}`); }
@@ -515,6 +532,7 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
             if (!symbol || !timeframe) {
                 return res.status(400).json({ error: 'symbol and timeframe are required' });
             }
+            if (isBadTime(from) || isBadTime(to)) return res.status(400).json({ error: 'from and to must be ISO dates or times' });
             // The continuous series joins the contracts at each roll without
             // adjusting them; adjust=back|ratio back-adjusts it (see
             // EXTERNAL_API.md). An unknown value is an error, not ignored:
@@ -678,6 +696,12 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
                 res.status(500).json({ error: fallbackErr.message });
             }
         }
+    });
+
+    // Anything else under /api/external/v1: without this it fell through to
+    // the app's own API and answered "Missing X-Account-ID header".
+    router.use((req, res) => {
+        res.status(404).json({ error: `No such endpoint: ${req.method} ${req.baseUrl}${req.path} (GET ${req.baseUrl}/ lists them)` });
     });
 
     return router;
