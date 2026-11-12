@@ -17,7 +17,8 @@ If this server is ever reachable outside a network you trust, put it behind a re
 - All responses are JSON.
 - All timestamps are ISO 8601 in UTC (e.g. `2026-03-14T13:45:00.000Z`).
 - Money fields are plain numbers (no currency symbol), in account currency.
-- Paginated list endpoints (`trades`, `daynotes`, `accounts/:id/cash-transactions`, `holdings`) return an object with a `total` count, `limit`, `offset`, and the array under a named key, not a bare array. Non-paginated list endpoints (`accounts`, `symbols`) return just the named key — no `total` field, since there's nothing to paginate.
+- Paginated list endpoints (`trades`, `accounts/:id/cash-transactions`, `holdings`) return an object with a `total` count, `limit`, `offset`, and the array under a named key, not a bare array. `daynotes` returns every matching note with a `total` count (no paging). Non-paginated list endpoints (`accounts`, `symbols`) return just the named key — no `total` field, since there's nothing to paginate.
+- Calendar dates without a time (a day note's `date`, a holding's `purchase_date`/`maturity_date`) are plain `YYYY-MM-DD`.
 - Errors are `{ "error": "message" }` with a non-2xx status code.
 - `GET /api/external/v1/` returns a small discovery document listing every endpoint.
 
