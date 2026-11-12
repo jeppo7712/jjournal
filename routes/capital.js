@@ -576,7 +576,10 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
         }
     });
 
-    // PUT /holdings/:id — also keeps the holding's own ledger rows in step:
+    // PUT /holdings/:id — without a status the holding keeps its own: it
+    // used to fall back to ACTIVE, so editing a matured holding made it
+    // redeemable, and credited, a second time.
+    // It also keeps the holding's own ledger rows in step:
     // the purchase row (created with the holding, see POST above) follows
     // purchase_price/purchase_date/name, and every linked row follows a
     // currency change, so the ledger can't drift from the holding.
@@ -592,10 +595,10 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
             const { rowCount } = await client.query(
                 `UPDATE holdings SET type=$1, name=$2, currency=$3, face_value=$4, purchase_price=$5,
                     purchase_date=$6, maturity_date=$7, coupon_rate=$8, coupon_frequency=$9, notes=$10,
-                    status=$11, updated_at=NOW()
+                    status=COALESCE($11, status), updated_at=NOW()
                  WHERE id=$12 AND account_id=$13`,
                 [type, name, currency || 'USD', face_value, purchase_price, purchase_date, maturity_date || null,
-                 coupon_rate || null, coupon_frequency || null, notes || null, status || 'ACTIVE', id, req.accountId]
+                 coupon_rate || null, coupon_frequency || null, notes || null, status || null, id, req.accountId]
             );
             if (rowCount === 0) {
                 await client.query('ROLLBACK');
