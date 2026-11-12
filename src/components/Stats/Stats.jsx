@@ -174,14 +174,20 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
     setCurrentView('dashboard');
   };
 
-  // Currencies present in the current (filtered) set, USD first.
+  // Currencies present in the current (filtered) set, the one with the most
+  // trades first (the page opens in it), then USD, then alphabetical. USD
+  // always came first before, so an account trading mostly in another
+  // currency opened on its few USD trades.
   const availableCurrencies = useMemo(() => {
-    const codes = new Set(
-      (filteredItems || [])
-        .filter(item => item?.type === 'FUT' || item?.type === 'STK')
-        .map(t => String(t.currency || 'USD').toUpperCase())
-    );
-    return [...codes].sort((a, b) => (a === 'USD' ? -1 : b === 'USD' ? 1 : a.localeCompare(b)));
+    const counts = new Map();
+    (filteredItems || [])
+      .filter(item => item?.type === 'FUT' || item?.type === 'STK')
+      .forEach(t => {
+        const code = String(t.currency || 'USD').toUpperCase();
+        counts.set(code, (counts.get(code) || 0) + 1);
+      });
+    return [...counts.keys()].sort((a, b) => (counts.get(b) - counts.get(a))
+      || (a === 'USD' ? -1 : b === 'USD' ? 1 : a.localeCompare(b)));
   }, [filteredItems]);
 
   // Unlike a sum, the metrics on this page (profit factor, expectancy,
