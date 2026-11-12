@@ -3,13 +3,13 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 6px 14px;
-  border: 1px solid rgba(59, 130, 246, 0.45);
+  border: 1px solid rgba(var(--ui-accent-rgb), 0.45);
   border-radius: 10px;
-  background: rgba(59, 130, 246, 0.08);
+  background: rgba(var(--ui-accent-rgb), 0.08);
   padding: 6px 12px;
   margin-bottom: 12px;
   font-size: 0.82rem;
-  color: #D1D5DB;
+  color: var(--ui-text-soft);
   box-sizing: border-box;
 }
 
@@ -17,11 +17,11 @@
   width: 7px;
   height: 7px;
   border-radius: 50%;
-  background: #3B82F6;
+  background: var(--ui-accent);
 }
 
 .head {
-  color: #E5E7EB;
+  color: var(--ui-text);
 }
 
 .group {
@@ -32,18 +32,18 @@
 
 .symbol {
   font-weight: 600;
-  color: #fff;
+  color: var(--ui-strong);
 }
 
 .count {
-  color: #9CA3AF;
+  color: var(--text-secondary);
 }
 
 .add {
   background: none;
   border: none;
   padding: 0;
-  color: #93C5FD;
+  color: var(--ui-accent-text);
   font-size: inherit;
   cursor: pointer;
   white-space: nowrap;
@@ -52,7 +52,7 @@
 .dismiss {
   background: none;
   border: none;
-  color: #6B7280;
+  color: var(--ui-faint);
   font-size: 1rem;
   line-height: 1;
   cursor: pointer;
@@ -60,6 +60,6 @@
 }
 
 @media (hover: hover) {
-  .add:hover { color: #DBEAFE; text-decoration: underline; }
-  .dismiss:hover { color: #E5E7EB; }
+  .add:hover { color: var(--ui-accent-3); text-decoration: underline; }
+  .dismiss:hover { color: var(--ui-text); }
 }
