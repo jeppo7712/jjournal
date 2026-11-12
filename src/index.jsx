@@ -3,8 +3,10 @@ import ReactDOM from 'react-dom/client';
 import App from './App';
 import './styles.css';
 import { startResponsiveTables } from './utils/responsiveTables';
+import { startTheme } from './utils/theme';
 
 startResponsiveTables();
+startTheme();
 
 // The charts size themselves with a ResizeObserver (lightweight-charts'
 // autoSize). When a chart opens inside a modal whose layout is still
