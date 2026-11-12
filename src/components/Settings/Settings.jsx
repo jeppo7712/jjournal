@@ -17,6 +17,7 @@ import { FaSlidersH, FaListUl, FaTerminal, FaWallet, FaTasks, FaTags, FaPlug, Fa
 import { notify, confirmDialog } from '../common/Dialogs';
 import { timeframeLabel } from '../../utils/timeframeLabel';
 import { appBadgeState, requestAppBadgePermission } from '../../utils/appBadge';
+import { THEME_CHOICES, THEME_CHOICE_UNLOCKED, getThemeChoice, setThemeChoice } from '../../utils/theme';
 
 // The sections of the Settings page, in menu order, in two groups: what
 // applies to the account open in the menu bar only, and what the whole
@@ -546,6 +547,7 @@ export default function Settings() {
   // Saved in the server config straight away (it applies on every device),
   // then applied here; the app redraws its numbers in the new format.
   const [numberFormat, setNumberFormatChoice] = useState(getNumberFormat);
+  const [themeChoice, setThemeChoiceState] = useState(getThemeChoice);
   const saveNumberFormat = async (value) => {
     const previous = numberFormat;
     setNumberFormatChoice(value);
@@ -1594,6 +1596,22 @@ export default function Settings() {
                   </select>
                   <span className={styles.fieldHint}>On every device.</span>
                 </div>
+                {THEME_CHOICE_UNLOCKED && (
+                  <div className={styles.formField}>
+                    <label htmlFor="themeChoice">Theme</label>
+                    <select
+                      id="themeChoice"
+                      value={themeChoice}
+                      onChange={(e) => { setThemeChoice(e.target.value); setThemeChoiceState(e.target.value); }}
+                      className={styles.inputBubble}
+                    >
+                      {THEME_CHOICES.map(c => (
+                        <option key={c.value} value={c.value}>{c.label}</option>
+                      ))}
+                    </select>
+                    <span className={styles.fieldHint}>On this device. "Match the system" follows its light or dark mode.</span>
+                  </div>
+                )}
               </div>
             </section>
 
