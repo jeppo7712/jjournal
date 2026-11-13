@@ -17,10 +17,6 @@ export const THEME_CHOICES = [
 const DEFAULT_CHOICE = 'dark';
 const isChoice = value => THEME_CHOICES.some(c => c.value === value);
 
-// Offered in Settings only once every page has light colours. Until then a
-// stored 'light' (set by hand, for testing) still applies.
-export const THEME_CHOICE_UNLOCKED = false;
-
 // The browser's bar colour (installed app, mobile Safari) per theme: the
 // app's background, as the page under it.
 export const THEME_BAR_COLORS = { dark: '#1E1E2E', light: '#E7EBF1' };
