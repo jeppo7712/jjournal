@@ -17,7 +17,7 @@ import { FaSlidersH, FaListUl, FaTerminal, FaWallet, FaTasks, FaTags, FaPlug, Fa
 import { notify, confirmDialog } from '../common/Dialogs';
 import { timeframeLabel } from '../../utils/timeframeLabel';
 import { appBadgeState, requestAppBadgePermission } from '../../utils/appBadge';
-import { THEME_CHOICES, THEME_CHOICE_UNLOCKED, getThemeChoice, setThemeChoice } from '../../utils/theme';
+import { THEME_CHOICES, getThemeChoice, setThemeChoice } from '../../utils/theme';
 
 // The sections of the Settings page, in menu order, in two groups: what
 // applies to the account open in the menu bar only, and what the whole
@@ -30,7 +30,7 @@ const SECTION_GROUPS = [
 const SECTIONS = [
   { id: 'tradeList', group: 'account', label: 'Trade list', icon: FaListUl, description: 'How the trade list shows this account\'s trades.' },
   { id: 'checklists', group: 'account', label: 'Checklists', icon: FaTasks, description: 'Checks to tick off when entering and leaving a trade in this account.' },
-  { id: 'general', group: 'journal', label: 'General', icon: FaSlidersH, description: 'Database connection and number format.' },
+  { id: 'general', group: 'journal', label: 'General', icon: FaSlidersH, description: 'Database connection, number format and theme.' },
   { id: 'accounts', group: 'journal', label: 'Accounts', icon: FaWallet, description: 'Trading accounts, where their cash is held and how they nest.' },
   { id: 'tags', group: 'journal', label: 'Tags', icon: FaTags, description: 'Tag groups and tags for your trades, shared by all accounts.' },
   { id: 'symbols', group: 'journal', label: 'Symbols', icon: FaChartLine, description: 'Contract specs, fees and which timeframes to fetch.' },
@@ -1596,22 +1596,20 @@ export default function Settings() {
                   </select>
                   <span className={styles.fieldHint}>On every device.</span>
                 </div>
-                {THEME_CHOICE_UNLOCKED && (
-                  <div className={styles.formField}>
-                    <label htmlFor="themeChoice">Theme</label>
-                    <select
-                      id="themeChoice"
-                      value={themeChoice}
-                      onChange={(e) => { setThemeChoice(e.target.value); setThemeChoiceState(e.target.value); }}
-                      className={styles.inputBubble}
-                    >
-                      {THEME_CHOICES.map(c => (
-                        <option key={c.value} value={c.value}>{c.label}</option>
-                      ))}
-                    </select>
-                    <span className={styles.fieldHint}>On this device. "Match the system" follows its light or dark mode.</span>
-                  </div>
-                )}
+                <div className={styles.formField}>
+                  <label htmlFor="themeChoice">Theme</label>
+                  <select
+                    id="themeChoice"
+                    value={themeChoice}
+                    onChange={(e) => { setThemeChoice(e.target.value); setThemeChoiceState(e.target.value); }}
+                    className={styles.inputBubble}
+                  >
+                    {THEME_CHOICES.map(c => (
+                      <option key={c.value} value={c.value}>{c.label}</option>
+                    ))}
+                  </select>
+                  <span className={styles.fieldHint}>On this device. "Match the system" follows its light or dark mode.</span>
+                </div>
               </div>
             </section>
 
