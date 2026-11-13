@@ -1,14 +1,14 @@
 /* Calendar.module.css */
 
 .calendar {
-  background: #1F2431;
+  background: var(--ui-cal-bg);
   border-radius: 8px;
   padding: 20px;
-  color: #F3F4F6;
+  color: var(--text-primary);
   width: 100%;
   max-width: 1200px;
   margin: 0 auto;
-  box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+  box-shadow: 0 4px 6px rgba(var(--ui-shadow-rgb), calc(0.1 * var(--ui-shadow-k)));
 }
 
 .header {
@@ -25,9 +25,9 @@
 }
 
 .navButton {
-  background: #2D3345;
+  background: var(--ui-cal-cell);
   border: none;
-  color: #F3F4F6;
+  color: var(--text-primary);
   font-size: 16px;
   width: 40px;
   height: 40px;
@@ -40,12 +40,12 @@
 }
 
 .navButton:hover {
-  background: #3B82F6;
+  background: var(--ui-accent);
 }
 
 .navButton:focus {
   outline: none;
-  box-shadow: 0 0 0 2px #3B82F6;
+  box-shadow: 0 0 0 2px var(--ui-accent);
 }
 
 .dayNames {
@@ -57,7 +57,7 @@
 .dayName {
   text-align: center;
   font-size: 12px;
-  color: #9CA3AF;
+  color: var(--text-secondary);
   padding: 5px 0;
 }
 
@@ -68,7 +68,7 @@
 }
 
 .dayCell {
-  background: #2D3345;
+  background: var(--ui-cal-cell);
   padding: 10px;
   min-height: 100px;
   display: flex;
@@ -81,13 +81,13 @@
 }
 
 .positiveDay {
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid #22C55E;
+  background: rgba(var(--ui-green-rgb), 0.1);
+  border: 1px solid var(--ui-green-2);
 }
 
 .negativeDay {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid #EF4444;
+  background: rgba(var(--ui-red-rgb), 0.1);
+  border: 1px solid var(--accent-red);
 }
 
 .dayCell.clickable {
@@ -95,13 +95,13 @@
 }
 
 .dayCell.clickable:hover {
-  background: #1A1E29;
-  border-color: #3B82F6;
+  background: var(--ui-field);
+  border-color: var(--ui-accent);
 }
 
 .outsideMonth {
-  background: #262B39;
-  color: #6B7280;
+  background: var(--ui-cal-outside);
+  color: var(--ui-faint);
 }
 
 .dayNumber {
@@ -121,7 +121,7 @@
 }
 
 .weekSummaryCell {
-  background: #342e32;
+  background: var(--ui-cal-week);
   padding: 10px;
   border-radius: 4px;
   min-height: 100px;
@@ -134,13 +134,13 @@
 }
 
 .positiveWeek {
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid #FFFFFF;
+  background: rgba(var(--ui-green-rgb), 0.1);
+  border: 1px solid var(--ui-week-border);
 }
 
 .negativeWeek {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid #FFFFFF;
+  background: rgba(var(--ui-red-rgb), 0.1);
+  border: 1px solid var(--ui-week-border);
 }
 
 .weekSummaryCell.clickable {
@@ -148,8 +148,8 @@
 }
 
 .weekSummaryCell.clickable:hover {
-  background: #1A1E29;
-  border-color: #3B82F6;
+  background: var(--ui-field);
+  border-color: var(--ui-accent);
 }
 
 .weekSummary {
@@ -165,7 +165,7 @@
 }
 
 .weekSummaryContent span:first-child {
-  color: #9CA3AF;
+  color: var(--text-secondary);
 }
 
 .weekSummaryContent span:last-child {
@@ -185,9 +185,9 @@
 .rowHeader {
   text-align: center;
   font-size: 12px;
-  color: #9CA3AF;
+  color: var(--text-secondary);
   padding: 5px 0;
-  background: #1F2431;
+  background: var(--ui-cal-bg);
   white-space: nowrap;
 }
 
@@ -325,8 +325,8 @@
    breakpoints above stay as they are) ---------- */
 .calendar {
   max-width: none;
-  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
-  border: 1px solid var(--ui-border, #2C3244);
+  background: linear-gradient(180deg, var(--ui-card-top) 0%, var(--ui-card) 100%);
+  border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius, 16px);
   box-shadow: var(--ui-shadow);
 }
@@ -334,21 +334,21 @@
 .header h2 {
   font-weight: 650;
   letter-spacing: -0.01em;
-  color: #fff;
+  color: var(--ui-strong);
 }
 
 .navButton {
-  border: 1px solid var(--ui-border, #2C3244);
+  border: 1px solid var(--ui-border);
   border-radius: 10px;
-  background: var(--ui-input, #141822);
-  color: var(--ui-text-2, #C7CDD8);
+  background: var(--ui-input);
+  color: var(--ui-text-2);
   transition: border-color 0.15s, color 0.15s;
 }
 
 .navButton:hover {
-  border-color: rgba(59, 130, 246, 0.55);
-  color: #fff;
-  background: var(--ui-input, #141822);
+  border-color: rgba(var(--ui-accent-rgb), 0.55);
+  color: var(--ui-strong);
+  background: var(--ui-input);
 }
 
 .dayName,
@@ -357,7 +357,7 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ui-faint, #6B7280);
+  color: var(--ui-faint);
   background: transparent;
 }
 
@@ -366,35 +366,35 @@
 }
 
 .dayCell {
-  background: rgba(255, 255, 255, 0.025);
-  border: 1px solid rgba(255, 255, 255, 0.04);
+  background: rgba(var(--ui-ink-rgb), 0.025);
+  border: 1px solid rgba(var(--ui-ink-rgb), 0.04);
   border-radius: 10px;
 }
 
 .outsideMonth {
   background: transparent;
   border-color: transparent;
-  color: #4B5266;
+  color: var(--ui-faint-2);
 }
 
 .dayNumber {
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
   font-weight: 600;
 }
 
 .positiveDay {
-  background: linear-gradient(180deg, rgba(34, 197, 94, 0.16), rgba(34, 197, 94, 0.06));
-  border: 1px solid rgba(34, 197, 94, 0.4);
+  background: linear-gradient(180deg, rgba(var(--ui-green-rgb), 0.16), rgba(var(--ui-green-rgb), 0.06));
+  border: 1px solid rgba(var(--ui-green-rgb), 0.4);
 }
 
 .negativeDay {
-  background: linear-gradient(180deg, rgba(239, 68, 68, 0.16), rgba(239, 68, 68, 0.06));
-  border: 1px solid rgba(239, 68, 68, 0.4);
+  background: linear-gradient(180deg, rgba(var(--ui-red-rgb), 0.16), rgba(var(--ui-red-rgb), 0.06));
+  border: 1px solid rgba(var(--ui-red-rgb), 0.4);
 }
 
 .positiveDay .dayNumber,
 .negativeDay .dayNumber {
-  color: #fff;
+  color: var(--ui-strong);
 }
 
 .daySummary {
@@ -403,28 +403,28 @@
 }
 
 .dayCell.clickable:hover {
-  background: rgba(59, 130, 246, 0.1);
-  border-color: rgba(96, 165, 250, 0.7);
+  background: rgba(var(--ui-accent-rgb), 0.1);
+  border-color: rgba(var(--ui-accent-2-rgb), 0.7);
 }
 
 .weekSummaryCell {
-  background: rgba(255, 255, 255, 0.04);
-  border: 1px dashed rgba(255, 255, 255, 0.08);
+  background: rgba(var(--ui-ink-rgb), 0.04);
+  border: 1px dashed rgba(var(--ui-ink-rgb), 0.08);
   border-radius: 10px;
 }
 
 .positiveWeek {
-  background: rgba(34, 197, 94, 0.1);
-  border: 1px solid rgba(34, 197, 94, 0.35);
+  background: rgba(var(--ui-green-rgb), 0.1);
+  border: 1px solid rgba(var(--ui-green-rgb), 0.35);
 }
 
 .negativeWeek {
-  background: rgba(239, 68, 68, 0.1);
-  border: 1px solid rgba(239, 68, 68, 0.35);
+  background: rgba(var(--ui-red-rgb), 0.1);
+  border: 1px solid rgba(var(--ui-red-rgb), 0.35);
 }
 
 .weekSummaryCell.clickable:hover {
-  border-color: rgba(96, 165, 250, 0.7);
+  border-color: rgba(var(--ui-accent-2-rgb), 0.7);
 }
 
 .weekSummaryContent {

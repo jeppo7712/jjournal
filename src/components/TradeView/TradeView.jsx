@@ -10,6 +10,8 @@ import { DateTime } from 'luxon';
 import { sanitizeNotesHtml } from '../../utils/sanitizeHtml';
 import { getWebSocketUrl } from '../../utils/getWebSocketUrl';
 import { loadStoredDisplayTimezone, storeDisplayTimezone, resolveDisplayZone, TimezonePicker } from '../../utils/timezonePreference';
+import useTheme from '../../utils/useTheme';
+import { themeColor } from '../../utils/theme';
 import styles from './TradeView.module.css';
 import { formatMoney, currencyMark } from '../../utils/formatMoney';
 import { formatNumber } from '../../utils/numberFormat';
@@ -397,6 +399,14 @@ export default function TradeView({ trade, onClose, onEdit }) {
   const contentWrapperRef = useRef(null);
   const chartContainerRef = useRef(null);
   const chartRef = useRef(null);
+  // The chart's colours from the theme's tokens (a canvas can't use CSS
+  // variables); a theme change recolours the open chart in place.
+  const theme = useTheme();
+  const chartThemeOptions = () => ({
+    layout: { background: { color: themeColor('--primary-dark') }, textColor: themeColor('--ui-muted') },
+    rightPriceScale: { borderColor: themeColor('--ui-input') },
+  });
+  useEffect(() => { chartRef.current?.applyOptions(chartThemeOptions()); }, [theme]);
   const candlestickSeriesRef = useRef(null);
   const avgPriceSeriesRef = useRef(null);
   const avgExitPriceSeriesRef = useRef(null);
@@ -948,7 +958,7 @@ const [dataVersion, setDataVersion] = useState(0);
               return {
                 time: barTime,
                 position: action.type === 'BUY' ? 'belowBar' : 'aboveBar',
-                color: action.type === 'BUY' ? '#FFFC33' : '#33FFFC',
+                color: action.type === 'BUY' ? themeColor('--ui-mark-buy') : themeColor('--ui-mark-sell'),
                 shape: action.type === 'BUY' ? 'arrowUp' : 'arrowDown',
                 text: `${action.type} ${formatQuantity(action.quantity)} @ ${formatNumber(adjustedPrice, pricePrecision)}`,
                 size: 1,
@@ -1205,8 +1215,8 @@ useEffect(() => {
       const chartOptions = {
         width: chartContainerRef.current.clientWidth,
         height: chartContainerRef.current.clientHeight,
-        layout: { background: { color: '#13161F' }, textColor: '#8B93A3' },
-        grid: { vertLines: { color: '#141822' }, horzLines: { color: '#141822' }, horzLinesVisible: false, vertLinesVisible: false },
+        ...chartThemeOptions(),
+        grid: { vertLines: { color: themeColor('--ui-input') }, horzLines: { color: themeColor('--ui-input') }, horzLinesVisible: false, vertLinesVisible: false },
         timeScale: {
           timeVisible: true,
           secondsVisible: timeframe === '1M' || timeframe === '15M' || timeframe === '5M' || timeframe === '1H',
@@ -1238,7 +1248,6 @@ useEffect(() => {
             return timeframe === '1D' || timeframe === '1W' ? dt.toFormat("d LLL ''yy") : dt.toFormat('HH:mm');
           },
         },
-        rightPriceScale: { borderColor: '#141822' },
         crosshair: { mode: 0 },
         autoSize: true, // This enables internal ResizeObserver
       };
@@ -1985,12 +1994,12 @@ useEffect(() => {
                     marginTop: '12px',
                     padding: '12px',
                     borderRadius: '8px',
-                    background: 'rgba(59, 130, 246, 0.08)',
-                    border: '1px solid rgba(59, 130, 246, 0.3)',
+                    background: 'rgba(var(--ui-accent-rgb), 0.08)',
+                    border: '1px solid rgba(var(--ui-accent-rgb), 0.3)',
                   }}
                 >
                   <div style={{ display: 'flex', alignItems: 'flex-start', gap: '8px', marginBottom: '6px' }}>
-                    <div style={{ flex: 1, minWidth: 0, fontSize: '0.75em', color: '#8FB6FF', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
+                    <div style={{ flex: 1, minWidth: 0, fontSize: '0.75em', color: 'var(--ui-ai-label)', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.03em' }}>
                       AI Analysis{trade.journal.ai_analysis_source ? ` — ${trade.journal.ai_analysis_source}` : ''}
                       {trade.journal.ai_analysis_updated_at && (
                         <span style={{ opacity: 0.7, textTransform: 'none', fontWeight: 400 }}>
@@ -2000,7 +2009,7 @@ useEffect(() => {
                     </div>
                     <IconButton icon="trash" size="small" label="Delete this AI analysis" busy={removingAi} onClick={handleRemoveAi} />
                   </div>
-                  <div style={{ whiteSpace: 'pre-wrap', color: '#e0e2e6', fontSize: '0.9em' }}>
+                  <div style={{ whiteSpace: 'pre-wrap', color: 'var(--ui-text-4)', fontSize: '0.9em' }}>
                     {aiAnalysis}
                   </div>
                 </div>
@@ -2011,7 +2020,7 @@ useEffect(() => {
             </div>
           </section>
           {error && (
-            <div className={styles.error} style={{ color: '#EF4444', marginTop: '16px' }}>
+            <div className={styles.error} style={{ color: 'var(--accent-red)', marginTop: '16px' }}>
               {error}
             </div>
           )}

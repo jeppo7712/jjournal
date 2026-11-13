@@ -5,6 +5,8 @@ import styles from './ChartViewer.module.css';
 import { loadStoredDisplayTimezone, storeDisplayTimezone, resolveDisplayZone, TimezonePicker } from '../../utils/timezonePreference';
 import { formatNumber } from '../../utils/numberFormat';
 import { timeframeLabel } from '../../utils/timeframeLabel';
+import useTheme from '../../utils/useTheme';
+import { themeColor } from '../../utils/theme';
 
 // Settings → Charts: any symbol's stored price history, without a trade —
 // for looking up old bars (1-minute data going back further than most
@@ -211,14 +213,22 @@ export default function ChartViewer({ futuresSettings = [], apiBaseUrl }) {
     loadAround(goTo ? DateTime.fromISO(goTo, { zone }).toUTC().toISO() : null);
   }, [selected?.key, timeframe, contract, range?.earliest, range?.latest]);
 
+  // The chart's colours from the theme's tokens (a canvas can't use CSS
+  // variables); a theme change recolours it in place, keeping the view.
+  const theme = useTheme();
+  const chartColors = () => ({
+    layout: { background: { color: themeColor('--primary-dark') }, textColor: themeColor('--ui-muted') },
+    rightPriceScale: { borderColor: themeColor('--ui-input') },
+  });
+  useEffect(() => { chartRef.current?.applyOptions(chartColors()); }, [theme]);
+
   // The chart, once.
   useEffect(() => {
     if (!chartContainerRef.current || chartRef.current) return;
     const chart = createChart(chartContainerRef.current, {
-      layout: { background: { color: '#13161F' }, textColor: '#8B93A3' },
+      ...chartColors(),
       grid: { vertLines: { visible: false }, horzLines: { visible: false } },
       timeScale: { timeVisible: true, rightOffset: 5 },
-      rightPriceScale: { borderColor: '#141822' },
       crosshair: { mode: 0 },
       autoSize: true,
     });

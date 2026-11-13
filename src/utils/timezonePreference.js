@@ -66,9 +66,9 @@ export function TimezonePicker({ value, onChange, options = TIMEZONE_OPTIONS }) 
       value={value}
       onChange={(e) => onChange(e.target.value)}
       style={{
-        background: '#2c303c',
-        color: '#e0e2e6',
-        border: '1px solid #3a3f4d',
+        background: 'var(--ui-raised-4)',
+        color: 'var(--ui-text-4)',
+        border: '1px solid var(--ui-border-8)',
         borderRadius: '8px',
         padding: '4px 8px',
         fontSize: '0.85em',

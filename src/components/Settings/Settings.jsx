@@ -142,7 +142,7 @@ function describeTimeframeLimits(tfLimits) {
   return parts.length > 0 ? parts.join(' · ') : null;
 }
 
-function BubbleButton({ children, onClick, color = '#3B82F6', disabled, className = '', ...rest }) {
+function BubbleButton({ children, onClick, color = 'var(--ui-accent)', disabled, className = '', ...rest }) {
   return (
     <button
       type="button"
@@ -2417,7 +2417,7 @@ export default function Settings() {
                   </span>
                   <ul style={{ paddingLeft: 0, margin: '8px 0 0', listStyle: 'none', maxHeight: 220, overflowY: 'auto' }}>
                     {queueStatus.recentOutcomes.map((o, i) => {
-                      const color = o.status === 'failed' ? '#EF4444' : o.status === 'cancelled' ? '#A5ADBA' : '#22C55E';
+                      const color = o.status === 'failed' ? 'var(--accent-red)' : o.status === 'cancelled' ? 'var(--ui-text-3)' : 'var(--ui-green-2)';
                       const icon = o.status === 'failed' ? '✗' : o.status === 'cancelled' ? '⊘' : '✓';
                       return (
                         <li key={i} style={{ marginBottom: 4, fontSize: '0.85rem', display: 'flex', gap: 8, alignItems: 'baseline' }}>
@@ -2425,7 +2425,7 @@ export default function Settings() {
                           <span>
                             {o.symbol} {timeframeLabel(o.timeframe)}{o.contractMonth ? ` (${o.contractMonth})` : ''} — {o.phase}
                             <span style={{ opacity: 0.6 }}> · {DateTime.fromISO(o.finishedAt).toFormat('HH:mm:ss')}</span>
-                            {o.error && <div style={{ color: '#EF4444', opacity: 0.9 }}>{o.error}</div>}
+                            {o.error && <div style={{ color: 'var(--accent-red)', opacity: 0.9 }}>{o.error}</div>}
                           </span>
                         </li>
                       );
@@ -2437,7 +2437,7 @@ export default function Settings() {
                 <div className={styles.actionStatus}>
                   <div style={{ flex: 1 }}>{historicalFetchStatus}</div>
                   <button
-                    style={{ background: 'transparent', border: 'none', color: '#A5ADBA', cursor: 'pointer', padding: 0, marginLeft: '12px' }}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--ui-text-3)', cursor: 'pointer', padding: 0, marginLeft: '12px' }}
                     onClick={() => setHistoricalFetchStatus('')}
                     title="Clear status"
                   >
@@ -2466,7 +2466,7 @@ export default function Settings() {
                     </div>
                   </div>
                   <button
-                    style={{ background: 'transparent', border: 'none', color: '#A5ADBA', cursor: 'pointer', padding: 0, marginLeft: '12px' }}
+                    style={{ background: 'transparent', border: 'none', color: 'var(--ui-text-3)', cursor: 'pointer', padding: 0, marginLeft: '12px' }}
                     onClick={() => setCurrentRebuildRequestId(null)}
                     title="Clear status"
                   >

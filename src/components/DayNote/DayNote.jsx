@@ -309,41 +309,41 @@ export default function DayNote({ note, onClose }) {
       style.id = styleId;
       style.innerHTML = `
         .${styles.modal} .${styles.richText} .ql-toolbar {
-          background: #161A24 !important;
+          background: var(--ui-toolbar) !important;
           border-radius: 12px 12px 0 0 !important;
           border: none !important;
-          color: #e0e2e6 !important;
+          color: var(--ui-text-4) !important;
         }
         .${styles.modal} .${styles.richText} .ql-toolbar button, 
         .${styles.modal} .${styles.richText} .ql-toolbar .ql-picker-label, 
         .${styles.modal} .${styles.richText} .ql-toolbar .ql-picker-item {
-          color: #e0e2e6 !important;
+          color: var(--ui-text-4) !important;
           filter: brightness(1.5);
         }
         .${styles.modal} .${styles.richText} .ql-toolbar button.ql-active, 
         .${styles.modal} .${styles.richText} .ql-toolbar .ql-picker-label.ql-active,
         .${styles.modal} .${styles.richText} .ql-toolbar .ql-picker-item:hover {
-          background: #3B82F6 !important;
+          background: var(--ui-accent) !important;
           color: #fff !important;
         }
         .${styles.modal} .${styles.richText} .ql-toolbar .ql-picker-options {
-          background: #161A24 !important;
+          background: var(--ui-toolbar) !important;
           border: none !important;
           border-radius: 8px !important;
-          color: #e0e2e6 !important;
+          color: var(--ui-text-4) !important;
         }
         .${styles.modal} .${styles.richText} .ql-container {
-          background: #141822 !important;
+          background: var(--ui-input) !important;
           border-radius: 0 0 12px 12px !important;
           border: none !important;
-          color: #e0e2e6 !important;
+          color: var(--ui-text-4) !important;
           min-height: 100 !important;
           max-height: 200px !important;
           overflow-y: auto !important;
         }
         .${styles.modal} .${styles.richText} .ql-editor {
           min-height: 120px !important;
-          color: #e0e2e6 !important;
+          color: var(--ui-text-4) !important;
           border: none !important;
           padding: 12px 15px !important;
           background: transparent !important;
@@ -355,8 +355,8 @@ export default function DayNote({ note, onClose }) {
         .${styles.modal} .${styles.richText} .ql-editor textarea {
           min-height: 220px !important;
           border: none !important;
-          background: #141822 !important;
-          color: #e0e2e6 !important;
+          background: var(--ui-input) !important;
+          color: var(--ui-text-4) !important;
           border-radius: 0 0 12px 12px !important;
         }
       `;

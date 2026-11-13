@@ -15,7 +15,7 @@ function renderSignedTotals(totals, { abs = true } = {}) {
   return list.map(({ currency, amount }, i) => (
     <React.Fragment key={currency}>
       {i > 0 ? ' \u00b7 ' : ''}
-      <span style={{ color: amount >= 0 ? '#22C55E' : '#EF4444' }}>
+      <span style={{ color: amount >= 0 ? 'var(--ui-green-2)' : 'var(--accent-red)' }}>
         {formatMoney(abs ? Math.abs(amount) : amount, currency)}
       </span>
     </React.Fragment>
@@ -199,15 +199,15 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
                         </div>
                         <div className={styles.weekSummaryContent}>
                           <span>Wins: </span>
-                          <span style={{ color: '#22C55E' }}>{weekSummary.wins}</span>
+                          <span style={{ color: 'var(--ui-green-2)' }}>{weekSummary.wins}</span>
                         </div>
                         <div className={styles.weekSummaryContent}>
                           <span>Losses: </span>
-                          <span style={{ color: '#EF4444' }}>{weekSummary.losses}</span>
+                          <span style={{ color: 'var(--accent-red)' }}>{weekSummary.losses}</span>
                         </div>
                         <div className={styles.weekSummaryContent}>
                           <span>Fees: </span>
-                          <span style={{ color: '#F3F4F6' }}>{formatTotals(weekSummary.feesByCurrency)}</span>
+                          <span style={{ color: 'var(--text-primary)' }}>{formatTotals(weekSummary.feesByCurrency)}</span>
                         </div>
                       </div>
                     )}
@@ -267,15 +267,15 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
                           </div>
                           <div className={styles.weekSummaryContent}>
                             <span>Wins: </span>
-                            <span style={{ color: '#22C55E' }}>{weekSummary.wins}</span>
+                            <span style={{ color: 'var(--ui-green-2)' }}>{weekSummary.wins}</span>
                           </div>
                           <div className={styles.weekSummaryContent}>
                             <span>Losses: </span>
-                            <span style={{ color: '#EF4444' }}>{weekSummary.losses}</span>
+                            <span style={{ color: 'var(--accent-red)' }}>{weekSummary.losses}</span>
                           </div>
                           <div className={styles.weekSummaryContent}>
                             <span>Fees: </span>
-                            <span style={{ color: '#F3F4F6' }}>{formatTotals(weekSummary.feesByCurrency)}</span>
+                            <span style={{ color: 'var(--text-primary)' }}>{formatTotals(weekSummary.feesByCurrency)}</span>
                           </div>
                         </div>
                       )}

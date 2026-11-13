@@ -23,7 +23,7 @@ export const THEME_CHOICE_UNLOCKED = false;
 
 // The browser's bar colour (installed app, mobile Safari) per theme: the
 // app's background, as the page under it.
-export const THEME_BAR_COLORS = { dark: '#1E1E2E', light: '#F4F6FA' };
+export const THEME_BAR_COLORS = { dark: '#1E1E2E', light: '#E7EBF1' };
 
 // 'dark' | 'light' for a choice and whether the device prefers light.
 export function resolveTheme(choice, systemPrefersLight) {
@@ -97,4 +97,11 @@ export function startTheme() {
 // drawn in JavaScript.
 export function themeColor(name) {
   return getComputedStyle(document.documentElement).getPropertyValue(name).trim();
+}
+
+// The same as six-digit hex, for code that adds an alpha byte or parses it
+// ('#FFFFFF' can come back as '#fff' from WebKit).
+export function themeHex(name) {
+  const value = themeColor(name);
+  return /^#[0-9a-f]{3}$/i.test(value) ? `#${value.slice(1).split('').map(c => c + c).join('')}` : value;
 }

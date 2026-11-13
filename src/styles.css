@@ -54,6 +54,95 @@
   --ui-violet-text: #C4B5FD;
   --ui-violet-3: #EDE9FE;
   --ui-chip-mix: #ffffff;        /* a tag chip's text: its colour mixed with this */
+  --ui-page-clear: rgba(19, 22, 31, 0); /* the page colour, fully transparent (fades) */
+  --ui-amber-text-2: #FDE68A;
+  --ui-green-text: #86EFAC;
+  --ui-green-text-2: #BBF7D0;
+  --ui-chart-other: #4B5263;     /* a chart's "Other" slice */
+  --ui-tooltip: rgba(20, 24, 34, 0.96);
+  /* The Capital page's own greys (sections, fields, buttons, rows). */
+  --ui-border-2: #32384A;
+  --ui-border-hover: #4B5468;
+  --ui-text-4: #E0E2E6;
+  --ui-section: #232837;
+  --ui-raised: #2A2F3E;
+  --ui-raised-2: #262B38;
+  --ui-field: #1A1E29;
+  --ui-btn: #353943;
+  --ui-btn-hover: #414552;
+  --ui-row-line: #2A2F3A;
+  --ui-row-line-2: #252A38;
+  --ui-accent-text-2: #BFDBFE;
+  --ui-red-text-2: #FECACA;
+  /* Settings' own (labels, logs, the hours grid, Historical Data). */
+  --ui-label: #AEB6C4;
+  --ui-placeholder: #5B6475;
+  --ui-savebar: rgba(24, 28, 40, 0.88);
+  --ui-teal-rgb: 20, 184, 166;
+  --ui-teal-text: #5EEAD4;
+  --ui-emerald-rgb: 16, 185, 129;
+  --ui-emerald: #34D399;
+  --ui-emerald-text: #D1FAE5;
+  --ui-segment-on: #2A3142;
+  --ui-log-bg: #0F121A;
+  --ui-log-border: #252B3A;
+  --ui-dash: #394056;
+  --ui-card-3: #1E2230;
+  --ui-border-3: #3A4154;
+  --ui-border-4: #343B4F;
+  --ui-raised-3: #2A2F3D;
+  --ui-stat-top: #2A3042;
+  --ui-text-5: #CBD2DC;
+  --ui-dim-2: #5B6478;
+  --ui-icon-info: #94A3B8;
+  --ui-tag-bg: rgba(165, 173, 186, 0.15);
+  --ui-page-veil: rgba(19, 22, 31, 0.85);
+  --ui-grid-cell: #20263A;
+  --ui-grid-cell-2: #282F45;
+  --ui-grid-open-2: #4A8CF7;
+  /* Calendar, dialogs, windows, the trade form's panels. */
+  --ui-cal-bg: #1F2431;
+  --ui-cal-cell: #2D3345;
+  --ui-cal-outside: #262B39;
+  --ui-cal-week: #342E32;
+  --ui-week-border: #FFFFFF;
+  --ui-dialog: #1C2030;
+  --ui-toast: rgba(29, 33, 48, 0.96);
+  --ui-overlay: rgba(8, 10, 16, 0.62);
+  --ui-footer: rgba(20, 24, 34, 0.6);
+  --ui-red-2-rgb: 248, 113, 113;
+  --ui-panel: #2A2E38;
+  --ui-border-5: #4B5563;
+  --ui-field-2: #1C1F27;
+  --ui-toolbar: #161A24;         /* editor toolbars, footers, tooltips */
+  --ui-input-focus: #181D29;
+  --ui-accent-wash: #232F4B;
+  /* The trade view's own. */
+  --ui-cyan-text: #7FD7FF;
+  --ui-border-6: #3A4050;
+  --ui-badge-blue: #1E293B;
+  --ui-blue-label: #74A9FF;
+  --ui-sky-rgb: 60, 154, 239;
+  --ui-sky-text: #6DA5FF;
+  --ui-loader-track: #F3F3F3;
+  --ui-star-off: #343B4D;
+  --ui-chartbar-bottom: #171A25;
+  --ui-chart-msg: rgba(53, 57, 67, 0.9);
+  --ui-chart-msg-2: rgba(27, 31, 44, 0.95);
+  --ui-mark-buy: #FFFC33;        /* a buy's arrow on the trade chart */
+  --ui-mark-sell: #33FFFC;
+  --ui-ai-label: #8FB6FF;
+  --ui-star: #FFD700;            /* a filled rating star */
+  --ui-chip-bg: #1A1D27;         /* the IBKR import window */
+  --ui-border-7: #2D3748;
+  --ui-error-bg: #2D1B1B;
+  --ui-tp-bg: #064E3B;
+  --ui-sl-bg: #450A0A;
+  --ui-indigo-text: #818CF8;
+  --ui-handle: #555B68;
+  --ui-orange: #F97316;
+  --ui-raised-4: #2C303C;        /* the timezone picker */
+  --ui-border-8: #3A3F4D;
   --ui-accent-text: #93C5FD;     /* blue text and icons on dark tints */
   --ui-accent-2: #60A5FA;
   --ui-accent-3: #DBEAFE;
@@ -92,7 +181,7 @@
 /* The light theme (Settings → General → Theme, src/utils/theme.js): the
    same tokens with light values. Everything drawn from the tokens follows. */
 :root[data-theme="light"] {
-  --primary-dark: #F4F6FA;
+  --primary-dark: #E7EBF1;
   --secondary-dark: #FFFFFF;
   --tertiary-dark: #EEF1F6;
   --accent-blue: #2563EB;
@@ -140,6 +229,91 @@
   --ui-violet-text: #6D28D9;
   --ui-violet-3: #4C1D95;
   --ui-chip-mix: #1E293B;
+  --ui-page-clear: rgba(231, 235, 241, 0);
+  --ui-amber-text-2: #92400E;
+  --ui-green-text: #15803D;
+  --ui-green-text-2: #166534;
+  --ui-chart-other: #CBD5E1;
+  --ui-tooltip: rgba(255, 255, 255, 0.98);
+  --ui-border-2: #DCE1E9;
+  --ui-border-hover: #B8C1CE;
+  --ui-text-4: #1F2937;
+  --ui-section: #FFFFFF;
+  --ui-raised: #F1F4F8;
+  --ui-raised-2: #F6F8FB;
+  --ui-field: #F8FAFC;
+  --ui-btn: #E5E9F0;
+  --ui-btn-hover: #D9DFE8;
+  --ui-row-line: #E8ECF1;
+  --ui-row-line-2: #E8ECF1;
+  --ui-accent-text-2: #1E40AF;
+  --ui-red-text-2: #991B1B;
+  --ui-label: #475569;
+  --ui-placeholder: #94A3B8;
+  --ui-savebar: rgba(255, 255, 255, 0.9);
+  --ui-teal-rgb: 13, 148, 136;
+  --ui-teal-text: #0F766E;
+  --ui-emerald-rgb: 5, 150, 105;
+  --ui-emerald: #059669;
+  --ui-emerald-text: #065F46;
+  --ui-segment-on: #FFFFFF;
+  --ui-log-bg: #F8FAFC;
+  --ui-log-border: #E2E6EE;
+  --ui-dash: #CBD5E1;
+  --ui-card-3: #FFFFFF;
+  --ui-border-3: #D5DBE4;
+  --ui-border-4: #DCE1E9;
+  --ui-raised-3: #F1F4F8;
+  --ui-stat-top: #FFFFFF;
+  --ui-text-5: #334155;
+  --ui-dim-2: #94A3B8;
+  --ui-icon-info: #64748B;
+  --ui-tag-bg: rgba(100, 116, 139, 0.12);
+  --ui-page-veil: rgba(231, 235, 241, 0.85);
+  --ui-grid-cell: #E5E9F0;
+  --ui-grid-cell-2: #DCE2EA;
+  --ui-grid-open-2: #3B82F6;
+  --ui-cal-bg: #FFFFFF;
+  --ui-cal-cell: #F1F4F8;
+  --ui-cal-outside: #F8FAFC;
+  --ui-cal-week: #F5F1EE;
+  --ui-week-border: #94A3B8;
+  --ui-dialog: #FFFFFF;
+  --ui-toast: rgba(255, 255, 255, 0.98);
+  --ui-overlay: rgba(15, 23, 42, 0.35);
+  --ui-footer: rgba(248, 250, 252, 0.85);
+  --ui-red-2-rgb: 220, 38, 38;
+  --ui-panel: #FFFFFF;
+  --ui-border-5: #CBD5E1;
+  --ui-field-2: #F8FAFC;
+  --ui-toolbar: #F8FAFC;
+  --ui-input-focus: #FFFFFF;
+  --ui-accent-wash: #E8F0FE;
+  --ui-cyan-text: #0369A1;
+  --ui-border-6: #D5DBE4;
+  --ui-badge-blue: #E8F0FE;
+  --ui-blue-label: #1D4ED8;
+  --ui-sky-rgb: 37, 99, 235;
+  --ui-sky-text: #1D4ED8;
+  --ui-loader-track: #E2E8F0;
+  --ui-star-off: #CBD5E1;
+  --ui-chartbar-bottom: #F8FAFC;
+  --ui-chart-msg: rgba(241, 245, 249, 0.95);
+  --ui-chart-msg-2: rgba(255, 255, 255, 0.95);
+  --ui-mark-buy: #CA8A04;
+  --ui-mark-sell: #0891B2;
+  --ui-ai-label: #1D4ED8;
+  --ui-star: #EAB308;
+  --ui-chip-bg: #EEF2F6;
+  --ui-border-7: #DCE1E9;
+  --ui-error-bg: #FEF2F2;
+  --ui-tp-bg: #ECFDF5;
+  --ui-sl-bg: #FEF2F2;
+  --ui-indigo-text: #4F46E5;
+  --ui-handle: #CBD5E1;
+  --ui-orange: #EA580C;
+  --ui-raised-4: #FFFFFF;
+  --ui-border-8: #D5DBE4;
   --ui-accent-text: #1D4ED8;
   --ui-accent-2: #2563EB;
   --ui-accent-3: #1E3A8A;

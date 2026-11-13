@@ -127,7 +127,7 @@
   transform: translateX(-50%);
   padding: 4px 12px;
   border-radius: 999px;
-  background: rgba(19, 22, 31, 0.85);
+  background: var(--ui-page-veil);
   border: 1px solid var(--s-border);
   color: var(--s-muted);
   font-size: 0.8rem;
@@ -136,7 +136,7 @@
 
 .error {
   margin: 0;
-  color: #EF4444;
+  color: var(--accent-red);
   font-size: 0.85rem;
 }
 
@@ -171,7 +171,7 @@
   /* Above the menu bar (~1000) and the phone's sticky section picker (1999). */
   z-index: 3000;
   padding: 16px;
-  background: var(--s-card, #13161F);
+  background: var(--s-card, var(--primary-dark));
   overflow: auto;
 }
 

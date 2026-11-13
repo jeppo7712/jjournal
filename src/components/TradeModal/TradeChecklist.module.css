@@ -1,5 +1,5 @@
 .panel {
-  background: #2a2e38;
+  background: var(--ui-panel);
   border-radius: 12px;
   padding: 12px 16px;
   margin-bottom: 16px;
@@ -14,12 +14,12 @@
 }
 
 .title {
-  color: #e0e2e6;
+  color: var(--ui-text-4);
   font-weight: 600;
 }
 
 .count {
-  color: #9CA3AF;
+  color: var(--text-secondary);
   font-weight: 400;
   font-size: 0.85em;
   margin-left: 6px;
@@ -32,7 +32,7 @@
 }
 
 .columnTitle {
-  color: #9CA3AF;
+  color: var(--text-secondary);
   font-size: 0.75em;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -44,20 +44,20 @@
   align-items: flex-start;
   gap: 8px;
   padding: 3px 0;
-  color: #d1d5db;
+  color: var(--ui-text-soft);
   font-size: 0.92em;
   cursor: pointer;
 }
 
 .item input {
   margin-top: 3px;
-  accent-color: #3B82F6;
+  accent-color: var(--ui-accent);
   cursor: pointer;
 }
 
-.checked .mark { color: #22C55E; }
-.unchecked { color: #9CA3AF; }
-.unchecked .mark { color: #EF4444; }
+.checked .mark { color: var(--ui-green-2); }
+.unchecked { color: var(--text-secondary); }
+.unchecked .mark { color: var(--accent-red); }
 
 .mark {
   width: 14px;
@@ -65,7 +65,7 @@
 }
 
 .hint {
-  color: #6B7280;
+  color: var(--ui-faint);
   font-size: 0.85em;
   margin: 0 0 12px;
 }
@@ -73,7 +73,7 @@
 .linkBtn {
   background: none;
   border: none;
-  color: #9CA3AF;
+  color: var(--text-secondary);
   font-size: 0.85em;
   padding: 0;
   cursor: pointer;
@@ -81,5 +81,5 @@
 }
 
 .linkBtn:hover {
-  color: #e0e2e6;
+  color: var(--ui-text-4);
 }

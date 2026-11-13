@@ -1,6 +1,6 @@
 .intro {
   margin: 0 0 16px;
-  color: #8B93A3;
+  color: var(--ui-muted);
   font-size: 0.85rem;
   line-height: 1.5;
   max-width: 760px;
@@ -51,12 +51,12 @@ span.groupName {
   flex: none;
   padding: 0;
   border-radius: 50%;
-  border: 2px solid rgba(255, 255, 255, 0.15);
+  border: 2px solid rgba(var(--ui-ink-rgb), 0.15);
   cursor: pointer;
 }
 
 .swatchOn {
-  border-color: #fff;
+  border-color: var(--ui-strong);
 }
 
 .palette {
@@ -69,14 +69,14 @@ span.groupName {
   display: inline-flex;
   align-items: center;
   gap: 5px;
-  color: #8B93A3;
+  color: var(--ui-muted);
   font-size: 0.78rem;
   white-space: nowrap;
   cursor: pointer;
 }
 
 .single input {
-  accent-color: #3B82F6;
+  accent-color: var(--ui-accent);
 }
 
 .headActions,
@@ -94,9 +94,9 @@ span.groupName {
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  background: #141822;
-  border: 1px solid #2C3244;
-  color: #A5ADBA;
+  background: var(--ui-input);
+  border: 1px solid var(--ui-border);
+  color: var(--ui-text-3);
   border-radius: 8px;
   cursor: pointer;
 }
@@ -111,12 +111,12 @@ span.groupName {
   align-items: center;
   gap: 10px;
   padding: 4px 0;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
+  border-bottom: 1px solid rgba(var(--ui-ink-rgb), 0.04);
   min-width: 0;
 }
 
 .count {
-  color: #6B7280;
+  color: var(--ui-faint);
   font-size: 0.78rem;
   white-space: nowrap;
 }
@@ -125,9 +125,9 @@ span.groupName {
   max-width: 130px;
   padding: 4px 6px;
   border-radius: 8px;
-  border: 1px solid #2C3244;
-  background: #141822;
-  color: #A5ADBA;
+  border: 1px solid var(--ui-border);
+  background: var(--ui-input);
+  color: var(--ui-text-3);
   font-size: 0.78rem;
 }
 
@@ -144,7 +144,7 @@ span.groupName {
 }
 
 .muted {
-  color: #6B7280;
+  color: var(--ui-faint);
   font-size: 0.85rem;
   font-weight: 400;
   margin: 0;
