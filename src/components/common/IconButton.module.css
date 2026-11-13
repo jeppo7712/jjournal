@@ -30,7 +30,7 @@
 .caption {
   font-size: 10px;
   line-height: 1;
-  color: #A5ADBA;
+  color: var(--ui-text-3);
 }
 
 .iconButton:disabled {

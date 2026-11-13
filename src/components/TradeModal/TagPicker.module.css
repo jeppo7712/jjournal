@@ -1,6 +1,6 @@
 /* Same panel look as TradeChecklist.module.css; the Journal tab spaces it. */
 .panel {
-  background: #2a2e38;
+  background: var(--ui-panel);
   border-radius: 12px;
   padding: 12px 16px;
 }
@@ -14,12 +14,12 @@
 }
 
 .title {
-  color: #e0e2e6;
+  color: var(--ui-text-4);
   font-weight: 600;
 }
 
 .hint {
-  color: #6B7280;
+  color: var(--ui-faint);
   font-size: 0.8em;
   margin: 0;
 }
@@ -33,7 +33,7 @@
 }
 
 .groupName {
-  color: #9CA3AF;
+  color: var(--text-secondary);
   font-size: 0.75em;
   font-weight: 600;
   text-transform: uppercase;
@@ -49,8 +49,8 @@
   margin-left: 5px;
   padding: 0 4px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
-  color: #9CA3AF;
+  background: rgba(var(--ui-ink-rgb), 0.08);
+  color: var(--text-secondary);
   font-size: 0.9em;
 }
 
@@ -66,17 +66,17 @@
   width: 24px;
   height: 24px;
   border-radius: 999px;
-  border: 1px dashed #4B5563;
+  border: 1px dashed var(--ui-border-5);
   background: transparent;
-  color: #9CA3AF;
+  color: var(--text-secondary);
   font-size: 15px;
   line-height: 1;
   cursor: pointer;
 }
 
 .addBtn:hover {
-  border-color: #3B82F6;
-  color: #E5E7EB;
+  border-color: var(--ui-accent);
+  color: var(--ui-text);
 }
 
 .addBox {
@@ -88,9 +88,9 @@
   max-width: 100%;
   padding: 3px 10px;
   border-radius: 999px;
-  border: 1px solid #3B82F6;
-  background: #1c1f27;
-  color: #E5E7EB;
+  border: 1px solid var(--ui-accent);
+  background: var(--ui-field-2);
+  color: var(--ui-text);
   font: inherit;
   font-size: 13px;
   outline: none;
@@ -104,9 +104,9 @@
   min-width: 200px;
   padding: 4px;
   border-radius: 10px;
-  border: 1px solid #2C3244;
-  background: #141822;
-  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.45);
+  border: 1px solid var(--ui-border);
+  background: var(--ui-input);
+  box-shadow: 0 8px 24px rgba(var(--ui-shadow-rgb), calc(0.45 * var(--ui-shadow-k)));
 }
 
 .suggestion {
@@ -118,7 +118,7 @@
   border: none;
   border-radius: 6px;
   background: transparent;
-  color: #E5E7EB;
+  color: var(--ui-text);
   font: inherit;
   font-size: 13px;
   text-align: left;
@@ -126,11 +126,11 @@
 }
 
 .suggestion:hover {
-  background: rgba(59, 130, 246, 0.15);
+  background: rgba(var(--ui-accent-rgb), 0.15);
 }
 
 .suggestionGroup {
-  color: #6B7280;
+  color: var(--ui-faint);
   font-size: 0.9em;
 }
 

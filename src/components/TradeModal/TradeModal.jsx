@@ -19,6 +19,7 @@ import { formatNumber } from '../../utils/numberFormat';
 import { currencyMark } from '../../utils/formatMoney';
 import { notify, confirmDialog, choiceDialog } from '../common/Dialogs';
 import { replayLots } from '../../utils/lots';
+import { themeHex } from '../../utils/theme';
 
 // Prices, sizes and fees from IBKR as they came, in the number format
 // setting: their own decimals (trailing zeros dropped), '—' when missing.
@@ -1048,41 +1049,41 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
       style.id = styleId;
       style.innerHTML = `
         .${styles.modal} .${styles.richText} .ql-toolbar {
-          background: #161A24 !important;
+          background: var(--ui-toolbar) !important;
           border-radius: 12px 12px 0 0 !important;
           border: none !important;
-          color: #e0e2e6 !important;
+          color: var(--ui-text-4) !important;
         }
         .${styles.modal} .${styles.richText} .ql-toolbar button, 
         .${styles.modal} .${styles.richText} .ql-toolbar .ql-picker-label, 
         .${styles.modal} .${styles.richText} .ql-toolbar .ql-picker-item {
-          color: #e0e2e6 !important;
+          color: var(--ui-text-4) !important;
           filter: brightness(1.5);
         }
         .${styles.modal} .${styles.richText} .ql-toolbar button.ql-active, 
         .${styles.modal} .${styles.richText} .ql-toolbar .ql-picker-label.ql-active,
         .${styles.modal} .${styles.richText} .ql-toolbar .ql-picker-item:hover {
-          background: #3B82F6 !important;
+          background: var(--ui-accent) !important;
           color: #fff !important;
         }
         .${styles.modal} .${styles.richText} .ql-toolbar .ql-picker-options {
-          background: #161A24 !important;
+          background: var(--ui-toolbar) !important;
           border: none !important;
           borderRadius: 8px !important;
-          color: #e0e2e6 !important;
+          color: var(--ui-text-4) !important;
         }
         .${styles.modal} .${styles.richText} .ql-container {
-          background: #141822 !important;
+          background: var(--ui-input) !important;
           border-radius: 0 0 12px 12px !important;
           border: none !important;
-          color: #e0e2e6 !important;
+          color: var(--ui-text-4) !important;
           min-height: 100px !important;
           max-height: 220px !important;
           overflow-y: auto !important;
         }
         .${styles.modal} .${styles.richText} .ql-editor {
           min-height: 120px !important;
-          color: #e0e2e6 !important;
+          color: var(--ui-text-4) !important;
           border: none !important;
           padding: 12px 15px !important;
           background: transparent !important;
@@ -1094,8 +1095,8 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
         .${styles.modal} .${styles.richText} .ql-editor textarea {
           min-height: 220px !important;
           border: none !important;
-          background: #141822 !important;
-          color: #e0e2e6 !important;
+          background: var(--ui-input) !important;
+          color: var(--ui-text-4) !important;
           border-radius: 0 0 12px 12px !important;
         }
       `;
@@ -1519,7 +1520,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                 sidesteps it entirely instead of chasing z-index further. */}
             <div
               onClick={() => setShowFormChart(false)}
-              style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.55)', zIndex: 1500 }}
+              style={{ position: 'fixed', inset: 0, background: 'rgba(var(--ui-shadow-rgb), calc(0.55 * var(--ui-shadow-k)))', zIndex: 1500 }}
             />
             {/* Bottom sheet: there's no room to show the chart beside the form on a
                 phone screen, so on mobile it slides up over the form instead of
@@ -1529,13 +1530,13 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
               style={{
                 position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 1501,
                 height: 'calc(var(--vh, 1vh) * 82)', maxHeight: 'calc(var(--vh, 1vh) * 82)',
-                background: '#1B1F2C', borderRadius: '18px 18px 0 0',
-                boxShadow: '0 -4px 32px 0 rgba(0,0,0,0.35)',
+                background: 'var(--ui-popover)', borderRadius: '18px 18px 0 0',
+                boxShadow: '0 -4px 32px 0 rgba(var(--ui-shadow-rgb), calc(0.35 * var(--ui-shadow-k)))',
                 display: 'flex', flexDirection: 'column', overflow: 'hidden',
                 animation: 'tradeFormChartSheetUp 0.2s ease-out',
               }}
             >
-              <div style={{ width: 40, height: 4, borderRadius: 2, background: '#555b68', margin: '10px auto 0' }} />
+              <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--ui-handle)', margin: '10px auto 0' }} />
               <TradeFormChart
                 symbol={form.symbol}
                 type={form.type}
@@ -1586,14 +1587,14 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
         )}
         {showIBKRModal && (
           <AppWindow
-            title={<>IBKR — {form.symbol} trade groups{ibkrSource === 'flex' && <span style={{ color: '#818CF8', fontSize: '0.75rem', marginLeft: 8, fontWeight: 500 }}>(via Flex)</span>}</>}
+            title={<>IBKR — {form.symbol} trade groups{ibkrSource === 'flex' && <span style={{ color: 'var(--ui-indigo-text)', fontSize: '0.75rem', marginLeft: 8, fontWeight: 500 }}>(via Flex)</span>}</>}
             onClose={() => setShowIBKRModal(false)}
             storageKey="tradeModal.ibkr"
             width={720}
           >
               <div style={{ marginBottom: 16 }}>
               {!ibkrLoading && (
-                <span style={{ color: '#6B7280', fontSize: '0.8rem' }}>
+                <span style={{ color: 'var(--ui-faint)', fontSize: '0.8rem' }}>
                   {ibkrGroups.filter(g => !g.alreadyLogged).length} new group{ibkrGroups.filter(g => !g.alreadyLogged).length !== 1 ? 's' : ''}
                   {ibkrGroups.some(g => g.alreadyLogged) ? ` (+${ibkrGroups.filter(g => g.alreadyLogged).length} already imported)` : ''}
                   {ibkrOrphans.length > 0 ? ` + ${ibkrOrphans.length} ungrouped exec${ibkrOrphans.length !== 1 ? 's' : ''}` : ''}
@@ -1601,7 +1602,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
               )}
               {!ibkrLoading && ibkrSource === 'flex' && ibkrFetchedAt && (
                 <div style={{ marginTop: 4 }}>
-                  <span style={{ color: '#6B7280', fontSize: '0.72rem' }}>
+                  <span style={{ color: 'var(--ui-faint)', fontSize: '0.72rem' }}>
                     {ibkrFromCache
                       ? `Cached · fetched ${formatCacheAge(ibkrFetchedAt)}`
                       : 'Freshly fetched from IBKR'}
@@ -1615,7 +1616,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                 </div>
               )}
               {!ibkrLoading && ibkrSource === 'flex' && ibkrWarning && (
-                <div style={{ marginTop: 6, padding: '6px 10px', background: 'rgba(245, 158, 11, 0.12)', border: '1px solid rgba(245, 158, 11, 0.35)', borderRadius: 6, color: '#F59E0B', fontSize: '0.75rem' }}>
+                <div style={{ marginTop: 6, padding: '6px 10px', background: 'rgba(var(--ui-amber-rgb), 0.12)', border: '1px solid rgba(var(--ui-amber-rgb), 0.35)', borderRadius: 6, color: 'var(--ui-amber)', fontSize: '0.75rem' }}>
                   ⚠ {ibkrWarning}
                 </div>
               )}
@@ -1623,24 +1624,24 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
 
               {/* States */}
               {ibkrLoading && (
-                <div style={{ textAlign: 'center', color: '#A5ADBA', padding: '40px 0' }}>
+                <div style={{ textAlign: 'center', color: 'var(--ui-text-3)', padding: '40px 0' }}>
                   <div style={{ fontSize: '0.95rem' }}>
                     {ibkrSource === 'flex' ? 'Fetching trades via Flex…' : 'Fetching from IBKR TWS…'}
                   </div>
-                  <div style={{ fontSize: '0.78rem', color: '#6B7280', marginTop: 6 }}>
+                  <div style={{ fontSize: '0.78rem', color: 'var(--ui-faint)', marginTop: 6 }}>
                     {ibkrSource === 'flex' ? 'This can take up to 90 seconds' : 'This may take up to 30 seconds'}
                   </div>
                 </div>
               )}
 
               {!ibkrLoading && ibkrError && (
-                <div style={{ color: '#F87171', background: '#2D1B1B', borderRadius: 8, padding: '12px 16px', fontSize: '0.88rem' }}>
+                <div style={{ color: 'var(--ui-red)', background: 'var(--ui-error-bg)', borderRadius: 8, padding: '12px 16px', fontSize: '0.88rem' }}>
                   ⚠️ {ibkrError}
                 </div>
               )}
 
               {!ibkrLoading && !ibkrError && ibkrGroups.length === 0 && ibkrOrphans.length === 0 && (
-                <div style={{ textAlign: 'center', color: '#6B7280', padding: '40px 0', fontSize: '0.9rem' }}>
+                <div style={{ textAlign: 'center', color: 'var(--ui-faint)', padding: '40px 0', fontSize: '0.9rem' }}>
                   {ibkrSource === 'flex' ? (
                     <>
                       No trades found for {form.symbol} via Flex.
@@ -1680,12 +1681,12 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                 const alreadyApplied = allGroupExecs.length > 0 && allGroupExecs.every(e => e.inJournal || addedIbkrItemIds.has(e.execId));
 
                 const resultColor = {
-                  TP_HIT:        '#10B981',
-                  SL_HIT:        '#EF4444',
-                  OPEN:          '#F59E0B',
-                  PENDING:       '#6B7280',
+                  TP_HIT:        themeHex('--accent-green'),
+                  SL_HIT:        themeHex('--accent-red'),
+                  OPEN:          themeHex('--ui-amber'),
+                  PENDING:       themeHex('--ui-faint'),
                   CLOSED:        '#A78BFA',
-                }[group.result] || '#6B7280';
+                }[group.result] || themeHex('--ui-faint');
 
                 const resultLabel = {
                   TP_HIT:        '✅ TP Hit',
@@ -1695,7 +1696,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                   CLOSED:        '📊 Closed',
                 }[group.result] || group.result;
 
-                const dirColor = group.direction === 'LONG' ? '#60A5FA' : '#F97316';
+                const dirColor = group.direction === 'LONG' ? themeHex('--ui-accent-2') : themeHex('--ui-orange');
 
                 // Summary numbers for collapsed view
                 const entryPrice = group.entryExecutions[0]?.price ?? '—';
@@ -1708,10 +1709,10 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
 
                 return (
                   <div key={group.parentOrderId} style={{
-                    background: '#161A24',
+                    background: 'var(--ui-toolbar)',
                     borderRadius: 12,
                     marginBottom: 12,
-                    border: `1px solid ${alreadyApplied ? '#374151' : '#2D3748'}`,
+                    border: `1px solid ${alreadyApplied ? 'var(--border-color)' : 'var(--ui-border-7)'}`,
                     opacity: alreadyApplied ? 0.65 : 1,
                     overflow: 'hidden',
                   }}>
@@ -1730,32 +1731,32 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                       </span>
 
                       {group.partlyLogged && (
-                        <span style={{ background: '#10B98122', color: '#10B981', borderRadius: 6, padding: '2px 8px', fontSize: '0.75rem', fontWeight: 600 }}>
+                        <span style={{ background: 'rgba(var(--ui-emerald-rgb), 0.1333)', color: 'var(--accent-green)', borderRadius: 6, padding: '2px 8px', fontSize: '0.75rem', fontWeight: 600 }}>
                           {group.newExecCount} new
                         </span>
                       )}
 
                       {/* Bracket type */}
                       {group.type === 'bracket' && (
-                        <span style={{ color: '#6B7280', fontSize: '0.72rem', background: '#1a1d27', borderRadius: 4, padding: '2px 6px' }}>BRACKET</span>
+                        <span style={{ color: 'var(--ui-faint)', fontSize: '0.72rem', background: 'var(--ui-chip-bg)', borderRadius: 4, padding: '2px 6px' }}>BRACKET</span>
                       )}
 
                       {/* Date/time of entry */}
                       {group.entryExecutions[0] && (
-                        <span style={{ color: '#9CA3AF', fontSize: '0.78rem', marginLeft: 2 }}>
+                        <span style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', marginLeft: 2 }}>
                           {group.entryExecutions[0].dateTime.toFormat('LLL d, HH:mm')}
                         </span>
                       )}
 
                       {/* Summary: qty @ entry → exit */}
-                      <span style={{ color: '#D1D5DB', fontSize: '0.82rem', flex: 1, textAlign: 'right' }}>
+                      <span style={{ color: 'var(--ui-text-soft)', fontSize: '0.82rem', flex: 1, textAlign: 'right' }}>
                         {totalQty > 0 ? `${showNum(totalQty)} @ ` : ''}{showNum(entryPrice)}
                         {exitPrice !== '—' ? ` → ${showNum(exitPrice)}` : ''}
-                        {totalFee > 0 ? <span style={{ color: '#6B7280' }}> (fee: {feeText(totalFee, allGroupExecs[0]?.feeCurrency, v => formatNumber(v, 2))})</span> : null}
+                        {totalFee > 0 ? <span style={{ color: 'var(--ui-faint)' }}> (fee: {feeText(totalFee, allGroupExecs[0]?.feeCurrency, v => formatNumber(v, 2))})</span> : null}
                       </span>
 
                       {/* Expand chevron */}
-                      <span style={{ color: '#6B7280', fontSize: '0.85rem', marginLeft: 4 }}>
+                      <span style={{ color: 'var(--ui-faint)', fontSize: '0.85rem', marginLeft: 4 }}>
                         {isExpanded ? '▲' : '▼'}
                       </span>
                     </div>
@@ -1767,11 +1768,11 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                         {/* Entry executions */}
                         {group.entryExecutions.length > 0 && (
                           <div style={{ marginBottom: 8 }}>
-                            <div style={{ color: '#9CA3AF', marginBottom: 4, fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Entry execution{group.entryExecutions.length > 1 ? 's' : ''}</div>
+                            <div style={{ color: 'var(--text-secondary)', marginBottom: 4, fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Entry execution{group.entryExecutions.length > 1 ? 's' : ''}</div>
                             {group.entryExecutions.map(e => (
-                              <div key={e.execId} style={{ display: 'flex', justifyContent: 'space-between', color: e.inJournal ? '#6B7280' : '#E5E7EB', padding: '3px 0' }}>
+                              <div key={e.execId} style={{ display: 'flex', justifyContent: 'space-between', color: e.inJournal ? 'var(--ui-faint)' : 'var(--ui-text)', padding: '3px 0' }}>
                                 <span>{e.action} {showNum(e.quantity)} @ <b>{showNum(e.price)}</b> — {e.dateTime.toFormat('LLL d, HH:mm:ss')}</span>
-                                <span style={{ color: '#9CA3AF' }}>{e.inJournal ? '✓ in journal · ' : ''}fee: {feeText(e.fee, e.feeCurrency, String)}</span>
+                                <span style={{ color: 'var(--text-secondary)' }}>{e.inJournal ? '✓ in journal · ' : ''}fee: {feeText(e.fee, e.feeCurrency, String)}</span>
                               </div>
                             ))}
                           </div>
@@ -1781,11 +1782,11 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                             TP/SL orders to show them under) */}
                         {group.type === 'position-based' && group.tpExecutions.length > 0 && (
                           <div style={{ marginBottom: 8 }}>
-                            <div style={{ color: '#9CA3AF', marginBottom: 4, fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Exit execution{group.tpExecutions.length > 1 ? 's' : ''}</div>
+                            <div style={{ color: 'var(--text-secondary)', marginBottom: 4, fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Exit execution{group.tpExecutions.length > 1 ? 's' : ''}</div>
                             {group.tpExecutions.map(e => (
-                              <div key={e.execId} style={{ display: 'flex', justifyContent: 'space-between', color: e.inJournal ? '#6B7280' : '#E5E7EB', padding: '3px 0' }}>
+                              <div key={e.execId} style={{ display: 'flex', justifyContent: 'space-between', color: e.inJournal ? 'var(--ui-faint)' : 'var(--ui-text)', padding: '3px 0' }}>
                                 <span>{e.action} {showNum(e.quantity)} @ <b>{showNum(e.price)}</b> — {e.dateTime.toFormat('LLL d, HH:mm:ss')}</span>
-                                <span style={{ color: '#9CA3AF' }}>{e.inJournal ? '✓ in journal · ' : ''}fee: {feeText(e.fee, e.feeCurrency, String)}</span>
+                                <span style={{ color: 'var(--text-secondary)' }}>{e.inJournal ? '✓ in journal · ' : ''}fee: {feeText(e.fee, e.feeCurrency, String)}</span>
                               </div>
                             ))}
                           </div>
@@ -1793,7 +1794,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
 
                         {/* Position-based group notice */}
                         {group.type === 'position-based' && (
-                          <div style={{ color: '#9CA3AF', fontSize: '0.78rem', background: '#1a1d27', borderRadius: 6, padding: '6px 10px', marginBottom: 8, fontStyle: 'italic' }}>
+                          <div style={{ color: 'var(--text-secondary)', fontSize: '0.78rem', background: 'var(--ui-chip-bg)', borderRadius: 6, padding: '6px 10px', marginBottom: 8, fontStyle: 'italic' }}>
                             ℹ️ Grouped by position tracking — no bracket order data available. TP/SL prices not shown.
                           </div>
                         )}
@@ -1801,8 +1802,8 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                         {/* TP order row */}
                         {group.tpOrder && (
                           <div style={{ marginBottom: 8 }}>
-                            <div style={{ color: '#9CA3AF', marginBottom: 4, fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Take Profit order</div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', color: group.tpExecutions.length > 0 ? '#10B981' : '#6B7280', padding: '3px 0' }}>
+                            <div style={{ color: 'var(--text-secondary)', marginBottom: 4, fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Take Profit order</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', color: group.tpExecutions.length > 0 ? 'var(--accent-green)' : 'var(--ui-faint)', padding: '3px 0' }}>
                               <span>LMT {group.tpOrder.action} {showNum(group.tpOrder.quantity)} @ <b>{showNum(group.tpOrder.limitPrice)}</b></span>
                               <span style={{ fontSize: '0.75rem' }}>
                                 {group.tpExecutions.length > 0
@@ -1816,8 +1817,8 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                         {/* SL order row */}
                         {group.slOrder && (
                           <div style={{ marginBottom: 10 }}>
-                            <div style={{ color: '#9CA3AF', marginBottom: 4, fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Stop Loss order</div>
-                            <div style={{ display: 'flex', justifyContent: 'space-between', color: group.slExecutions.length > 0 ? '#EF4444' : '#6B7280', padding: '3px 0' }}>
+                            <div style={{ color: 'var(--text-secondary)', marginBottom: 4, fontWeight: 600, fontSize: '0.75rem', textTransform: 'uppercase', letterSpacing: '0.05em' }}>Stop Loss order</div>
+                            <div style={{ display: 'flex', justifyContent: 'space-between', color: group.slExecutions.length > 0 ? 'var(--accent-red)' : 'var(--ui-faint)', padding: '3px 0' }}>
                               <span>{group.slOrder.orderType} {group.slOrder.action} {showNum(group.slOrder.quantity)} @ <b>{showNum(group.slOrder.stopPrice ?? group.slOrder.limitPrice)}</b></span>
                               <span style={{ fontSize: '0.75rem' }}>
                                 {group.slExecutions.length > 0
@@ -1881,7 +1882,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                           {group.tpOrder?.limitPrice != null && (
                             <button
                               onClick={() => setForm(prev => ({ ...prev, target: group.tpOrder.limitPrice.toString(), targetConfirmed: true }))}
-                              style={{ padding: '6px 12px', background: form.target === group.tpOrder.limitPrice.toString() ? '#374151' : '#064E3B', color: '#10B981', border: '1px solid #10B981', borderRadius: 7, cursor: 'pointer', fontSize: '0.78rem' }}
+                              style={{ padding: '6px 12px', background: form.target === group.tpOrder.limitPrice.toString() ? 'var(--border-color)' : 'var(--ui-tp-bg)', color: 'var(--accent-green)', border: '1px solid var(--accent-green)', borderRadius: 7, cursor: 'pointer', fontSize: '0.78rem' }}
                             >
                               {form.target === group.tpOrder.limitPrice.toString() ? '✓' : '→'} Set TP {group.tpOrder.limitPrice}
                             </button>
@@ -1894,7 +1895,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                                 const slP = (group.slOrder.stopPrice ?? group.slOrder.limitPrice).toString();
                                 setForm(prev => ({ ...prev, stopLoss: slP, stopLossConfirmed: true }));
                               }}
-                              style={{ padding: '6px 12px', background: form.stopLoss === (group.slOrder.stopPrice ?? group.slOrder.limitPrice)?.toString() ? '#374151' : '#450A0A', color: '#EF4444', border: '1px solid #EF4444', borderRadius: 7, cursor: 'pointer', fontSize: '0.78rem' }}
+                              style={{ padding: '6px 12px', background: form.stopLoss === (group.slOrder.stopPrice ?? group.slOrder.limitPrice)?.toString() ? 'var(--border-color)' : 'var(--ui-sl-bg)', color: 'var(--accent-red)', border: '1px solid var(--accent-red)', borderRadius: 7, cursor: 'pointer', fontSize: '0.78rem' }}
                             >
                               {form.stopLoss === (group.slOrder.stopPrice ?? group.slOrder.limitPrice)?.toString() ? '✓' : '→'} Set SL {showNum(group.slOrder.stopPrice ?? group.slOrder.limitPrice)}
                             </button>
@@ -1909,15 +1910,15 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
               {/* Orphan Executions Section */}
               {!ibkrLoading && ibkrOrphans.length > 0 && (
                 <div style={{ marginTop: 16 }}>
-                  <div style={{ color: '#9CA3AF', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
+                  <div style={{ color: 'var(--text-secondary)', fontSize: '0.8rem', fontWeight: 600, textTransform: 'uppercase', letterSpacing: '0.05em', marginBottom: 8 }}>
                     Ungrouped executions (no bracket order data)
                   </div>
                   {ibkrOrphans.map((item) => (
-                    <div key={item.execId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: '#161A24', borderRadius: 8, marginBottom: 6 }}>
-                      <span style={{ color: '#D1D5DB', fontSize: '0.83rem' }}>
-                        <b style={{ color: item.action === 'BUY' ? '#60A5FA' : '#F97316' }}>{item.action}</b>{' '}
+                    <div key={item.execId} style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '8px 12px', background: 'var(--ui-toolbar)', borderRadius: 8, marginBottom: 6 }}>
+                      <span style={{ color: 'var(--ui-text-soft)', fontSize: '0.83rem' }}>
+                        <b style={{ color: item.action === 'BUY' ? 'var(--ui-accent-2)' : 'var(--ui-orange)' }}>{item.action}</b>{' '}
                         {showNum(item.quantity)} @ {showNum(item.price)} — {item.dateTime.toFormat('LLL d, HH:mm:ss')}
-                        <span style={{ color: '#6B7280' }}> fee: {feeText(item.fee, item.feeCurrency)}</span>
+                        <span style={{ color: 'var(--ui-faint)' }}> fee: {feeText(item.fee, item.feeCurrency)}</span>
                       </span>
                       <button
                         onClick={() => handleAddAsAction(item)}

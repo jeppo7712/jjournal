@@ -9,7 +9,7 @@
   justify-content: center;
   padding: 24px;
   box-sizing: border-box;
-  background: rgba(5, 7, 12, 0.62);
+  background: var(--ui-backdrop);
   -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
   animation: overlayIn 0.18s ease-out;
@@ -31,11 +31,11 @@
   max-width: 100%;
   max-height: min(88vh, calc(var(--app-height, 100dvh) - 48px));
   box-sizing: border-box;
-  background: linear-gradient(180deg, #1F2434 0%, #1B1F2C 120px);
-  color: var(--ui-text, #E5E7EB);
-  border: 1px solid var(--ui-border, #2C3244);
+  background: linear-gradient(180deg, var(--ui-card-top) 0%, var(--ui-popover) 120px);
+  color: var(--ui-text);
+  border: 1px solid var(--ui-border);
   border-radius: 18px;
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+  box-shadow: 0 30px 80px rgba(var(--ui-shadow-rgb), calc(0.55 * var(--ui-shadow-k))), inset 0 1px 0 rgba(var(--ui-ink-rgb), 0.04);
   animation: windowIn 0.2s ease-out;
   touch-action: auto;
 }
@@ -46,7 +46,7 @@
 }
 
 .dragging {
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(96, 165, 250, 0.35);
+  box-shadow: 0 30px 80px rgba(var(--ui-shadow-rgb), calc(0.6 * var(--ui-shadow-k))), 0 0 0 1px rgba(var(--ui-accent-2-rgb), 0.35);
   animation: none;
 }
 
@@ -58,7 +58,7 @@
   gap: 12px;
   flex-shrink: 0;
   padding: 14px 14px 12px 22px;
-  border-bottom: 1px solid var(--ui-border, #2C3244);
+  border-bottom: 1px solid var(--ui-border);
 }
 
 /* A grip, to show the window can be moved. */
@@ -71,7 +71,7 @@
   height: 4px;
   margin-left: -18px;
   border-radius: 4px;
-  background: rgba(255, 255, 255, 0.08);
+  background: rgba(var(--ui-ink-rgb), 0.08);
   pointer-events: none;
 }
 
@@ -84,7 +84,7 @@
   font-size: 1.12rem;
   font-weight: 650;
   letter-spacing: -0.01em;
-  color: #fff;
+  color: var(--ui-strong);
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -93,7 +93,7 @@
 .subtitle {
   margin: 2px 0 0;
   font-size: 12.5px;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
 }
 
 .close {
@@ -107,15 +107,15 @@
   border: none;
   border-radius: 10px;
   background: transparent;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
   cursor: pointer;
   transition: background 0.15s, color 0.15s;
 }
 
 @media (hover: hover) {
   .close:hover {
-    background: rgba(255, 255, 255, 0.07);
-    color: #fff;
+    background: rgba(var(--ui-ink-rgb), 0.07);
+    color: var(--ui-strong);
   }
 }
 
@@ -127,7 +127,7 @@
   -webkit-overflow-scrolling: touch;
   padding: 20px 22px 22px;
   scrollbar-width: thin;
-  scrollbar-color: rgba(255, 255, 255, 0.14) transparent;
+  scrollbar-color: rgba(var(--ui-ink-rgb), 0.14) transparent;
 }
 
 .footer {
@@ -137,8 +137,8 @@
   gap: 10px;
   flex-shrink: 0;
   padding: 12px 18px;
-  border-top: 1px solid var(--ui-border, #2C3244);
-  background: rgba(20, 24, 34, 0.6);
+  border-top: 1px solid var(--ui-border);
+  background: var(--ui-footer);
   border-radius: 0 0 18px 18px;
 }
 
@@ -156,9 +156,9 @@
   height: 38px;
   padding: 0 16px;
   border-radius: 10px;
-  border: 1px solid var(--ui-border, #2C3244);
-  background: rgba(255, 255, 255, 0.03);
-  color: var(--ui-text-2, #C7CDD8);
+  border: 1px solid var(--ui-border);
+  background: rgba(var(--ui-ink-rgb), 0.03);
+  color: var(--ui-text-2);
   font: inherit;
   font-size: 14px;
   font-weight: 600;
@@ -173,8 +173,8 @@
 
 @media (hover: hover) {
   .btn:not(:disabled):hover {
-    background: rgba(255, 255, 255, 0.07);
-    color: #fff;
+    background: rgba(var(--ui-ink-rgb), 0.07);
+    color: var(--ui-strong);
   }
 }
 
@@ -182,7 +182,7 @@
   min-width: 96px;
   border-color: transparent;
   background: linear-gradient(180deg, #4F8DF7 0%, #3B82F6 100%);
-  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 20px rgba(var(--ui-accent-rgb), 0.25), inset 0 1px 0 rgba(var(--ui-ink-rgb), 0.18);
   color: #fff;
 }
 
@@ -193,15 +193,15 @@
 }
 
 .danger {
-  border-color: rgba(248, 113, 113, 0.35);
-  background: rgba(248, 113, 113, 0.08);
-  color: #FCA5A5;
+  border-color: rgba(var(--ui-red-2-rgb), 0.35);
+  background: rgba(var(--ui-red-2-rgb), 0.08);
+  color: var(--ui-red-text);
 }
 
 @media (hover: hover) {
   .danger:not(:disabled):hover {
-    background: rgba(248, 113, 113, 0.16);
-    color: #FECACA;
+    background: rgba(var(--ui-red-2-rgb), 0.16);
+    color: var(--ui-red-text-2);
   }
 }
 

@@ -1,25 +1,42 @@
 import { DateTime } from 'luxon';
 import { formatNumber } from '../../utils/numberFormat';
+import { themeColor } from '../../utils/theme';
 
 // One look for every chart on the Stats page: recessive axes and grid, thin
 // 2px lines over a soft gradient wash, a dot on the latest value, a hairline
 // crosshair and a card-style tooltip. Colours follow the app's tokens
 // (src/styles.css); green/red keep their meaning (above/below a baseline).
 
-export const COLORS = {
-  text: '#E5E7EB',
-  muted: '#8B93A3',
-  faint: '#6B7280',
-  grid: 'rgba(255, 255, 255, 0.05)',
-  baseline: 'rgba(255, 255, 255, 0.16)',
-  surface: '#1D2130',
-  accent: '#3B82F6',
-  green: '#4ADE80',
-  red: '#F87171',
-  amber: '#F59E0B',
-  slate: '#8B93A3',
-  other: '#4B5263',
+// Read from the theme's tokens (once per theme: charts ask on every draw).
+// WebKit can hand back "#FFFFFF" as "#fff"; rgba() below wants six digits.
+const hex6 = value => (/^#[0-9a-f]{3}$/i.test(value)
+  ? `#${value.slice(1).split('').map(c => c + c).join('')}`
+  : value);
+const TOKENS = {
+  text: '--ui-text', muted: '--ui-muted', faint: '--ui-faint', surface: '--ui-card',
+  accent: '--ui-accent', green: '--ui-green', red: '--ui-red', amber: '--ui-amber',
+  slate: '--ui-muted', other: '--ui-chart-other', border: '--ui-border', tooltip: '--ui-tooltip',
 };
+let palette = { theme: null };
+const current = () => {
+  const theme = typeof document !== 'undefined' ? document.documentElement.dataset.theme : 'dark';
+  if (palette.theme !== theme) {
+    const ink = themeColor('--ui-ink-rgb');
+    palette = { theme };
+    Object.entries(TOKENS).forEach(([key, token]) => { palette[key] = hex6(themeColor(token)); });
+    palette.grid = `rgba(${ink}, 0.05)`;
+    palette.baseline = `rgba(${ink}, 0.16)`;
+    palette.crosshair = `rgba(${ink}, 0.18)`;
+  }
+  return palette;
+};
+export const COLORS = Object.fromEntries(
+  [...Object.keys(TOKENS), 'grid', 'baseline', 'crosshair']
+    .map(key => [key, undefined])
+);
+Object.keys(COLORS).forEach(key => {
+  Object.defineProperty(COLORS, key, { get: () => current()[key], enumerable: true });
+});
 
 // Fixed order, never cycled: past eight, the rest folds into "Other".
 // Validated as a set (CVD and normal-vision separation, contrast) against
@@ -111,16 +128,17 @@ export const crosshairPlugin = {
     ctx.moveTo(x, chartArea.top);
     ctx.lineTo(x, chartArea.bottom);
     ctx.lineWidth = 1;
-    ctx.strokeStyle = 'rgba(255, 255, 255, 0.18)';
+    ctx.strokeStyle = COLORS.crosshair;
     ctx.stroke();
     ctx.restore();
   },
 };
 
-const tooltipBase = {
+// A function, not a constant: the colours follow the theme.
+const tooltipBase = () => ({
   enabled: true,
-  backgroundColor: 'rgba(20, 24, 34, 0.96)',
-  borderColor: '#2C3244',
+  backgroundColor: COLORS.tooltip,
+  borderColor: COLORS.border,
   borderWidth: 1,
   cornerRadius: 10,
   padding: { x: 12, y: 10 },
@@ -137,7 +155,7 @@ const tooltipBase = {
   boxPadding: 6,
   usePointStyle: true,
   displayColors: false,
-};
+});
 
 // The zero line (or another baseline) is drawn a step brighter than the
 // rest of the grid, so above/below reads at a glance.
@@ -169,7 +187,7 @@ export const baseOptions = ({ tooltip = {}, scales, multi = false, ...rest } = {
   scales,
   plugins: {
     legend: { display: false },
-    tooltip: { ...tooltipBase, displayColors: multi, ...tooltip },
+    tooltip: { ...tooltipBase(), displayColors: multi, ...tooltip },
     // The Dashboard registers its own crosshair globally; it stays off here.
     verticalLine: { enabled: false },
   },

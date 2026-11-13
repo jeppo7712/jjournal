@@ -51,6 +51,7 @@ import {
   COLORS, CATEGORICAL, HOLD_TICKS, rgba, polarityStroke, polarityFill, areaFill, endDot, lineStyle,
   crosshairPlugin, scaleX, scaleY, baseOptions, signed, percentTick, moneyTick, dateTick, dateTitle, formatHold,
 } from './chartTheme';
+import useTheme from '../../utils/useTheme';
 import { Line, Bar, Doughnut, Scatter } from 'react-chartjs-2';
 import { Chart as ChartJS, CategoryScale, LinearScale, LogarithmicScale, PointElement, LineElement, BarElement, ArcElement, Title, Tooltip, Legend, Filler } from 'chart.js';
 import { DateTime } from 'luxon';
@@ -84,7 +85,7 @@ class StatsErrorBoundary extends React.Component {
 // on figures that are actually coloured: where a value renders in plain
 // white, the sign is the one thing telling a loss from a gain.
 const absAmount = (value) => formatNumber(Math.abs(Number(value)), 2);
-const pnlColor = (value) => (value === null || value === undefined || Number(value) === 0 ? undefined : Number(value) > 0 ? '#22C55E' : '#EF4444');
+const pnlColor = (value) => (value === null || value === undefined || Number(value) === 0 ? undefined : Number(value) > 0 ? 'var(--ui-green-2)' : 'var(--accent-red)');
 
 // Icons and one-line descriptions for the section menu and header.
 const TAB_META = {
@@ -131,6 +132,8 @@ const INCOME_TYPES = new Set(['DIVIDEND', 'WITHHOLDING_TAX', 'INTEREST', 'FEE'])
 const INCOME_PREF_KEY = 'jj.stats.returnIncludesIncome';
 
 const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilterWeek }) => {
+  // The charts' colours follow the theme (chartTheme.js): redraw on a change.
+  useTheme();
   const { filteredItems, filter, timeFilter, symbolFilter, restrictToActionsInRange, accounts, currentAccountId, tagFilter = [], setTagFilter, subAccountIds = [], withSubAccounts = false } = React.useContext(TradeContext) || { filteredItems: [], filter: [], timeFilter: null, symbolFilter: '', restrictToActionsInRange: false };
   // A parent account's sub-accounts are in (or not) as on the Dashboard: its
   // Sub-accounts toggle decides for both.
@@ -930,7 +933,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                       {computedStats.monthlyPnL.map((month, idx) => (
                         <tr key={idx}>
                           <td>{month.month}</td>
-                          <td style={{ color: month.pnl >= 0 ? '#22C55E' : '#EF4444' }}>{currencyMark(activeCurrency)}{absAmount(month.pnl)}</td>
+                          <td style={{ color: month.pnl >= 0 ? 'var(--ui-green-2)' : 'var(--accent-red)' }}>{currencyMark(activeCurrency)}{absAmount(month.pnl)}</td>
                           <td>{month.wins}</td>
                           <td>{month.losses}</td>
                           <td>{month.trades}</td>
@@ -969,10 +972,10 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                           <tr key={idx}>
                             <td>{hour.hour}</td>
                             <td>{hour.total}</td>
-                            <td style={{ color: '#22C55E' }}>{hour.wins}</td>
-                            <td style={{ color: '#EF4444' }}>{hour.losses}</td>
+                            <td style={{ color: 'var(--ui-green-2)' }}>{hour.wins}</td>
+                            <td style={{ color: 'var(--accent-red)' }}>{hour.losses}</td>
                             <td>{formatNumberText(hour.winRate)}%</td>
-                            <td style={{ color: hour.pnl >= 0 ? '#22C55E' : '#EF4444' }}>{currencyMark(activeCurrency)}{absAmount(hour.pnl)}</td>
+                            <td style={{ color: hour.pnl >= 0 ? 'var(--ui-green-2)' : 'var(--accent-red)' }}>{currencyMark(activeCurrency)}{absAmount(hour.pnl)}</td>
                           </tr>
                         )
                       ))}

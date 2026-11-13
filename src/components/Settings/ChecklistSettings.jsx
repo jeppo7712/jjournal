@@ -16,7 +16,7 @@ const SECTIONS = [
 
 const smallBtn = {
   width: 30, height: 30, flex: 'none', display: 'inline-flex', alignItems: 'center', justifyContent: 'center',
-  background: '#141822', border: '1px solid #2C3244', color: '#A5ADBA', borderRadius: 8,
+  background: 'var(--ui-input)', border: '1px solid var(--ui-border)', color: 'var(--ui-text-3)', borderRadius: 8,
   cursor: 'pointer', fontSize: '0.85em',
 };
 
@@ -89,7 +89,7 @@ function ChecklistSettings({ styles, apiBaseUrl }) {
     }
   };
 
-  if (!accounts?.length || !account) return <p style={{ color: '#9CA3AF' }}>Open an account first (Settings → Accounts to create one).</p>;
+  if (!accounts?.length || !account) return <p style={{ color: 'var(--text-secondary)' }}>Open an account first (Settings → Accounts to create one).</p>;
 
   return (
     <div>
@@ -116,9 +116,9 @@ function ChecklistSettings({ styles, apiBaseUrl }) {
       <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(280px, 1fr))', gap: 16, marginTop: 20 }}>
         {SECTIONS.map(({ key, title, hint }) => (
           <div key={key} className={styles.innerCard}>
-            <h4 style={{ margin: '0 0 4px', color: '#fff', fontSize: '0.95rem' }}>{title}</h4>
-            <p style={{ color: '#8B93A3', fontSize: '0.8rem', margin: '0 0 12px' }}>{hint}</p>
-            {lists[key].length === 0 && <p style={{ color: '#6B7280', fontSize: '0.85rem' }}>No items yet.</p>}
+            <h4 style={{ margin: '0 0 4px', color: 'var(--ui-strong)', fontSize: '0.95rem' }}>{title}</h4>
+            <p style={{ color: 'var(--ui-muted)', fontSize: '0.8rem', margin: '0 0 12px' }}>{hint}</p>
+            {lists[key].length === 0 && <p style={{ color: 'var(--ui-faint)', fontSize: '0.85rem' }}>No items yet.</p>}
             {lists[key].map((item, i) => (
               <div key={`${key}-${i}`} style={{ display: 'flex', gap: 6, alignItems: 'center', marginBottom: 6 }}>
                 <input
@@ -150,7 +150,7 @@ function ChecklistSettings({ styles, apiBaseUrl }) {
 
       <div className={styles.footerRow} style={{ alignItems: 'center', gap: 12 }}>
         {message && (
-          <span style={{ color: message.type === 'error' ? '#EF4444' : message.type === 'success' ? '#22C55E' : '#A5ADBA', fontSize: '0.9em' }}>
+          <span style={{ color: message.type === 'error' ? 'var(--accent-red)' : message.type === 'success' ? 'var(--ui-green-2)' : 'var(--ui-text-3)', fontSize: '0.9em' }}>
             {message.text}
           </span>
         )}

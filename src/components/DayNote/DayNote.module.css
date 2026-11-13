@@ -1,7 +1,7 @@
 .overlay {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.72);
+  background: rgba(var(--ui-shadow-rgb), calc(0.72 * var(--ui-shadow-k)));
   display: flex;
   align-items: center;
   justify-content: center;
@@ -10,12 +10,12 @@
 }
 
 .modal {
-  background: #1B1F2C;
+  background: var(--ui-popover);
   border-radius: 18px;
   width: 800px;
   max-width: 100vw;
   max-height: 90vh;
-  box-shadow: 0 4px 32px 0 rgba(0,0,0,0.18);
+  box-shadow: 0 4px 32px 0 rgba(var(--ui-shadow-rgb), calc(0.18 * var(--ui-shadow-k)));
   position: relative;
   display: flex;
   flex-direction: column;
@@ -26,15 +26,15 @@
   align-items: center;
   justify-content: space-between;
   padding: 10px 12px 6px 12px;
-  background: #141822;
-  border-bottom: 1px solid #2C3244;
+  background: var(--ui-input);
+  border-bottom: 1px solid var(--ui-border);
   border-radius: 18px 18px 0 0;
   margin-bottom: 0;
   flex-shrink: 0;
 }
 
 .title {
-  color: #fff;
+  color: var(--ui-strong);
   font-size: 1.18rem;
   font-weight: 600;
 }
@@ -42,7 +42,7 @@
 .closeBtn {
   background: none;
   border: none;
-  color: #A5ADBA;
+  color: var(--ui-text-3);
   font-size: 1.7rem;
   cursor: pointer;
   line-height: 1;
@@ -53,7 +53,7 @@
   overflow-y: auto;
   flex: 1;
   scrollbar-width: thin;
-  scrollbar-color: #3B82F6 #141822;
+  scrollbar-color: var(--ui-accent) var(--ui-input);
 }
 
 .tabContent::-webkit-scrollbar {
@@ -61,12 +61,12 @@
 }
 
 .tabContent::-webkit-scrollbar-track {
-  background: #141822;
+  background: var(--ui-input);
   border-radius: 4px;
 }
 
 .tabContent::-webkit-scrollbar-thumb {
-  background: #3B82F6;
+  background: var(--ui-accent);
   border-radius: 4px;
 }
 
@@ -100,16 +100,16 @@
 }
 
 .formField label {
-  color: #A5ADBA;
+  color: var(--ui-text-3);
   font-size: 0.97em;
   margin-bottom: 2px;
 }
 
 .inputBubble, .actionInputBubble, select.inputBubble {
-  background: #141822;
+  background: var(--ui-input);
   border: none;
   border-radius: 18px;
-  color: #e0e2e6;
+  color: var(--ui-text-4);
   padding: 10px 16px;
   font-size: 1em;
   outline: none;
@@ -123,8 +123,8 @@
 }
 
 .inputBubble:focus, .actionInputBubble:focus {
-  background: #181D29;
-  color: #fff;
+  background: var(--ui-input-focus);
+  color: var(--ui-strong);
 }
 
 select.inputBubble {
@@ -137,15 +137,15 @@ select.inputBubble {
   align-items: center;
   gap: 16px;
   padding: 10px 32px;
-  background: #161A24;
-  border-top: 1px solid #2C3244;
+  background: var(--ui-toolbar);
+  border-top: 1px solid var(--ui-border);
   border-radius: 0 0 18px 18px;
   flex-shrink: 0;
 }
 
 .saveBtn {
   padding: 10px 28px;
-  background: #3B82F6;
+  background: var(--ui-accent);
   color: #fff;
   border: none;
   border-radius: 8px;
@@ -172,7 +172,7 @@ select.inputBubble {
 }
 
 .notesEditor {
-  background: #141822;
+  background: var(--ui-input);
   border-radius: 12px;
   padding: 0;
   margin-top: 4px;
@@ -182,27 +182,27 @@ select.inputBubble {
 }
 
 .richText .ql-toolbar {
-  background: #161A24;
+  background: var(--ui-toolbar);
   border-radius: 12px 12px 0 0;
   border: none;
-  color: #e0e2e6;
+  color: var(--ui-text-4);
   position: sticky;
   top: 0;
   z-index: 1;
 }
 
 .richText .ql-container {
-  background: #141822;
+  background: var(--ui-input);
   border-radius: 0 0 12px 12px;
   border: none;
-  color: #e0e2e6;
+  color: var(--ui-text-4);
   flex: 1;
   overflow-y: auto;
 }
 
 .richText .ql-editor {
   min-height: 140px; /* Reduced to fit within smaller max-height */
-  color: #e0e2e6;
+  color: var(--ui-text-4);
   overflow-y: auto;
 }
 
@@ -219,7 +219,7 @@ select.inputBubble {
   align-items: center;
   gap: 8px;
   background: none;
-  color: #A5ADBA;
+  color: var(--ui-text-3);
   padding: 4px 8px;
   cursor: pointer;
   font-size: 0.95em;
@@ -230,8 +230,8 @@ select.inputBubble {
 }
 
 .uploadBtn:hover {
-  background: #232f4b;
-  color: #fff;
+  background: var(--ui-accent-wash);
+  color: var(--ui-strong);
 }
 
 .iconContainer {
@@ -240,7 +240,7 @@ select.inputBubble {
   justify-content: center;
   width: 40px;
   height: 40px;
-  border: 2px dashed #A5ADBA;
+  border: 2px dashed var(--ui-text-3);
   border-radius: 4px;
   padding: 8px;
   box-sizing: border-box;
@@ -249,14 +249,14 @@ select.inputBubble {
 }
 
 .uploadBtn:hover .iconContainer {
-  border-color: #fff;
+  border-color: var(--ui-strong);
 }
 
 .uploadIcon {
   width: 38px;
   height: 38px;
   padding: 0;
-  color: #A5ADBA;
+  color: var(--ui-text-3);
   position: absolute;
   top: 50%;
   left: 50%;
@@ -264,7 +264,7 @@ select.inputBubble {
 }
 
 .uploadBtn:hover .uploadIcon {
-  color: #fff;
+  color: var(--ui-strong);
 }
 
 .attachmentsPreview {
@@ -287,8 +287,8 @@ select.inputBubble {
   height: 56px;
   border-radius: 8px;
   overflow: visible;
-  background: #232837;
-  border: 1.5px solid #3B82F6;
+  background: var(--ui-section);
+  border: 1.5px solid var(--ui-accent);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -302,8 +302,8 @@ select.inputBubble {
 .tooltip {
   visibility: hidden;
   opacity: 0;
-  background: #161A24;
-  color: #e0e2e6;
+  background: var(--ui-toolbar);
+  color: var(--ui-text-4);
   font-size: 0.9em;
   padding: 6px 12px;
   border-radius: 6px;
@@ -314,7 +314,7 @@ select.inputBubble {
   white-space: nowrap;
   z-index: 10;
   transition: opacity 0.2s, visibility 0.2s;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 8px rgba(var(--ui-shadow-rgb), calc(0.2 * var(--ui-shadow-k)));
   max-width: 200px;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -328,14 +328,14 @@ select.inputBubble {
   transform: translateX(-50%);
   border-width: 5px;
   border-style: solid;
-  border-color: #161A24 transparent transparent transparent;
+  border-color: var(--ui-toolbar) transparent transparent transparent;
 }
 
 .attachmentRemove {
   position: absolute;
   top: -10px;
   right: -10px;
-  background: #ef4444;
+  background: var(--accent-red);
   color: #fff;
   border: none;
   border-radius: 50%;
@@ -347,7 +347,7 @@ select.inputBubble {
   justify-content: center;
   cursor: pointer;
   z-index: 2;
-  box-shadow: 0 2px 8px 0 rgba(0,0,0,0.22);
+  box-shadow: 0 2px 8px 0 rgba(var(--ui-shadow-rgb), calc(0.22 * var(--ui-shadow-k)));
   line-height: 1;
   padding: 0;
   opacity: 1;
@@ -360,7 +360,7 @@ select.inputBubble {
 .radio-btn-group {
   display: flex;
   align-items: center;
-  background: #141822;
+  background: var(--ui-input);
   border-radius: 999px;
   padding: 0px 0px;
   gap: 8px;
@@ -383,7 +383,7 @@ select.inputBubble {
   border-radius: 999px;
   cursor: pointer;
   background: transparent;
-  color: #A5ADBA;
+  color: var(--ui-text-3);
   font-size: 1.18em;
   font-weight: 500;
   transition: background 0.18s, color 0.18s;
@@ -401,7 +401,7 @@ select.inputBubble {
 
 input[type="radio"]:checked + .radio-btn,
 .radio-btn.selected {
-  background: #3B82F6;
+  background: var(--ui-accent);
   color: #fff;
 }
 
@@ -429,7 +429,7 @@ input[type="radio"]:checked + .radio-btn,
 }
 
 .moodField label {
-  color: #A5ADBA;
+  color: var(--ui-text-3);
   font-size: 0.97em;
 }
 
@@ -492,7 +492,7 @@ input[type="radio"]:checked + .radio-btn,
 /* ---------- Shared window look (same in TradeModal, TradeView, DayNote):
    colours everywhere, shapes only above the phone layout. ---------- */
 .overlay {
-  background: rgba(5, 7, 12, 0.62);
+  background: var(--ui-backdrop);
   -webkit-backdrop-filter: blur(3px);
   backdrop-filter: blur(3px);
   animation: overlayIn 0.18s ease-out;
@@ -504,19 +504,19 @@ input[type="radio"]:checked + .radio-btn,
 }
 
 .modal {
-  background: linear-gradient(180deg, #1F2434 0%, #1B1F2C 120px);
-  color: var(--ui-text, #E5E7EB);
+  background: linear-gradient(180deg, var(--ui-card-top) 0%, var(--ui-popover) 120px);
+  color: var(--ui-text);
 }
 
 .headerRow {
   background: transparent;
-  border-bottom: 1px solid var(--ui-border, #2C3244);
+  border-bottom: 1px solid var(--ui-border);
 }
 
 .title {
   font-weight: 650;
   letter-spacing: -0.01em;
-  color: #fff;
+  color: var(--ui-strong);
 }
 
 .closeBtn {
@@ -526,13 +526,13 @@ input[type="radio"]:checked + .radio-btn,
   width: 34px;
   height: 34px;
   border-radius: 10px;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
   transition: background 0.15s, color 0.15s;
 }
 
 .closeBtn:hover {
-  background: rgba(255, 255, 255, 0.07);
-  color: #fff;
+  background: rgba(var(--ui-ink-rgb), 0.07);
+  color: var(--ui-strong);
 }
 
 .formField label,
@@ -541,28 +541,28 @@ input[type="radio"]:checked + .radio-btn,
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
 }
 
 .inputBubble,
 .actionInputBubble {
-  border: 1px solid var(--ui-border, #2C3244) !important;
+  border: 1px solid var(--ui-border) !important;
   border-radius: 10px !important;
-  background-color: var(--ui-input, #141822) !important;
-  color: #fff;
+  background-color: var(--ui-input) !important;
+  color: var(--ui-strong);
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 
 .inputBubble:focus,
 .actionInputBubble:focus {
-  border-color: rgba(59, 130, 246, 0.65) !important;
-  box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.15);
+  border-color: rgba(var(--ui-accent-rgb), 0.65) !important;
+  box-shadow: 0 0 0 3px rgba(var(--ui-accent-rgb), 0.15);
 }
 
 .saveBtn {
   border-radius: 10px;
   background: linear-gradient(180deg, #4F8DF7 0%, #3B82F6 100%);
-  box-shadow: 0 8px 20px rgba(59, 130, 246, 0.25), inset 0 1px 0 rgba(255, 255, 255, 0.18);
+  box-shadow: 0 8px 20px rgba(var(--ui-accent-rgb), 0.25), inset 0 1px 0 rgba(var(--ui-ink-rgb), 0.18);
 }
 
 .saveBtn:hover {
@@ -570,15 +570,15 @@ input[type="radio"]:checked + .radio-btn,
 }
 
 .dragging {
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(96, 165, 250, 0.35) !important;
+  box-shadow: 0 30px 80px rgba(var(--ui-shadow-rgb), calc(0.6 * var(--ui-shadow-k))), 0 0 0 1px rgba(var(--ui-accent-2-rgb), 0.35) !important;
   transition: none !important;
 }
 
 @media (min-width: 701px) {
   .modal {
-    border: 1px solid var(--ui-border, #2C3244);
+    border: 1px solid var(--ui-border);
     border-radius: 18px;
-    box-shadow: 0 30px 80px rgba(0, 0, 0, 0.55), inset 0 1px 0 rgba(255, 255, 255, 0.04);
+    box-shadow: 0 30px 80px rgba(var(--ui-shadow-rgb), calc(0.55 * var(--ui-shadow-k))), inset 0 1px 0 rgba(var(--ui-ink-rgb), 0.04);
     animation: windowIn 0.2s ease-out;
   }
 
@@ -601,7 +601,7 @@ input[type="radio"]:checked + .radio-btn,
     height: 4px;
     margin-left: -18px;
     border-radius: 4px;
-    background: rgba(255, 255, 255, 0.08);
+    background: rgba(var(--ui-ink-rgb), 0.08);
     pointer-events: none;
   }
 
@@ -623,7 +623,7 @@ input[type="radio"]:checked + .radio-btn,
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
 }
 
 .daySummary {
@@ -634,8 +634,8 @@ input[type="radio"]:checked + .radio-btn,
   margin: 4px 0 18px;
   padding: 10px 12px;
   border-radius: 12px;
-  background: rgba(245, 158, 11, 0.06);
-  border: 1px solid rgba(245, 158, 11, 0.2);
+  background: rgba(var(--ui-amber-rgb), 0.06);
+  border: 1px solid rgba(var(--ui-amber-rgb), 0.2);
 }
 
 .daySummaryLabel {
@@ -644,12 +644,12 @@ input[type="radio"]:checked + .radio-btn,
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: #FCD34D;
+  color: var(--ui-amber-text);
 }
 
 .daySummaryEmpty {
   font-size: 12.5px;
-  color: var(--ui-faint, #6B7280);
+  color: var(--ui-faint);
 }
 
 .dayChip {
@@ -658,14 +658,14 @@ input[type="radio"]:checked + .radio-btn,
   gap: 3px;
   padding: 3px 10px;
   border-radius: 999px;
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--ui-text-2, #C7CDD8);
+  background: rgba(var(--ui-ink-rgb), 0.05);
+  color: var(--ui-text-2);
   font-size: 12px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 
-.dayChipWin { background: rgba(34, 197, 94, 0.13); color: #4ADE80; }
-.dayChipLoss { background: rgba(239, 68, 68, 0.13); color: #F87171; }
-.dayWins { color: #4ADE80; }
-.dayLosses { color: #F87171; }
+.dayChipWin { background: rgba(var(--ui-green-rgb), 0.13); color: var(--ui-green); }
+.dayChipLoss { background: rgba(var(--ui-red-rgb), 0.13); color: var(--ui-red); }
+.dayWins { color: var(--ui-green); }
+.dayLosses { color: var(--ui-red); }

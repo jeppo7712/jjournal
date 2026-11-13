@@ -421,8 +421,8 @@ const Capital = () => {
         <span
           className={styles.virtualBadge}
           style={{
-            background: isVirtualAccount ? 'rgba(245, 158, 11, 0.15)' : 'rgba(34, 197, 94, 0.15)',
-            color: isVirtualAccount ? '#F59E0B' : '#22C55E',
+            background: isVirtualAccount ? 'rgba(var(--ui-amber-rgb), 0.15)' : 'rgba(var(--ui-green-rgb), 0.15)',
+            color: isVirtualAccount ? 'var(--ui-amber)' : 'var(--ui-green-2)',
           }}
         >
           {isVirtualAccount ? 'PAPER ACCOUNT' : 'REAL ACCOUNT'}
@@ -665,7 +665,7 @@ const Capital = () => {
               <input value={dividendForm.note} onChange={e => setDividendForm(p => ({ ...p, note: e.target.value }))} placeholder="optional" />
             </div>
             <div className={styles.formActions}>
-              <span style={{ fontSize: '0.85rem', color: '#A5ADBA' }}>
+              <span style={{ fontSize: '0.85rem', color: 'var(--ui-text-3)' }}>
                 Net: <span className={formNet >= 0 ? styles.positive : styles.negative}>{formatNumber(formNet, 2)} {dividendForm.currency}</span>
               </span>
               <span>

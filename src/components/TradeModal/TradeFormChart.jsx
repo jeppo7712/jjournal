@@ -7,6 +7,8 @@ import { resolveDisplayZone } from '../../utils/timezonePreference';
 import { getWebSocketUrl } from '../../utils/getWebSocketUrl';
 import { formatNumber } from '../../utils/numberFormat';
 import { timeframeLabel } from '../../utils/timeframeLabel';
+import useTheme from '../../utils/useTheme';
+import { themeColor } from '../../utils/theme';
 
 const TIMEFRAMES = ['1W', '1D', '4H', '1H', '15M', '5M', '1M'];
 
@@ -270,17 +272,25 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
   }, [symbol]);
   // --- END: WEBSOCKET IMPLEMENTATION ---
 
+  // The chart's colours from the theme's tokens (a canvas can't use CSS
+  // variables); a theme change recolours it in place.
+  const theme = useTheme();
+  const chartThemeOptions = () => ({
+    layout: { background: { color: themeColor('--primary-dark') }, textColor: themeColor('--ui-muted') },
+    rightPriceScale: { borderColor: themeColor('--ui-input') },
+  });
+  useEffect(() => { chartRef.current?.applyOptions(chartThemeOptions()); }, [theme]);
+
   // Create the chart once, on mount.
   useEffect(() => {
     if (!chartContainerRef.current || chartRef.current) return;
     const chart = createChart(chartContainerRef.current, {
       width: chartContainerRef.current.clientWidth,
       height: chartContainerRef.current.clientHeight,
-      layout: { background: { color: '#13161F' }, textColor: '#8B93A3' },
-      grid: { vertLines: { color: '#141822' }, horzLines: { color: '#141822' }, horzLinesVisible: false, vertLinesVisible: false },
+      ...chartThemeOptions(),
+      grid: { vertLines: { color: themeColor('--ui-input') }, horzLines: { color: themeColor('--ui-input') }, horzLinesVisible: false, vertLinesVisible: false },
       // Labels: see the effect below.
       timeScale: { timeVisible: true },
-      rightPriceScale: { borderColor: '#141822' },
       crosshair: { mode: 0 },
       autoSize: true,
     });
@@ -381,7 +391,7 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
           return {
             time: barTime,
             position: a.type === 'BUY' ? 'belowBar' : 'aboveBar',
-            color: a.type === 'BUY' ? '#FFFC33' : '#33FFFC',
+            color: a.type === 'BUY' ? themeColor('--ui-mark-buy') : themeColor('--ui-mark-sell'),
             shape: a.type === 'BUY' ? 'arrowUp' : 'arrowDown',
             text: `${a.type} ${a.quantity || ''} @ ${formatNumber(parseFloat(a.price), pricePrecision)}`,
             size: 1,
@@ -484,16 +494,16 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
           // overlay (chartMessageOverlay) sets the same z-index: 10 for
           // exactly this reason — dropped when this component was built from
           // scratch instead of sharing that CSS.
-          <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, background: '#13161F' }}>
+          <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, background: 'var(--primary-dark)' }}>
             <Oval height="40" width="40" color="#3B82F6" ariaLabel="loading-indicator" secondaryColor="#ccc" strokeWidth={4} strokeWidthSecondary={4} />
-            <p style={{ color: '#e0e2e6', fontSize: '0.9em', textAlign: 'center', padding: '0 20px' }}>
+            <p style={{ color: 'var(--ui-text-4)', fontSize: '0.9em', textAlign: 'center', padding: '0 20px' }}>
               {awaitingData ? `Fetching ${symbol} (${timeframeLabel(timeframe)}) data for the first time — this can take a bit…` : `Loading ${timeframeLabel(timeframe)} chart…`}
             </p>
           </div>
         )}
         {error && (
-          <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#13161F' }}>
-            <p style={{ color: '#EF4444' }}>{error}</p>
+          <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', alignItems: 'center', justifyContent: 'center', background: 'var(--primary-dark)' }}>
+            <p style={{ color: 'var(--accent-red)' }}>{error}</p>
           </div>
         )}
       </div>

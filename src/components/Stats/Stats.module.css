@@ -11,7 +11,7 @@
   padding: 4px 4px 24px;
   box-sizing: border-box;
   overflow-y: auto;
-  color: var(--ui-text, #E5E7EB);
+  color: var(--ui-text);
 }
 
 .statsLayout {
@@ -31,8 +31,8 @@
   flex-direction: column;
   gap: 10px;
   padding: 8px;
-  background: var(--ui-card-2, #1A1E2B);
-  border: 1px solid var(--ui-border, #2C3244);
+  background: var(--ui-card-2);
+  border: 1px solid var(--ui-border);
   border-radius: 16px;
   z-index: 5;
 }
@@ -49,7 +49,7 @@
   font-weight: 600;
   letter-spacing: 0.09em;
   text-transform: uppercase;
-  color: #5F6778;
+  color: var(--ui-dim);
 }
 
 .navButton {
@@ -61,7 +61,7 @@
   border: none;
   border-radius: 10px;
   background: transparent;
-  color: #A5ADBA;
+  color: var(--ui-text-3);
   font-size: 13.5px;
   font-weight: 500;
   text-align: left;
@@ -73,25 +73,25 @@
   flex: none;
   width: 15px;
   height: 15px;
-  color: var(--ui-faint, #6B7280);
+  color: var(--ui-faint);
   transition: color 0.15s;
 }
 
 @media (hover: hover) {
   .navButton:hover {
-    background: rgba(255, 255, 255, 0.04);
-    color: #fff;
+    background: rgba(var(--ui-ink-rgb), 0.04);
+    color: var(--ui-strong);
   }
 }
 
 .navActive,
 .navActive:hover {
-  background: rgba(59, 130, 246, 0.14) !important;
-  color: #fff;
+  background: rgba(var(--ui-accent-rgb), 0.14) !important;
+  color: var(--ui-strong);
 }
 
 .navActive .navIcon {
-  color: #60A5FA;
+  color: var(--ui-accent-2);
 }
 
 /* ---------- Header ---------- */
@@ -110,7 +110,7 @@
   flex-direction: column;
   gap: 12px;
   padding: 4px 0 12px;
-  background: linear-gradient(180deg, var(--primary-dark, #13161F) 85%, rgba(19, 22, 31, 0));
+  background: linear-gradient(180deg, var(--primary-dark) 85%, var(--ui-page-clear));
 }
 
 .sectionHeader {
@@ -126,13 +126,13 @@
   font-size: 1.55rem;
   font-weight: 650;
   letter-spacing: -0.01em;
-  color: #fff;
+  color: var(--ui-strong);
 }
 
 .sectionHeading p {
   margin: 4px 0 0;
   font-size: 0.9rem;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
 }
 
 .scopeControls {
@@ -153,18 +153,18 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ui-faint, #6B7280);
+  color: var(--ui-faint);
 }
 
 .scopeSelect {
   height: 34px;
   padding: 0 28px 0 12px;
-  border: 1px solid var(--ui-border, #2C3244);
+  border: 1px solid var(--ui-border);
   border-radius: 10px;
-  background: var(--ui-input, #141822) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%238B93A3'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/%3E%3C/svg%3E") no-repeat right 8px center / 15px;
+  background: var(--ui-input) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%238B93A3'%3E%3Cpath fill-rule='evenodd' d='M5.23 7.21a.75.75 0 011.06.02L10 11.17l3.71-3.94a.75.75 0 111.08 1.04l-4.25 4.5a.75.75 0 01-1.08 0l-4.25-4.5a.75.75 0 01.02-1.06z' clip-rule='evenodd'/%3E%3C/svg%3E") no-repeat right 8px center / 15px;
   -webkit-appearance: none;
   appearance: none;
-  color: #fff;
+  color: var(--ui-strong);
   font-size: 13px;
   font-weight: 600;
 }
@@ -172,7 +172,7 @@
 /* Which sub-accounts are in (the Dashboard's Sub-accounts toggle). */
 .scopeNote {
   margin: 0;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
   font-size: 12.5px;
 }
 
@@ -182,9 +182,9 @@
   gap: 10px;
   padding: 10px 14px;
   border-radius: 12px;
-  border: 1px solid rgba(245, 158, 11, 0.35);
-  background: rgba(245, 158, 11, 0.08);
-  color: #FDE68A;
+  border: 1px solid rgba(var(--ui-amber-rgb), 0.35);
+  background: rgba(var(--ui-amber-rgb), 0.08);
+  color: var(--ui-amber-text-2);
   font-size: 13px;
 }
 
@@ -192,11 +192,11 @@
   flex: none;
   width: 16px;
   height: 16px;
-  color: #F59E0B;
+  color: var(--ui-amber);
 }
 
 .filterWarning strong {
-  color: #FCD34D;
+  color: var(--ui-amber-text);
   margin-right: 4px;
 }
 
@@ -219,7 +219,7 @@
   margin: 0;
   font-size: 1.05rem;
   font-weight: 600;
-  color: #fff;
+  color: var(--ui-strong);
 }
 
 /* Stat tiles */
@@ -235,8 +235,8 @@
   gap: 8px;
   min-width: 0;
   padding: 14px 16px;
-  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
-  border: 1px solid var(--ui-border, #2C3244);
+  background: linear-gradient(180deg, var(--ui-card-top) 0%, var(--ui-card) 100%);
+  border: 1px solid var(--ui-border);
   border-radius: 14px;
   box-shadow: var(--ui-shadow);
   transition: border-color 0.15s, transform 0.12s;
@@ -244,7 +244,7 @@
 
 @media (hover: hover) {
   .statBox:hover {
-    border-color: #3A4258;
+    border-color: var(--ui-border-strong);
   }
 }
 
@@ -253,25 +253,25 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
 }
 
 .statValue {
   font-size: 1.35rem;
   font-weight: 700;
   letter-spacing: -0.01em;
-  color: #fff;
+  color: var(--ui-strong);
   font-variant-numeric: tabular-nums;
   word-break: break-word;
 }
 
 /* Money figures coloured by sign (see toneClass in Stats.jsx). */
 .valuePos {
-  color: #4ADE80;
+  color: var(--ui-green);
 }
 
 .valueNeg {
-  color: #F87171;
+  color: var(--ui-red);
 }
 
 /* Cards: charts and tables */
@@ -283,8 +283,8 @@
   gap: 10px;
   width: 100%;
   padding: 18px 20px 20px;
-  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
-  border: 1px solid var(--ui-border, #2C3244);
+  background: linear-gradient(180deg, var(--ui-card-top) 0%, var(--ui-card) 100%);
+  border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius, 16px);
   box-shadow: var(--ui-shadow);
   box-sizing: border-box;
@@ -301,7 +301,7 @@
   font-size: 1.05rem;
   font-weight: 600;
   text-align: left;
-  color: #fff;
+  color: var(--ui-strong);
 }
 
 .chartExplanation {
@@ -309,7 +309,7 @@
   max-width: 90ch;
   font-size: 0.85rem;
   line-height: 1.55;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
 }
 
 .chartCanvasWrapper {
@@ -346,7 +346,7 @@
   align-items: center;
   gap: 7px;
   font-size: 12px;
-  color: var(--ui-text-2, #C7CDD8);
+  color: var(--ui-text-2);
 }
 
 .chartKeyLine {
@@ -374,15 +374,15 @@
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: -0.02em;
-  color: var(--ui-text, #E5E7EB);
+  color: var(--ui-text);
 }
 
 .chartHeadValue.valuePos {
-  color: var(--ui-green, #4ADE80);
+  color: var(--ui-green);
 }
 
 .chartHeadValue.valueNeg {
-  color: var(--ui-red, #F87171);
+  color: var(--ui-red);
 }
 
 .chartHeadCaption {
@@ -390,7 +390,7 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ui-faint, #6B7280);
+  color: var(--ui-faint);
 }
 
 .chartOption {
@@ -399,13 +399,13 @@
   gap: 8px;
   align-self: flex-start;
   font-size: 12.5px;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
   cursor: pointer;
   user-select: none;
 }
 
 .chartOption input {
-  accent-color: var(--ui-accent, #3B82F6);
+  accent-color: var(--ui-accent);
   margin: 0;
 }
 
@@ -414,13 +414,13 @@
   padding: 48px 0;
   text-align: center;
   font-size: 0.9rem;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
 }
 
 /* "How it's calculated", folded away under the chart. */
 .chartInfo {
   margin-top: 2px;
-  border-top: 1px solid var(--ui-border-soft, rgba(255, 255, 255, 0.06));
+  border-top: 1px solid var(--ui-border-soft, rgba(var(--ui-ink-rgb), 0.06));
   padding-top: 10px;
 }
 
@@ -432,7 +432,7 @@
   list-style: none;
   font-size: 12px;
   font-weight: 500;
-  color: var(--ui-faint, #6B7280);
+  color: var(--ui-faint);
   user-select: none;
 }
 
@@ -455,7 +455,7 @@
 }
 
 .chartInfo summary:hover {
-  color: var(--ui-text-2, #C7CDD8);
+  color: var(--ui-text-2);
 }
 
 .chartInfo .chartExplanation {
@@ -493,7 +493,7 @@
   font-weight: 700;
   line-height: 1;
   letter-spacing: -0.02em;
-  color: var(--ui-text, #E5E7EB);
+  color: var(--ui-text);
 }
 
 .allocationCountLabel {
@@ -502,7 +502,7 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ui-faint, #6B7280);
+  color: var(--ui-faint);
 }
 
 .allocationLegend {
@@ -531,13 +531,13 @@
 
 .allocationSymbol {
   font-weight: 600;
-  color: var(--ui-text, #E5E7EB);
+  color: var(--ui-text);
 }
 
 .allocationBar {
   height: 6px;
   border-radius: 3px;
-  background: rgba(255, 255, 255, 0.05);
+  background: rgba(var(--ui-ink-rgb), 0.05);
   overflow: hidden;
 }
 
@@ -551,7 +551,7 @@
 .allocationPct {
   text-align: right;
   font-variant-numeric: tabular-nums;
-  color: var(--ui-text-2, #C7CDD8);
+  color: var(--ui-text-2);
 }
 
 .visualizations {
@@ -563,10 +563,10 @@
 .symbolSelector {
   max-width: 220px;
   padding: 8px 10px;
-  border: 1px solid var(--ui-border, #2C3244);
+  border: 1px solid var(--ui-border);
   border-radius: 10px;
-  background: var(--ui-input, #141822);
-  color: #fff;
+  background: var(--ui-input);
+  color: var(--ui-strong);
 }
 
 /* Tables (Settings' table look) */
@@ -583,16 +583,16 @@
   font-weight: 600;
   letter-spacing: 0.07em;
   text-transform: uppercase;
-  color: var(--ui-muted, #8B93A3);
-  background: rgba(255, 255, 255, 0.015);
-  border-bottom: 1px solid var(--ui-border, #2C3244);
+  color: var(--ui-muted);
+  background: rgba(var(--ui-ink-rgb), 0.015);
+  border-bottom: 1px solid var(--ui-border);
   white-space: nowrap;
 }
 
 .statsTable td {
   padding: 10px 14px;
-  color: var(--ui-text-2, #C7CDD8);
-  border-bottom: 1px solid var(--ui-border-soft, rgba(255, 255, 255, 0.05));
+  color: var(--ui-text-2);
+  border-bottom: 1px solid var(--ui-border-soft, rgba(var(--ui-ink-rgb), 0.05));
   font-variant-numeric: tabular-nums;
 }
 
@@ -602,16 +602,16 @@
 
 @media (hover: hover) {
   .statsTable tbody tr:hover td {
-    background: rgba(255, 255, 255, 0.025);
+    background: rgba(var(--ui-ink-rgb), 0.025);
   }
 }
 
 .errorContainer {
   padding: 20px;
-  border: 1px solid rgba(239, 68, 68, 0.4);
-  background: rgba(239, 68, 68, 0.1);
+  border: 1px solid rgba(var(--ui-red-rgb), 0.4);
+  background: rgba(var(--ui-red-rgb), 0.1);
   border-radius: 14px;
-  color: #FCA5A5;
+  color: var(--ui-red-text);
   text-align: center;
 }
 
@@ -628,8 +628,8 @@
   gap: 8px;
   flex-wrap: wrap;
   padding: 8px;
-  background: var(--ui-card-2, #1A1E2B);
-  border: 1px solid var(--ui-border, #2C3244);
+  background: var(--ui-card-2);
+  border: 1px solid var(--ui-border);
   border-radius: 14px;
 }
 
@@ -639,42 +639,42 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ui-faint, #6B7280);
+  color: var(--ui-faint);
 }
 
 .notesSortControls button {
   height: 32px;
   padding: 0 12px;
-  border: 1px solid var(--ui-border, #2C3244);
+  border: 1px solid var(--ui-border);
   border-radius: 999px;
-  background: var(--ui-input, #141822);
-  color: var(--ui-muted, #8B93A3);
+  background: var(--ui-input);
+  color: var(--ui-muted);
   font-size: 12.5px;
   font-weight: 600;
   transition: background 0.15s, border-color 0.15s, color 0.15s;
 }
 
 .notesSortControls button:hover {
-  color: #fff;
+  color: var(--ui-strong);
 }
 
 .notesSortControls button.activeSort {
-  background: rgba(59, 130, 246, 0.15);
-  border-color: rgba(59, 130, 246, 0.55);
-  color: #DBEAFE;
+  background: rgba(var(--ui-accent-rgb), 0.15);
+  border-color: rgba(var(--ui-accent-rgb), 0.55);
+  color: var(--ui-accent-3);
 }
 
 .notesSortControls .exportButton {
   margin-left: auto;
   border-radius: 10px;
-  background: rgba(34, 197, 94, 0.12);
-  border-color: rgba(34, 197, 94, 0.4);
-  color: #86EFAC;
+  background: rgba(var(--ui-green-rgb), 0.12);
+  border-color: rgba(var(--ui-green-rgb), 0.4);
+  color: var(--ui-green-text);
 }
 
 .notesSortControls .exportButton:hover {
-  background: rgba(34, 197, 94, 0.2);
-  color: #BBF7D0;
+  background: rgba(var(--ui-green-rgb), 0.2);
+  color: var(--ui-green-text-2);
 }
 
 .tradeNotesList {
@@ -686,8 +686,8 @@
 .tradeNoteCard {
   display: flex;
   flex-direction: column;
-  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
-  border: 1px solid var(--ui-border, #2C3244);
+  background: linear-gradient(180deg, var(--ui-card-top) 0%, var(--ui-card) 100%);
+  border: 1px solid var(--ui-border);
   border-radius: var(--ui-radius, 16px);
   box-shadow: var(--ui-shadow);
   overflow: hidden;
@@ -697,7 +697,7 @@
 
 @media (hover: hover) {
   .tradeNoteCard:hover {
-    border-color: rgba(59, 130, 246, 0.5);
+    border-color: rgba(var(--ui-accent-rgb), 0.5);
     transform: translateY(-1px);
   }
 }
@@ -708,7 +708,7 @@
   align-items: center;
   gap: 10px;
   padding: 12px 16px;
-  border-bottom: 1px solid var(--ui-border-soft, rgba(255, 255, 255, 0.05));
+  border-bottom: 1px solid var(--ui-border-soft, rgba(var(--ui-ink-rgb), 0.05));
 }
 
 .headerLeft,
@@ -721,7 +721,7 @@
 .symbolBadge {
   font-size: 15px;
   font-weight: 700;
-  color: #fff;
+  color: var(--ui-strong);
 }
 
 .sideBadge,
@@ -733,14 +733,14 @@
   font-weight: 700;
 }
 
-.sideBadge.long { background: rgba(34, 197, 94, 0.13); color: #4ADE80; }
-.sideBadge.short { background: rgba(239, 68, 68, 0.13); color: #F87171; }
-.pnlBadge.win { background: rgba(34, 197, 94, 0.13); color: #4ADE80; }
-.pnlBadge.loss { background: rgba(239, 68, 68, 0.13); color: #F87171; }
+.sideBadge.long { background: rgba(var(--ui-green-rgb), 0.13); color: var(--ui-green); }
+.sideBadge.short { background: rgba(var(--ui-red-rgb), 0.13); color: var(--ui-red); }
+.pnlBadge.win { background: rgba(var(--ui-green-rgb), 0.13); color: var(--ui-green); }
+.pnlBadge.loss { background: rgba(var(--ui-red-rgb), 0.13); color: var(--ui-red); }
 
 .dateBadge {
-  background: rgba(255, 255, 255, 0.05);
-  color: var(--ui-muted, #8B93A3);
+  background: rgba(var(--ui-ink-rgb), 0.05);
+  color: var(--ui-muted);
   font-weight: 600;
 }
 
@@ -755,7 +755,7 @@
   gap: 12px;
   margin-bottom: 10px;
   padding-bottom: 10px;
-  border-bottom: 1px solid var(--ui-border-soft, rgba(255, 255, 255, 0.05));
+  border-bottom: 1px solid var(--ui-border-soft, rgba(var(--ui-ink-rgb), 0.05));
 }
 
 .ratingInNotesLeft,
@@ -770,7 +770,7 @@
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
-  color: var(--ui-faint, #6B7280);
+  color: var(--ui-faint);
 }
 
 .starsInline {
@@ -780,7 +780,7 @@
 
 .starsInline .star {
   font-size: 14px;
-  color: #FCD34D;
+  color: var(--ui-amber-text);
 }
 
 .notesContentWrapper {
@@ -790,7 +790,7 @@
 }
 
 .notesContent {
-  color: var(--ui-text-2, #C7CDD8);
+  color: var(--ui-text-2);
   font-size: 13px;
   line-height: 1.6;
   word-break: break-word;
@@ -812,7 +812,7 @@
 
 .noNotesText {
   margin: 0;
-  color: var(--ui-faint, #6B7280);
+  color: var(--ui-faint);
 }
 
 .attachmentsPreview {
@@ -827,8 +827,8 @@
   height: 52px;
   border-radius: 10px;
   overflow: hidden;
-  border: 1px solid var(--ui-border, #2C3244);
-  background: var(--ui-input, #141822);
+  border: 1px solid var(--ui-border);
+  background: var(--ui-input);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -877,7 +877,7 @@
   .navGroup + .navGroup {
     padding-left: 6px;
     margin-left: 4px;
-    border-left: 1px solid var(--ui-border, #2C3244);
+    border-left: 1px solid var(--ui-border);
   }
 
   .navGroupLabel {
@@ -910,8 +910,8 @@
     top: -6px;
     padding: 6px 0 8px;
     gap: 8px;
-    background: var(--primary-dark, #13161F);
-    border-bottom: 1px solid var(--ui-border, #2C3244);
+    background: var(--primary-dark);
+    border-bottom: 1px solid var(--ui-border);
   }
 
   .sectionHeading {
@@ -939,9 +939,9 @@
     height: 38px;
     -webkit-appearance: none;
     appearance: none;
-    background: rgba(59, 130, 246, 0.16) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2393C5FD'><path d='M5.3 7.3a1 1 0 011.4 0L10 10.6l3.3-3.3a1 1 0 111.4 1.4l-4 4a1 1 0 01-1.4 0l-4-4a1 1 0 010-1.4z'/></svg>") no-repeat right 10px center / 16px;
-    color: #DBEAFE;
-    border: 1px solid rgba(59, 130, 246, 0.45);
+    background: rgba(var(--ui-accent-rgb), 0.16) url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 20' fill='%2393C5FD'><path d='M5.3 7.3a1 1 0 011.4 0L10 10.6l3.3-3.3a1 1 0 111.4 1.4l-4 4a1 1 0 01-1.4 0l-4-4a1 1 0 010-1.4z'/></svg>") no-repeat right 10px center / 16px;
+    color: var(--ui-accent-3);
+    border: 1px solid rgba(var(--ui-accent-rgb), 0.45);
     border-radius: 11px;
     padding: 0 32px 0 12px;
     font-size: 16px;
@@ -1035,7 +1035,7 @@
 .tagStatsNote,
 .tagStatsEmpty p {
   margin: 0;
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
   font-size: 13px;
   line-height: 1.5;
 }
@@ -1048,16 +1048,16 @@
 }
 
 .tagStatsSub {
-  color: var(--ui-muted, #8B93A3);
+  color: var(--ui-muted);
   font-size: 12px;
   font-weight: 400;
 }
 
 .tagTableWrap {
   overflow-x: auto;
-  border: 1px solid var(--ui-border, #2C3244);
+  border: 1px solid var(--ui-border);
   border-radius: 14px;
-  background: linear-gradient(180deg, var(--ui-card-top, #1F2434) 0%, var(--ui-card, #1D2130) 100%);
+  background: linear-gradient(180deg, var(--ui-card-top) 0%, var(--ui-card) 100%);
 }
 
 .tagTableWrap .statsTable td,
