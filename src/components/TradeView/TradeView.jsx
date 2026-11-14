@@ -8,7 +8,7 @@ import { useTags } from '../../context/TagsContext';
 import { TradeContext, calculateRisk, getEnabledTimeframesForSetting } from '../../context/TradeContext';
 import { DateTime } from 'luxon';
 import { sanitizeNotesHtml } from '../../utils/sanitizeHtml';
-import { getWebSocketUrl } from '../../utils/getWebSocketUrl';
+import useLiveSocket from '../../utils/useLiveSocket';
 import { loadStoredDisplayTimezone, storeDisplayTimezone, resolveDisplayZone, TimezonePicker } from '../../utils/timezonePreference';
 import useTheme from '../../utils/useTheme';
 import { themeColor, fillMarkColor, recolorFillMarks } from '../../utils/theme';
@@ -416,8 +416,8 @@ export default function TradeView({ trade, onClose, onEdit }) {
   const stopLossLineRef = useRef(null);
   const stopLossLineSeriesRef = useRef(null);
   const adjustmentMapRef = useRef(new Map());
-  const wsRef = useRef(null);
   const onMessageRef = useRef(); // To hold the websocket message handler
+  const onResumeRef = useRef(null); // reloads stored bars after the connection comes back
   // Whether we've auto-centered the view at least once for the current
   // chart generation (symbol/timeframe). Only the very first successful load
   // auto-centers on the trade — every update after that (background load,
@@ -1095,57 +1095,14 @@ const [dataVersion, setDataVersion] = useState(0);
         console.error('[TradeView] Error parsing WebSocket message:', err);
       }
     };
+    // Bars stored while the connection was down were never announced.
+    onResumeRef.current = () => {
+      if (showChart && trade?.symbol && initialDataLoaded) fetchChartDataLogic(false, { storedOnly: true });
+    };
   }, [showChart, trade, timeframe, fetchChartDataLogic, initialDataLoaded]); // Dependencies for the handler logic
 
-  // 2. Set up the WebSocket connection. This effect now has a stable dependency array,
-  //    so it only runs when the trade symbol changes, preventing unnecessary reconnections.
-  useEffect(() => {
-    // Don't connect if there's no trade symbol
-    if (!trade?.symbol) {
-      return;
-    }
-
-    const ws = new WebSocket(getWebSocketUrl('/ws'));
-    wsRef.current = ws;
-
-    ws.onopen = () => {
-    };
-    
-    // The onmessage handler simply calls the function stored in our ref
-    ws.onmessage = (event) => {
-      if(onMessageRef.current) {
-        onMessageRef.current(event);
-      }
-    };
-
-    ws.onclose = () => {
-    };
-    
-    ws.onerror = (err) => {
-      console.error('[TradeView] WebSocket error:', err);
-    };
-
-    // Cleanup function to close the WebSocket connection when the component unmounts or the symbol changes
-    return () => {
-      if (wsRef.current) {
-        // Clear event handlers to prevent memory leaks and errors on a closed socket
-        wsRef.current.onopen = null;
-        wsRef.current.onmessage = null;
-        wsRef.current.onerror = null;
-        wsRef.current.onclose = null;
-        
-        // Close the connection if it's open or connecting
-        if (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING) {
-          try {
-            wsRef.current.close();
-          } catch (e) {
-            console.warn('[TradeView] Error during explicit WebSocket close:', e);
-          }
-        }
-        wsRef.current = null;
-      }
-    };
-  }, [trade?.symbol]); // Stable dependency: only reconnect if the symbol changes
+  // 2. The connection itself, reopened when it drops (useLiveSocket).
+  useLiveSocket(!!trade?.symbol, onMessageRef, onResumeRef);
   
   // --- END: STABLE WEBSOCKET IMPLEMENTATION ---
 
