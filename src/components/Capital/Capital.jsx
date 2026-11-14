@@ -6,6 +6,7 @@ import { formatNumber } from '../../utils/numberFormat';
 import { notify, confirmDialog, promptDialog } from '../common/Dialogs';
 import BrokerActivity from './BrokerActivity';
 import AccountOptions from '../common/AccountOptions';
+import { newSaveKey, isNetworkError } from '../../utils/saveKey';
 
 const apiBaseUrl = process.env.REACT_APP_API_URL || '';
 
@@ -170,11 +171,25 @@ const Capital = () => {
     try { await fn(e); } finally { savingRef.current = false; }
   };
 
+  // One save key per form until the server answers (src/utils/saveKey.js):
+  // Save pressed again after a lost answer doesn't book the money twice.
+  const saveKeys = useRef({});
+  const book = async (form, url, init) => {
+    const key = (saveKeys.current[form] ||= newSaveKey());
+    const res = await fetch(url, { ...init, headers: { ...init.headers, 'X-Save-Key': key } });
+    delete saveKeys.current[form]; // answered: the next save is a new one
+    if (res.status === 409) fetchAll(); // saved once already: show it
+    return res;
+  };
+  const bookingError = err => (isNetworkError(err)
+    ? 'The journal could not be reached, so this may not be saved. Check the connection and press Save again: it is never booked twice.'
+    : err.message);
+
   const submitTransaction = oneAtATime(async (e) => {
     e.preventDefault();
     if (!txForm.amount || Number(txForm.amount) <= 0) { notify('Enter a positive amount.'); return; }
     try {
-      const res = await fetch(`${apiBaseUrl}/api/cash-transactions`, {
+      const res = await book('transaction', `${apiBaseUrl}/api/cash-transactions`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
         body: JSON.stringify({ ...txForm, amount: Number(txForm.amount), date_time: new Date(txForm.date_time).toISOString() }),
@@ -182,7 +197,7 @@ const Capital = () => {
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to save transaction');
       setTxForm(prev => ({ ...prev, amount: '', note: '' }));
       fetchAll();
-    } catch (err) { notify(err.message); }
+    } catch (err) { notify(bookingError(err)); }
   });
 
   const submitTransfer = oneAtATime(async (e) => {
@@ -190,7 +205,7 @@ const Capital = () => {
     if (!transferForm.to_account_id) { notify('Choose a destination account.'); return; }
     if (!transferForm.amount || Number(transferForm.amount) <= 0) { notify('Enter a positive amount.'); return; }
     try {
-      const res = await fetch(`${apiBaseUrl}/api/cash-transactions/transfer`, {
+      const res = await book('transfer', `${apiBaseUrl}/api/cash-transactions/transfer`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
         body: JSON.stringify({ ...transferForm, amount: Number(transferForm.amount), date_time: new Date(transferForm.date_time).toISOString() }),
@@ -198,7 +213,7 @@ const Capital = () => {
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to save transfer');
       setTransferForm(prev => ({ ...prev, amount: '', note: '' }));
       fetchAll();
-    } catch (err) { notify(err.message); }
+    } catch (err) { notify(bookingError(err)); }
   });
 
   const submitExchange = oneAtATime(async (e) => {
@@ -210,7 +225,7 @@ const Capital = () => {
       notify('From/To currencies must differ — use a plain deposit/withdrawal for same-currency amounts.'); return;
     }
     try {
-      const res = await fetch(`${apiBaseUrl}/api/cash-transactions/exchange`, {
+      const res = await book('exchange', `${apiBaseUrl}/api/cash-transactions/exchange`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
         body: JSON.stringify({
@@ -223,7 +238,7 @@ const Capital = () => {
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to save exchange');
       setExchangeForm(prev => ({ ...prev, from_amount: '', to_amount: '', note: '' }));
       fetchAll();
-    } catch (err) { notify(err.message); }
+    } catch (err) { notify(bookingError(err)); }
   });
 
   const deleteTransaction = async (id) => {
@@ -266,7 +281,7 @@ const Capital = () => {
     if (!gross) { notify('Enter the gross amount.'); return; }
     if (tax < 0 || tax > Math.abs(gross)) { notify('Tax withheld must be between 0 and the gross amount.'); return; }
     try {
-      const res = await fetch(`${apiBaseUrl}/api/dividends${editingDividendId ? `/${editingDividendId}` : ''}`, {
+      const res = await book('dividend', `${apiBaseUrl}/api/dividends${editingDividendId ? `/${editingDividendId}` : ''}`, {
         method: editingDividendId ? 'PUT' : 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
         body: JSON.stringify({
@@ -279,7 +294,7 @@ const Capital = () => {
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to save dividend');
       resetDividendForm();
       fetchAll();
-    } catch (err) { notify(err.message); }
+    } catch (err) { notify(bookingError(err)); }
   });
 
   const deleteDividend = async (d) => {
@@ -310,7 +325,7 @@ const Capital = () => {
       return;
     }
     try {
-      const res = await fetch(`${apiBaseUrl}/api/holdings`, {
+      const res = await book('holding', `${apiBaseUrl}/api/holdings`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
         body: JSON.stringify({
@@ -325,7 +340,7 @@ const Capital = () => {
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to save holding');
       setHoldingForm(prev => ({ ...prev, name: '', face_value: '', purchase_price: '', maturity_date: '', coupon_rate: '', coupon_frequency: '', notes: '' }));
       fetchAll();
-    } catch (err) { notify(err.message); }
+    } catch (err) { notify(bookingError(err)); }
   });
 
   const redeemHolding = async (holding) => {
@@ -336,14 +351,14 @@ const Capital = () => {
     const amount = Number(String(input).trim().replace(',', '.'));
     if (!amount || amount <= 0) { notify('Enter a positive amount.'); return; }
     try {
-      const res = await fetch(`${apiBaseUrl}/api/holdings/${holding.id}/redeem`, {
+      const res = await book(`redeem-${holding.id}`, `${apiBaseUrl}/api/holdings/${holding.id}/redeem`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json', 'X-Account-ID': currentAccountId },
         body: JSON.stringify({ amount }),
       });
       if (!res.ok) throw new Error((await res.json()).error || 'Failed to redeem');
       fetchAll();
-    } catch (err) { notify(err.message); }
+    } catch (err) { notify(bookingError(err)); }
   };
 
   const deleteHolding = async (id) => {
