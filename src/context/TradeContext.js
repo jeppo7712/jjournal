@@ -803,6 +803,9 @@ export const TradeProvider = ({ children }) => {
       try {
         await fetch(`${process.env.REACT_APP_API_URL}/api/accounts/${currentAccountId}/filters`, {
           method: 'PUT',
+          // Outlives the page: the flush below runs as it closes, and a
+          // plain request is cancelled with it.
+          keepalive: true,
           headers: {
             'Content-Type': 'application/json',
             'X-Account-ID': currentAccountId,
