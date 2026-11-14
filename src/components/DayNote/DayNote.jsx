@@ -75,7 +75,7 @@ function SegmentedRadio({ name, value, onChange, options }) {
             htmlFor={`${name}-${idx}`}
             className={`${styles['radio-btn']}${value === idx ? ' selected' : ''}`}
           >
-            <span className="inline-block justify-center align-middle">{icon}</span>
+            {icon}
           </label>
         </React.Fragment>
       ))}
