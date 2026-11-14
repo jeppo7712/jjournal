@@ -1056,7 +1056,7 @@ select.inputBubble {
     -webkit-appearance: none;
     appearance: none;
     background: var(--ui-accent) url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%23fff"><path d="M5.3 7.3a1 1 0 011.4 0L10 10.6l3.3-3.3a1 1 0 111.4 1.4l-4 4a1 1 0 01-1.4 0l-4-4a1 1 0 010-1.4z"/></svg>') no-repeat right 12px center / 16px;
-    color: var(--ui-strong);
+    color: #fff; /* on the blue, in both themes */
     border: none;
     border-radius: 12px;
     padding: 9px 36px 9px 16px;

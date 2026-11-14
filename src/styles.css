@@ -638,8 +638,8 @@ input::-webkit-date-and-time-value {
 
   table.responsive-table tr {
     display: block;
-    background: #232837 !important;
-    border: 1px solid #32384a;
+    background: var(--ui-section) !important;
+    border: 1px solid var(--ui-border-2);
     border-radius: 10px;
     margin-bottom: 10px;
     padding: 6px 0;
@@ -661,7 +661,7 @@ input::-webkit-date-and-time-value {
      stay together on the right. */
   table.responsive-table td::before {
     content: attr(data-label);
-    color: #9CA3AF;
+    color: var(--text-secondary);
     font-size: 0.85em;
     text-align: left;
     flex-shrink: 0;
