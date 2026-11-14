@@ -195,12 +195,36 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
         return rows.map(r => r.trade_id);
     }
 
+    // A new trade's save is answered once. The form sends a key of its own
+    // (saveKey); when the trade went in but the answer was lost on the way
+    // back (a phone's connection dropping), pressing Save again sent a second
+    // copy, fills and all. A repeat of a key gets the trade already made
+    // (repeated: true), and the form saves its current contents onto it.
+    // Kept in memory for a day: long enough for any retry.
+    const tradeBySaveKey = new Map(); // key -> { at, tradeId: Promise<number|null> }
+    const SAVE_KEY_TTL_MS = 24 * 60 * 60 * 1000;
+
     // Optimized POST /trades: bulk insert trade_actions, journal, attachments update
     router.post('/trades', async (req, res) => {
-        const client = await pool.connect();
+        const accountId = req.accountId;
+        const saveKey = typeof req.body.saveKey === 'string' && req.body.saveKey && req.body.saveKey.length <= 100
+            ? `${accountId}:${req.body.saveKey}` : null;
+        if (saveKey && tradeBySaveKey.has(saveKey)) {
+            // A first attempt still running is waited for.
+            const tradeId = await tradeBySaveKey.get(saveKey).tradeId;
+            if (tradeId) return res.json({ success: true, id: tradeId, repeated: true });
+        }
+        let settle = () => {};
+        if (saveKey) {
+            const now = Date.now();
+            for (const [key, entry] of tradeBySaveKey) if (now - entry.at > SAVE_KEY_TTL_MS) tradeBySaveKey.delete(key);
+            tradeBySaveKey.set(saveKey, { at: now, tradeId: new Promise(resolve => { settle = resolve; }) });
+        }
+        let createdId = null;
+        let client;
         try {
+            client = await pool.connect();
             const { type, symbol, target, stopLoss, tickSize, tickValue, contract_month, actions, journal, attachments } = req.body;
-            const accountId = req.accountId;
 
             const badFill = invalidActions(actions);
             if (badFill) return res.status(400).json({ error: badFill });
@@ -258,15 +282,19 @@ module.exports = (pool, upload, broadcastStatus, uuidv4) => {
             }
 
             await client.query('COMMIT');
+            createdId = tradeId;
             broadcastStatus(uuidv4(), `Created trade ID ${tradeId} for ${symbol}`, 'success');
             res.json({ success: true, id: tradeId });
         } catch (err) {
-            await client.query('ROLLBACK');
+            if (client) await client.query('ROLLBACK').catch(() => {});
             broadcastStatus(uuidv4(), `Error creating trade: ${err.message}`, 'error');
             logger.error('Error creating trade:', err);
             res.status(500).json({ error: err.message });
         } finally {
-            client.release();
+            if (client) client.release();
+            // Nothing made (refused or failed): a retry is a fresh attempt.
+            settle(createdId);
+            if (saveKey && !createdId) tradeBySaveKey.delete(saveKey);
         }
     });
 

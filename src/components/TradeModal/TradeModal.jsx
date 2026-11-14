@@ -913,6 +913,10 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
   // dialog's Save) posted the same new trade twice, fills and all.
   const savingRef = useRef(false);
   const [saving, setSaving] = useState(false);
+  // This form's key for a new trade's save (see POST /trades): a retry
+  // after a lost answer gets the trade already made, not a second copy.
+  // Not crypto.randomUUID: Safari only has it over https.
+  const saveKeyRef = useRef(`${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`);
   async function saveTrade() {
     if (savingRef.current) return;
     savingRef.current = true;
@@ -920,7 +924,12 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
     try {
       await doSaveTrade();
     } catch (err) {
-      notify(`Error saving trade: ${err.message}`);
+      // fetch fails with a TypeError when the server can't be reached:
+      // "Load failed" (Safari), "Failed to fetch" (Chrome), "NetworkError
+      // when attempting to fetch resource." (Firefox).
+      notify(err instanceof TypeError && /load failed|failed to fetch|networkerror/i.test(err.message)
+        ? 'The journal could not be reached, so the trade may not be saved. Check the connection and press Save again: it is never saved twice.'
+        : `Error saving trade: ${err.message}`);
     } finally {
       savingRef.current = false;
       setSaving(false);
@@ -965,14 +974,26 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
       ? `${process.env.REACT_APP_API_URL}/api/trades/${trade.id}`
       : `${process.env.REACT_APP_API_URL}/api/trades`;
     const method = isEditMode ? 'PUT' : 'POST';
-    const resp = await fetch(url, {
+    let resp = await fetch(url, {
       method,
       headers: {
         'Content-Type': 'application/json',
         'X-Account-ID': tradeAccountId,
       },
-      body: JSON.stringify(payload)
+      body: JSON.stringify(isEditMode ? payload : { ...payload, saveKey: saveKeyRef.current })
     });
+    if (resp.ok && !isEditMode) {
+      // An earlier attempt already made this trade (its answer was lost):
+      // what's in the form now goes onto that trade.
+      const created = await resp.clone().json().catch(() => ({}));
+      if (created.repeated && created.id) {
+        resp = await fetch(`${process.env.REACT_APP_API_URL}/api/trades/${created.id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json', 'X-Account-ID': tradeAccountId },
+          body: JSON.stringify({ ...payload, id: created.id }),
+        });
+      }
+    }
     if (resp.ok) {
       refreshTrades();
       refreshTags(); // the tags' trade counts
