@@ -2,6 +2,7 @@ import React, { useContext, useState, useCallback, useRef, useEffect, useLayoutE
 import { createPortal } from 'react-dom';
 import useDraggableWindow from '../../utils/useDraggableWindow';
 import useScrollLock from '../../utils/useScrollLock';
+import { newSaveKey, isNetworkError } from '../../utils/saveKey';
 import AppWindow from '../common/AppWindow';
 import ReactQuill from 'react-quill';
 import TradeChecklist from './TradeChecklist';
@@ -915,8 +916,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
   const [saving, setSaving] = useState(false);
   // This form's key for a new trade's save (see POST /trades): a retry
   // after a lost answer gets the trade already made, not a second copy.
-  // Not crypto.randomUUID: Safari only has it over https.
-  const saveKeyRef = useRef(`${Date.now().toString(36)}-${Math.random().toString(36).slice(2)}${Math.random().toString(36).slice(2)}`);
+  const saveKeyRef = useRef(newSaveKey());
   async function saveTrade() {
     if (savingRef.current) return;
     savingRef.current = true;
@@ -924,10 +924,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
     try {
       await doSaveTrade();
     } catch (err) {
-      // fetch fails with a TypeError when the server can't be reached:
-      // "Load failed" (Safari), "Failed to fetch" (Chrome), "NetworkError
-      // when attempting to fetch resource." (Firefox).
-      notify(err instanceof TypeError && /load failed|failed to fetch|networkerror/i.test(err.message)
+      notify(isNetworkError(err)
         ? 'The journal could not be reached, so the trade may not be saved. Check the connection and press Save again: it is never saved twice.'
         : `Error saving trade: ${err.message}`);
     } finally {

@@ -4,6 +4,7 @@ const { logger } = require('../modules/logger.js');
 const { processHoldingsAccrual } = require('../modules/holdingsAccrual.js');
 const { syncDividendLedger } = require('../modules/dividends.js');
 const { resettleTrades } = require('../modules/tradeSettlement.js');
+const { saveOnce } = require('../modules/saveOnce.js');
 
 // Cash ledger + non-trade holdings (T-bills/bonds). See
 // docs/CAPITAL_TRACKING_DESIGN.md for the design this implements.
@@ -16,6 +17,9 @@ const { resettleTrades } = require('../modules/tradeSettlement.js');
 // cash_transactions/holdings — every transaction under an account is
 // whatever that account is, permanently, not a per-transaction choice.
 module.exports = (pool, broadcastStatus, uuidv4) => {
+    // Bookings answered once per form save (X-Save-Key): a retry after a
+    // lost answer doesn't book the same money twice.
+    const once = saveOnce();
 
     // --- Cash transactions ---
 
@@ -50,7 +54,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
     // POST /cash-transactions — deposit / withdrawal / interest / other.
     // Not for transfers (see /cash-transactions/transfer) or trade
     // settlements (created automatically by routes/trades.js).
-    router.post('/cash-transactions', async (req, res) => {
+    router.post('/cash-transactions', once, async (req, res) => {
         const { type, amount, currency, date_time, note } = req.body;
         const allowedTypes = ['DEPOSIT', 'WITHDRAWAL', 'INTEREST', 'FEE', 'OTHER'];
         if (!allowedTypes.includes(type)) {
@@ -81,7 +85,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
     // to_account_id is the destination. Creates a matched TRANSFER_OUT /
     // TRANSFER_IN pair, linked via transfer_pair_id, so a transfer is always
     // a traceable, balanced two-sided entry rather than one free-floating row.
-    router.post('/cash-transactions/transfer', async (req, res) => {
+    router.post('/cash-transactions/transfer', once, async (req, res) => {
         const { to_account_id, amount, currency, date_time, note } = req.body;
         if (!to_account_id) {
             return res.status(400).json({ error: 'to_account_id is required' });
@@ -131,7 +135,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
     // the currency differs between the two legs instead of the account.
     // to_amount is whatever you actually received, not computed from a rate
     // — the implied rate is just to_amount/from_amount, no rate lookup needed.
-    router.post('/cash-transactions/exchange', async (req, res) => {
+    router.post('/cash-transactions/exchange', once, async (req, res) => {
         const { from_amount, from_currency, to_amount, to_currency, date_time, note } = req.body;
         if (typeof from_amount !== 'number' || from_amount <= 0 || typeof to_amount !== 'number' || to_amount <= 0) {
             return res.status(400).json({ error: 'from_amount and to_amount (positive numbers) are required' });
@@ -388,7 +392,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
     });
 
     // POST /dividends — a dividend entered by hand.
-    router.post('/dividends', async (req, res) => {
+    router.post('/dividends', once, async (req, res) => {
         const parsed = parseDividendBody(req.body);
         if (parsed.error) return res.status(400).json({ error: parsed.error });
         const client = await pool.connect();
@@ -538,7 +542,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
     // POST /holdings — purchasing a holding also debits cash automatically,
     // same reasoning as trade settlement: one action, not two records to
     // keep in sync by hand.
-    router.post('/holdings', async (req, res) => {
+    router.post('/holdings', once, async (req, res) => {
         const {
             type, name, currency, face_value, purchase_price, purchase_date,
             maturity_date, coupon_rate, coupon_frequency, notes,
@@ -632,7 +636,7 @@ module.exports = (pool, broadcastStatus, uuidv4) => {
     // cash for the redemption amount (face value by default, or a specific
     // amount if provided — e.g. a bond sold before maturity at a different
     // price, or a final coupon added on top of face value).
-    router.post('/holdings/:id/redeem', async (req, res) => {
+    router.post('/holdings/:id/redeem', once, async (req, res) => {
         const { id } = req.params;
         const { amount, date_time, status } = req.body;
         const client = await pool.connect();
