@@ -8,7 +8,7 @@ import { getWebSocketUrl } from '../../utils/getWebSocketUrl';
 import { formatNumber } from '../../utils/numberFormat';
 import { timeframeLabel } from '../../utils/timeframeLabel';
 import useTheme from '../../utils/useTheme';
-import { themeColor } from '../../utils/theme';
+import { themeColor, fillMarkColor, recolorFillMarks } from '../../utils/theme';
 
 const TIMEFRAMES = ['1W', '1D', '4H', '1H', '15M', '5M', '1M'];
 
@@ -279,7 +279,10 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
     layout: { background: { color: themeColor('--primary-dark') }, textColor: themeColor('--ui-muted') },
     rightPriceScale: { borderColor: themeColor('--ui-input') },
   });
-  useEffect(() => { chartRef.current?.applyOptions(chartThemeOptions()); }, [theme]);
+  useEffect(() => {
+    chartRef.current?.applyOptions(chartThemeOptions());
+    recolorFillMarks(candlestickSeriesRef.current);
+  }, [theme]);
 
   // Create the chart once, on mount.
   useEffect(() => {
@@ -391,7 +394,7 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
           return {
             time: barTime,
             position: a.type === 'BUY' ? 'belowBar' : 'aboveBar',
-            color: a.type === 'BUY' ? themeColor('--ui-mark-buy') : themeColor('--ui-mark-sell'),
+            color: fillMarkColor(a.type),
             shape: a.type === 'BUY' ? 'arrowUp' : 'arrowDown',
             text: `${a.type} ${a.quantity || ''} @ ${formatNumber(parseFloat(a.price), pricePrecision)}`,
             size: 1,
