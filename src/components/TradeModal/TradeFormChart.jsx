@@ -4,7 +4,7 @@ import { createChart } from 'lightweight-charts';
 import { Oval } from 'react-loader-spinner';
 import styles from './TradeModal.module.css';
 import { resolveDisplayZone } from '../../utils/timezonePreference';
-import { getWebSocketUrl } from '../../utils/getWebSocketUrl';
+import useLiveSocket from '../../utils/useLiveSocket';
 import { formatNumber } from '../../utils/numberFormat';
 import { timeframeLabel } from '../../utils/timeframeLabel';
 import useTheme from '../../utils/useTheme';
@@ -82,8 +82,8 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
   // render effect to decide whether to auto-center (initial) or preserve
   // whatever the user's currently looking at (full).
   const loadPhaseRef = useRef('initial');
-  const wsRef = useRef(null);
   const onMessageRef = useRef(null);
+  const onResumeRef = useRef(null);
   // Aborts any in-flight fetch belonging to a previous symbol/type/timeframe
   // whenever those change — without this, a still-in-flight background fetch
   // from the timeframe the user just switched away from lands later and its
@@ -247,29 +247,13 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
         console.error('[TradeFormChart] Error parsing WebSocket message:', err);
       }
     };
+    // Bars stored while the connection was down were never announced.
+    onResumeRef.current = () => {
+      if (symbol && initialDataLoaded) fetchChartDataLogic(false, { storedOnly: true });
+    };
   }, [symbol, timeframe, fetchChartDataLogic, initialDataLoaded]);
 
-  useEffect(() => {
-    if (!symbol) return;
-    const ws = new WebSocket(getWebSocketUrl('/ws'));
-    wsRef.current = ws;
-    ws.onopen = () => {};
-    ws.onmessage = (event) => { if (onMessageRef.current) { onMessageRef.current(event); } };
-    ws.onclose = () => {};
-    ws.onerror = (err) => { console.error('[TradeFormChart] WebSocket error:', err); };
-    return () => {
-      if (wsRef.current) {
-        wsRef.current.onopen = null;
-        wsRef.current.onmessage = null;
-        wsRef.current.onerror = null;
-        wsRef.current.onclose = null;
-        if (wsRef.current.readyState === WebSocket.OPEN || wsRef.current.readyState === WebSocket.CONNECTING) {
-          try { wsRef.current.close(); } catch (e) { console.warn('[TradeFormChart] Error during explicit WebSocket close:', e); }
-        }
-        wsRef.current = null;
-      }
-    };
-  }, [symbol]);
+  useLiveSocket(!!symbol, onMessageRef, onResumeRef);
   // --- END: WEBSOCKET IMPLEMENTATION ---
 
   // The chart's colours from the theme's tokens (a canvas can't use CSS
