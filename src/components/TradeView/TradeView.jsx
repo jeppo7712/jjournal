@@ -11,7 +11,7 @@ import { sanitizeNotesHtml } from '../../utils/sanitizeHtml';
 import { getWebSocketUrl } from '../../utils/getWebSocketUrl';
 import { loadStoredDisplayTimezone, storeDisplayTimezone, resolveDisplayZone, TimezonePicker } from '../../utils/timezonePreference';
 import useTheme from '../../utils/useTheme';
-import { themeColor } from '../../utils/theme';
+import { themeColor, fillMarkColor, recolorFillMarks } from '../../utils/theme';
 import styles from './TradeView.module.css';
 import { formatMoney, currencyMark } from '../../utils/formatMoney';
 import { formatNumber } from '../../utils/numberFormat';
@@ -406,8 +406,11 @@ export default function TradeView({ trade, onClose, onEdit }) {
     layout: { background: { color: themeColor('--primary-dark') }, textColor: themeColor('--ui-muted') },
     rightPriceScale: { borderColor: themeColor('--ui-input') },
   });
-  useEffect(() => { chartRef.current?.applyOptions(chartThemeOptions()); }, [theme]);
   const candlestickSeriesRef = useRef(null);
+  useEffect(() => {
+    chartRef.current?.applyOptions(chartThemeOptions());
+    recolorFillMarks(candlestickSeriesRef.current);
+  }, [theme]);
   const avgPriceSeriesRef = useRef(null);
   const avgExitPriceSeriesRef = useRef(null);
   const stopLossLineRef = useRef(null);
@@ -958,7 +961,7 @@ const [dataVersion, setDataVersion] = useState(0);
               return {
                 time: barTime,
                 position: action.type === 'BUY' ? 'belowBar' : 'aboveBar',
-                color: action.type === 'BUY' ? themeColor('--ui-mark-buy') : themeColor('--ui-mark-sell'),
+                color: fillMarkColor(action.type),
                 shape: action.type === 'BUY' ? 'arrowUp' : 'arrowDown',
                 text: `${action.type} ${formatQuantity(action.quantity)} @ ${formatNumber(adjustedPrice, pricePrecision)}`,
                 size: 1,

@@ -101,3 +101,22 @@ export function themeHex(name) {
   const value = themeColor(name);
   return /^#[0-9a-f]{3}$/i.test(value) ? `#${value.slice(1).split('').map(c => c + c).join('')}` : value;
 }
+
+// A trade chart's arrow for a fill (lightweight-charts markers): a buy's
+// points up, a sell's down, each in its theme colour.
+export function fillMarkColor(type) {
+  return themeColor(type === 'BUY' ? '--ui-mark-buy' : '--ui-mark-sell');
+}
+
+// Recolours the arrows already on a chart after a theme change: their colour
+// was read when they were set, so a chart open across the change kept the
+// old theme's (bright yellow on a light chart).
+export function recolorFillMarks(series) {
+  const marks = typeof series?.markers === 'function' ? series.markers() : [];
+  if (!marks.length) return;
+  series.setMarkers(marks.map(m => (
+    m.shape === 'arrowUp' ? { ...m, color: fillMarkColor('BUY') }
+      : m.shape === 'arrowDown' ? { ...m, color: fillMarkColor('SELL') }
+        : m
+  )));
+}
