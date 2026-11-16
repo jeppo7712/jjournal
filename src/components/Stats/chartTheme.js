@@ -196,8 +196,6 @@ export const baseOptions = ({ tooltip = {}, scales, multi = false, ...rest } = {
 
 // --- Number and date formatting for axes and tooltips ---
 
-export const signed = (value, decimals = 2) => `${value > 0 ? '+' : ''}${formatNumber(value, decimals)}`;
-
 export const percentTick = value => `${formatNumber(value, Math.abs(value) >= 10 || Number.isInteger(value) ? 0 : 1)}%`;
 
 // Compact money for an axis: $950, $12.5k, $1.2M.

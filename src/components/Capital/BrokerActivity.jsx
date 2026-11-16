@@ -40,7 +40,7 @@ function formatShortDate(iso) {
   return new Date(y, m - 1, d).toLocaleDateString(undefined, { day: 'numeric', month: 'short' });
 }
 
-const amountText = (amount, currency) => `${Number(amount) >= 0 ? '+' : ''}${formatNumber(Number(amount), 2)} ${currency}`;
+const amountText = (amount, currency) => `${formatNumber(Number(amount), 2)} ${currency}`;
 
 // What IBKR reported for a top-level account mapped to an IBKR account:
 // fees, interest, dividends and tax, deposits and withdrawals. See
@@ -125,7 +125,7 @@ const BrokerActivity = ({ accountId, accounts, onLedgerChange }) => {
   };
 
   const align = async (b) => {
-    const signed = `${b.unexplained > 0 ? '+' : ''}${formatNumber(b.unexplained, 2)} ${b.currency}`;
+    const signed = `${formatNumber(b.unexplained, 2)} ${b.currency}`;
     if (!await confirmDialog(
       `Book an adjustment of ${signed} on ${formatISODate(b.asOf)}, so the journal's ${b.currency} cash matches IBKR's? It shows in the ledger as ADJUSTMENT, and you can delete it.`,
       { title: `Align ${b.currency} with IBKR`, confirmLabel: 'Align', danger: false }
@@ -228,7 +228,7 @@ const BrokerActivity = ({ accountId, accounts, onLedgerChange }) => {
                       <span><span className={styles.figureLabel}>IBKR on {formatShortDate(b.asOf)}</span>{formatNumber(b.broker, 2)}</span>
                       {Math.abs(b.sinceStatement) >= 0.005 && (
                         <span className={styles.since}>
-                          Since then {b.sinceStatement > 0 ? '+' : ''}{formatNumber(b.sinceStatement, 2)} in the journal, which IBKR's next statement should show too.
+                          Since then the journal changed by {formatNumber(b.sinceStatement, 2)}, which IBKR's next statement should show too.
                         </span>
                       )}
                       {/* Types IBKR counts but the Flex query doesn't list:

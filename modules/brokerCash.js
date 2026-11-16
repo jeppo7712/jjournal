@@ -590,12 +590,11 @@ async function alignBalance(db, rootId, currency) {
     const row = (await balanceCheck(db, rootId)).find(b => b.currency === currency);
     if (!row) throw new Error(`IBKR reported no ${currency} cash for this account`);
     if (row.inLine) return { amount: 0, row };
-    const sign = row.unexplained > 0 ? '+' : '';
     await db.query(
         `INSERT INTO cash_transactions (account_id, date_time, type, amount, currency, note)
          VALUES ($1, $2::date::timestamp AT TIME ZONE 'UTC', 'ADJUSTMENT', $3, $4, $5)`,
         [rootId, row.asOf, row.unexplained, currency,
-         `Aligned with IBKR's ${currency} cash of ${row.asOf} (${sign}${row.unexplained.toFixed(2)})`]
+         `Aligned with IBKR's ${currency} cash of ${row.asOf} (${row.unexplained.toFixed(2)})`]
     );
     return { amount: row.unexplained, row };
 }

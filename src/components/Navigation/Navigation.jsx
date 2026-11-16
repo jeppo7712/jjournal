@@ -377,7 +377,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
             key={currency}
             className={`${styles.accountBalance} ${amount >= 0 ? styles.positive : styles.negative}`}
           >
-            {formatMoney(Math.abs(amount), currency)}
+            {formatMoney(amount, currency)}
           </span>
         ))}
       </span>

@@ -420,7 +420,7 @@ export default function DayNote({ note, onClose }) {
               <>
                 {dayPnl.map(({ currency, amount }) => (
                   <span key={currency} className={`${styles.dayChip} ${amount >= 0 ? styles.dayChipWin : styles.dayChipLoss}`}>
-                    {amount >= 0 ? '+' : '−'}{formatMoney(Math.abs(amount), currency)}
+                    {formatMoney(amount, currency)}
                   </span>
                 ))}
                 <span className={styles.dayChip}>

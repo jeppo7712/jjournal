@@ -19,6 +19,7 @@ import { getRealisedPnL } from '../../context/TradeContext';
 import UnenteredFills from './UnenteredFills';
 import useTheme from '../../utils/useTheme';
 import { themeColor } from '../../utils/theme';
+import { polarityStroke, polarityFill } from '../Stats/chartTheme';
 
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
@@ -246,10 +247,18 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
 
   // One cumulative line per currency. A single blended line would draw a
   // curve whose y-axis is in no currency at all; separate lines each stay in
-  // their own. A single-currency account still renders exactly one line, in
-  // the original blue, so nothing changes visually until a second currency
-  // actually exists.
-  const CHART_SERIES_COLORS = [themeColor('--ui-accent'), '#F59E0B', '#A855F7', '#14B8A6', '#EC4899'];
+  // their own.
+  //
+  // Both P&L charts (realised and unrealised) draw like the Stats return
+  // chart: green above 0, red below, turning exactly where the line crosses.
+  const pnlLineStyle = {
+    borderColor: polarityStroke(0),
+    backgroundColor: polarityFill(0),
+    fill: { target: { value: 0 } },
+    tension: 0.3,
+    pointRadius: 0,
+    pointHoverRadius: 0,
+  };
   const tradeCurrency = t => String(t.currency || 'USD').toUpperCase();
   // Only currencies that have actually realised something get a line. A
   // currency whose positions are all still open has no realised curve to
@@ -281,9 +290,8 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
   const chartData = {
     labels: chartLabels,
     datasets: chartCurrencies
-      .map((code, i) => ({ code, i }))
-      .filter(({ code }) => code === activeChartCurrency)
-      .map(({ code, i }) => {
+      .filter(code => code === activeChartCurrency)
+      .map(code => {
       // Cumulative within this currency, carrying the running total across
       // points belonging to other currencies so every series stays aligned
       // to the shared label axis.
@@ -297,12 +305,7 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
       return {
         label: chartCurrencies.length > 1 ? `Realised P&L (${code})` : 'Realised P&L',
         data,
-        borderColor: CHART_SERIES_COLORS[i % CHART_SERIES_COLORS.length],
-        backgroundColor: i === 0 ? `rgba(${themeColor('--ui-accent-rgb')}, 0.1)` : 'transparent',
-        tension: 0.3,
-        fill: i === 0,
-        pointRadius: 0,
-        pointHoverRadius: 0,
+        ...pnlLineStyle,
       };
       }),
   };
@@ -407,12 +410,7 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
           ? `Unrealised P&L (${activeUnrealisedCurrency})`
           : 'Unrealised P&L',
         data: unrealisedByCurrency[activeUnrealisedCurrency] || [],
-        borderColor: themeColor('--accent-red'),
-        backgroundColor: `rgba(${themeColor('--ui-red-rgb')}, 0.1)`,
-        tension: 0.3,
-        fill: true,
-        pointRadius: 0,
-        pointHoverRadius: 0,
+        ...pnlLineStyle,
       },
     ] : [],
   };
@@ -623,7 +621,7 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
             return <span key={currency} className={styles.statLinePlaceholder} aria-hidden="true">{'\u00a0'}</span>;
           }
           const amount = Number(stat.totals[currency]) || 0;
-          const text = formatMoney(stat.abs ? Math.abs(amount) : amount, currency, stat.decimals ?? 2);
+          const text = formatMoney(amount, currency, stat.decimals ?? 2);
           // A P&L figure is coloured by its own sign, never by the sign of
           // whichever currency happens to be listed first — that printed a
           // negative EUR total in green because the USD beside it was up.
@@ -665,8 +663,9 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
       { label: 'WASH', value: stats.wash, pct: stats.totalTrades ? Math.round((stats.wash / stats.totalTrades) * 100) + '%' : '0%', color: themeColor('--ui-text-3'), onClick: () => toggleFilter('WASH'), filterValue: 'WASH' },
     ],
     [
-      { label: 'AVG W', value: formatTotals(stats.avgWinByCurrency, { decimals: 0, abs: true, emptyCurrency: displayedChartCurrency }), totals: stats.avgWinByCurrency, decimals: 0, abs: true, pct: (stats.avgWinPct ?? 0).toFixed(0) + '%', color: themeColor('--ui-green-2') },
-      { label: 'AVG L', value: formatTotals(stats.avgLossByCurrency, { decimals: 0, abs: true, emptyCurrency: displayedChartCurrency }), totals: stats.avgLossByCurrency, decimals: 0, abs: true, pct: (stats.avgLossPct ?? 0).toFixed(0) + '%', color: themeColor('--accent-red') },
+      // Math.round, not toFixed(0): a -0.3% average must read "0%", not "-0%".
+      { label: 'AVG W', value: formatTotals(stats.avgWinByCurrency, { decimals: 0, emptyCurrency: displayedChartCurrency }), totals: stats.avgWinByCurrency, decimals: 0, pct: `${Math.round(stats.avgWinPct ?? 0) || 0}%`, color: themeColor('--ui-green-2') },
+      { label: 'AVG L', value: formatTotals(stats.avgLossByCurrency, { decimals: 0, emptyCurrency: displayedChartCurrency }), totals: stats.avgLossByCurrency, decimals: 0, pct: `${Math.round(stats.avgLossPct ?? 0) || 0}%`, color: themeColor('--accent-red') },
     ],
   ].map((row) => {
     // Every row is one side-by-side pair, so both boxes in it share a line
@@ -735,9 +734,8 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
   const chartVisible = isGraphHidden ? showGraphPopup : chartOpen;
   const realisedPnlStat = {
     label: 'R P&L',
-    value: formatTotals(totalRealisedPnlByCurrency, { abs: true, emptyCurrency: displayedChartCurrency }),
+    value: formatTotals(totalRealisedPnlByCurrency, { emptyCurrency: displayedChartCurrency }),
     totals: totalRealisedPnlByCurrency,
-    abs: true,
     // Box-level colour, which with several currencies only shows through on
     // anything the figures themselves don't paint. It states nothing when the
     // currencies disagree rather than asserting the first one's sign.
@@ -759,9 +757,8 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
   };
   const unrealisedPnlStat = {
     label: 'U P&L',
-    value: formatTotals(unrealisedPnlByCurrency, { abs: true, emptyCurrency: displayedChartCurrency }),
+    value: formatTotals(unrealisedPnlByCurrency, { emptyCurrency: displayedChartCurrency }),
     totals: unrealisedPnlByCurrency,
-    abs: true,
     color: signColour(unrealisedPnlByCurrency),
     signColored: true,
     onClick: () => {
@@ -866,7 +863,8 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
   // One tile of the overview strip. Status tiles (WINS/LOSSES/OPEN/WASH)
   // toggle that status filter: include, exclude, off.
   const renderTile = (stat, { align = 'left', lines = stat.lines, ring = true, extraClass = '' } = {}) => {
-    const percentage = parseFloat(stat.pct) || 0;
+    // The ring shows a size: AVG L's "-2%" fills it like 2%.
+    const percentage = Math.abs(parseFloat(stat.pct) || 0);
     const circumference = 2 * Math.PI * 12;
     const strokeDashoffset = circumference - (Math.min(100, Math.max(0, percentage)) / 100) * circumference;
     const filterState = stat.filterValue ? filter.find(f => f.type === stat.filterValue) : null;

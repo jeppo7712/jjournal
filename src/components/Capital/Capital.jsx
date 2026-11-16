@@ -142,7 +142,7 @@ const Capital = () => {
       setEditingOpening(false);
       notify(result.changes.length === 0
         ? 'Saved. No balance changed.'
-        : `Saved. Balance ${result.changes.map(c => `${c.change > 0 ? '+' : ''}${formatNumber(c.change, 2)} ${c.currency}`).join(', ')}.`, 'success');
+        : `Saved. Balance changed by ${result.changes.map(c => `${formatNumber(c.change, 2)} ${c.currency}`).join(', ')}.`, 'success');
       fetchAll();
     } catch (err) { notify(err.message); }
   };
@@ -461,9 +461,7 @@ const Capital = () => {
               <div key={i} className={styles.balanceCard}>
                 <div className={styles.balanceCurrency}>{b.currency}</div>
                 <div className={`${styles.balanceAmount} ${Number(b.balance) >= 0 ? styles.positive : styles.negative}`}>
-                  {/* No minus sign: the card is already red when the balance
-                      is negative, so the glyph only adds noise. */}
-                  {formatNumber(Math.abs(Number(b.balance)), 2)}
+                  {formatNumber(Number(b.balance), 2)}
                 </div>
               </div>
             ))}
@@ -791,7 +789,7 @@ const Capital = () => {
                             <span className={styles.monthNet}>
                               {Object.entries(monthNets.get(key) || {}).map(([currency, net]) => (
                                 <span key={currency} className={net >= 0 ? styles.positive : styles.negative}>
-                                  {net >= 0 ? '+' : ''}{formatNumber(net, 2)} {currency}
+                                  {formatNumber(net, 2)} {currency}
                                 </span>
                               ))}
                             </span>
@@ -803,7 +801,7 @@ const Capital = () => {
                         {hasChildAccounts && <td className={!isOwnAccount ? styles.mutedCell : undefined}>{tx.account_name}</td>}
                         <td>{TYPE_LABELS[tx.type] || tx.type}</td>
                         <td className={Number(tx.amount) >= 0 ? styles.positive : styles.negative}>
-                          {Number(tx.amount) >= 0 ? '+' : ''}{formatNumber(Number(tx.amount), 2)} {tx.currency}
+                          {formatNumber(Number(tx.amount), 2)} {tx.currency}
                         </td>
                         <td>{tx.note}</td>
                         <td>

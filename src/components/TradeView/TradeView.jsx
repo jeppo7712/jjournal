@@ -103,14 +103,9 @@ function getBarDurationInSeconds(timeframe) {
 // precise fill keeps its real precision; toFixed(8) first guards against
 // scientific notation for very small values (e.g. 1e-8) that plain
 // Number.toString() would otherwise produce.
-// Status chip colours, and money with an explicit sign (+$12.50 / −$3.10).
+// Status chip colours. Money and percentages follow the app's sign rule
+// (formatMoney.js): a minus on a loss, no plus on a gain.
 const STATUS_CHIP = { WIN: 'tvChipWin', LOSS: 'tvChipLoss', OPEN: 'tvChipOpen', WASH: 'tvChipWash' };
-
-function signedMoney(value, currency) {
-  const n = Number(value) || 0;
-  if (Math.abs(n) < 1e-9) return formatMoney(0, currency);
-  return `${n > 0 ? '+' : '−'}${formatMoney(Math.abs(n), currency)}`;
-}
 
 function pnlTone(value) {
   const n = Number(value);
@@ -1816,14 +1811,14 @@ useEffect(() => {
             <div className={styles.tvPnl}>
               <span className={styles.tvPnlLabel}>{trade.status === 'OPEN' ? 'Total P&L (open)' : 'Net P&L'}</span>
               <span className={`${styles.tvPnlValue} ${pnlTone(trade.status === 'OPEN' && unrealisedPnL === null ? realisedPnL : totalPnL)}`}>
-                {signedMoney(trade.status === 'OPEN' && unrealisedPnL === null ? realisedPnL : totalPnL, trade.currency)}
+                {formatMoney(trade.status === 'OPEN' && unrealisedPnL === null ? realisedPnL : totalPnL, trade.currency)}
               </span>
               <span className={styles.tvPnlSub}>
                 {returnPct !== null && returnPct !== undefined && !isNaN(returnPct) && (
-                  <span className={pnlTone(returnPct)}>{returnPct >= 0 ? '+' : '−'}{formatNumber(Math.abs(returnPct), 2)}%</span>
+                  <span className={pnlTone(returnPct)}>{formatNumber(returnPct, 2)}%</span>
                 )}
                 {trade.rMultiple != null && !isNaN(trade.rMultiple) && (
-                  <span className={pnlTone(trade.rMultiple)}>{trade.rMultiple >= 0 ? '+' : '−'}{formatNumber(Math.abs(Number(trade.rMultiple)), 2)}R</span>
+                  <span className={pnlTone(trade.rMultiple)}>{formatNumber(Number(trade.rMultiple), 2)}R</span>
                 )}
                 <span className={styles.tvFeeNote}>after {formatMoney(totalFees, trade.currency)} fees</span>
               </span>
@@ -1831,7 +1826,7 @@ useEffect(() => {
                 <div className={styles.tvSplit}>
                   <span className={styles.tvSplitItem} title="Locked in by partial closes so far">
                     <span className={styles.tvSplitDot} style={{ background: '#60A5FA' }} />
-                    Realised <strong className={pnlTone(realisedPnL)}>{signedMoney(realisedPnL, trade.currency)}</strong>
+                    Realised <strong className={pnlTone(realisedPnL)}>{formatMoney(realisedPnL, trade.currency)}</strong>
                   </span>
                   <span
                     className={styles.tvSplitItem}
@@ -1841,7 +1836,7 @@ useEffect(() => {
                   >
                     <span className={styles.tvSplitDot} style={{ background: '#F59E0B' }} />
                     Unrealised <strong className={unrealisedPnL === null ? '' : pnlTone(unrealisedPnL)}>
-                      {unrealisedPnL === null ? (trade.priceUnavailable ? 'no live price' : '…') : signedMoney(unrealisedPnL, trade.currency)}
+                      {unrealisedPnL === null ? (trade.priceUnavailable ? 'no live price' : '…') : formatMoney(unrealisedPnL, trade.currency)}
                     </strong>
                     {unrealisedPnL !== null && trade.priceAsOf && (
                       <span className={styles.tvStoredPrice}>stored price {DateTime.fromISO(trade.priceAsOf).toFormat('dd/MM HH:mm')}</span>
@@ -2201,7 +2196,7 @@ useEffect(() => {
                   </span>
                 )}
                 <span className={`${styles.chartPnl} ${pnlTone(trade.status === 'OPEN' && unrealisedPnL === null ? realisedPnL : totalPnL)}`}>
-                  {signedMoney(trade.status === 'OPEN' && unrealisedPnL === null ? realisedPnL : totalPnL, trade.currency)}
+                  {formatMoney(trade.status === 'OPEN' && unrealisedPnL === null ? realisedPnL : totalPnL, trade.currency)}
                 </span>
                 {tradedContract && !showBackAdjustedLines && (
                   <span

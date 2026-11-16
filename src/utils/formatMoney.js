@@ -7,10 +7,13 @@
 // rendered with a hardcoded '$' is wrong even before any aggregation is
 // involved.
 //
-// Deliberately NOT Intl.NumberFormat: negatives are conveyed by colour with
-// Math.abs() at the call site rather than a minus sign, and the grouping and
-// decimal mark follow the user's number format setting (numberFormat.js),
-// not the browser's locale.
+// Sign rule for the whole app: a negative amount or percentage carries a
+// minus ("-$12.50", "-1.25%") on top of its red colour; a positive one has
+// no plus (its green says it). One minus character, the plain hyphen-minus.
+//
+// Deliberately NOT Intl.NumberFormat: the grouping and decimal mark follow
+// the user's number format setting (numberFormat.js), not the browser's
+// locale.
 
 import { formatNumber } from './numberFormat';
 
@@ -48,9 +51,7 @@ export function markAmount(mark, text) {
 
 // formatMoney(12.5, 'EUR') -> "€12.50" (grouping per the number format setting)
 // formatMoney(12.5)        -> "$12.50"   (USD default, matches previous behaviour)
-//
-// Most call sites pass Math.abs() and colour the value, the convention
-// throughout the trade views; a negative amount reads "-$12.50".
+// formatMoney(-12.5)       -> "-$12.50"  (pass the signed value, never Math.abs)
 export function formatMoney(amount, currency = 'USD', decimals = 2) {
   const n = Number(amount);
   if (!Number.isFinite(n)) return '-';

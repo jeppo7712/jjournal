@@ -4,6 +4,7 @@ import { getRealisedPnL } from '../../context/TradeContext';
 import { computeTagStats } from '../../utils/tagFilter';
 import TagChip from '../common/TagChip';
 import { formatNumber } from '../../utils/numberFormat';
+import { markAmount } from '../../utils/formatMoney';
 import styles from './Stats.module.css';
 
 // Stats → Tags: per tag group, how the trades with each tag did, open
@@ -19,15 +20,15 @@ function TagStats({ trades, mark, onFilterTag }) {
     () => computeTagStats(trades, tags, groups, { realisedOf: getRealisedPnL }),
     [trades, tags, groups]
   );
-  const money = (v, signed = true) => {
+  const money = v => {
     if (v === null || v === undefined) return '—';
     const tone = v > 0 ? styles.valuePos : v < 0 ? styles.valueNeg : '';
-    return <span className={tone}>{signed && v < 0 ? '−' : ''}{mark}{formatNumber(Math.abs(v), 2)}</span>;
+    return <span className={tone}>{markAmount(mark, formatNumber(v, 2))}</span>;
   };
   const signedPct = v => {
     if (v === null || v === undefined) return '—';
     const tone = v > 0 ? styles.valuePos : v < 0 ? styles.valueNeg : '';
-    return <span className={tone}>{v < 0 ? '−' : ''}{formatNumber(Math.abs(v), 2)}%</span>;
+    return <span className={tone}>{formatNumber(v, 2)}%</span>;
   };
   // "12 trades (5W / 4L, 3 open)"
   const counts = s => {

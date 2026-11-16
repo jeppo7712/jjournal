@@ -9,14 +9,14 @@ import { DateTime } from 'luxon';
 // Each currency figure is coloured by its own sign. Colouring the whole
 // summary by its first currency told the opposite of the truth for the rest —
 // a losing EUR day showed green because the USD on it was up.
-function renderSignedTotals(totals, { abs = true } = {}) {
+function renderSignedTotals(totals) {
   const list = toTotalsList(totals);
-  if (list.length === 0) return formatTotals(totals, { abs });
+  if (list.length === 0) return formatTotals(totals);
   return list.map(({ currency, amount }, i) => (
     <React.Fragment key={currency}>
       {i > 0 ? ' \u00b7 ' : ''}
       <span style={{ color: amount >= 0 ? 'var(--ui-green-2)' : 'var(--accent-red)' }}>
-        {formatMoney(abs ? Math.abs(amount) : amount, currency)}
+        {formatMoney(amount, currency)}
       </span>
     </React.Fragment>
   ));

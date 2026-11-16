@@ -568,13 +568,12 @@ function computeStats(trades, futuresSettings) {
     avgWinByCurrency: Object.fromEntries(
       Object.entries(winSumByCurrency).map(([code, sum]) => [code, sum / winCountByCurrency[code]])
     ),
-    // Negated to match the previous scalar avgLoss, which reported the
-    // average loss as a positive magnitude.
+    // Signed (negative), shown with its minus like every loss.
     avgLossByCurrency: Object.fromEntries(
-      Object.entries(lossSumByCurrency).map(([code, sum]) => [code, -sum / lossCountByCurrency[code]])
+      Object.entries(lossSumByCurrency).map(([code, sum]) => [code, sum / lossCountByCurrency[code]])
     ),
     avgWinPct: winCount ? winReturnPctSum / winCount : 0,
-    avgLossPct: lossCount ? -lossReturnPctSum / lossCount : 0,
+    avgLossPct: lossCount ? lossReturnPctSum / lossCount : 0,
     totalReturnByCurrency,
     totalTrades,
   };

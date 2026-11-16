@@ -1285,7 +1285,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                     </span>
                     {fillSummary.isFlat ? (
                       <span className={`${styles.summaryChip} ${fillSummary.pnl >= 0 ? styles.summaryWin : styles.summaryLoss}`} title="After fees">
-                        {fillSummary.pnl >= 0 ? '+' : '−'}{formatNumber(Math.abs(fillSummary.pnl), 2)} P&amp;L
+                        {formatNumber(fillSummary.pnl, 2)} P&amp;L
                       </span>
                     ) : (
                       <span className={styles.summaryChip}>{formatNumber(fillSummary.openQty, 8, true)} open</span>

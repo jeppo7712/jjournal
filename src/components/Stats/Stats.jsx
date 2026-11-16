@@ -49,7 +49,7 @@ import ChartCard from './ChartCard';
 import TagStats from './TagStats';
 import {
   COLORS, CATEGORICAL, HOLD_TICKS, rgba, polarityStroke, polarityFill, areaFill, endDot, lineStyle,
-  crosshairPlugin, scaleX, scaleY, baseOptions, signed, percentTick, moneyTick, dateTick, dateTitle, formatHold,
+  crosshairPlugin, scaleX, scaleY, baseOptions, percentTick, moneyTick, dateTick, dateTitle, formatHold,
 } from './chartTheme';
 import useTheme from '../../utils/useTheme';
 import { Line, Bar, Doughnut, Scatter } from 'react-chartjs-2';
@@ -84,7 +84,7 @@ class StatsErrorBoundary extends React.Component {
 // sign — red says "down" on its own and the extra glyph is noise. Only used
 // on figures that are actually coloured: where a value renders in plain
 // white, the sign is the one thing telling a loss from a gain.
-const absAmount = (value) => formatNumber(Math.abs(Number(value)), 2);
+const amount = (value) => formatNumber(Number(value), 2);
 const pnlColor = (value) => (value === null || value === undefined || Number(value) === 0 ? undefined : Number(value) > 0 ? 'var(--ui-green-2)' : 'var(--accent-red)');
 
 // Icons and one-line descriptions for the section menu and header.
@@ -522,7 +522,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
     tooltip: {
       callbacks: {
         title: dateTitle,
-        label: context => `${signed(context.parsed.y)}%`,
+        label: context => `${formatNumber(context.parsed.y, 2)}%`,
       },
     },
   });
@@ -562,7 +562,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
     tooltip: {
       callbacks: {
         title: dateTitle,
-        label: context => `${context.dataset.label}  ${context.parsed.y < 0 ? '-' : ''}${mark}${absAmount(context.parsed.y)}`,
+        label: context => `${context.dataset.label}  ${markAmount(mark, amount(context.parsed.y))}`,
         labelColor: context => ({ borderColor: context.dataset.borderColor, backgroundColor: context.dataset.borderColor, borderWidth: 0, borderRadius: 4 }),
       },
     },
@@ -591,14 +591,14 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
   const barChartOptions = baseOptions({
     interaction: { mode: 'nearest', axis: 'x', intersect: false },
     scales: {
-      x: scaleX({ type: 'linear', min: -50, max: 50, offset: false, ticks: { stepSize: 25, callback: v => `${v > 0 ? '+' : ''}${v}%` } }),
+      x: scaleX({ type: 'linear', min: -50, max: 50, offset: false, ticks: { stepSize: 25, callback: v => `${v}%` } }),
       y: scaleY({ beginAtZero: true, ticks: { precision: 0 } }),
     },
     tooltip: {
       callbacks: {
         title: items => {
           const start = items[0].raw.x - 2.5;
-          return `${start > 0 ? '+' : ''}${start}% to ${start + 5 > 0 ? '+' : ''}${start + 5}%`;
+          return `${start}% to ${start + 5}%`;
         },
         label: context => `${context.parsed.y} ${context.parsed.y === 1 ? 'trade' : 'trades'}`,
       },
@@ -663,7 +663,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
     layout: { padding: 8 },
     tooltip: {
       callbacks: {
-        label: context => `${context.label}  ${mark}${absAmount(context.parsed)} · ${formatNumber(allocationTotal ? (context.parsed / allocationTotal) * 100 : 0, 1)}%`,
+        label: context => `${context.label}  ${markAmount(mark, amount(context.parsed))} · ${formatNumber(allocationTotal ? (context.parsed / allocationTotal) * 100 : 0, 1)}%`,
       },
     },
   });
@@ -741,7 +741,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
     tooltip: {
       callbacks: {
         title: () => '',
-        label: context => `${signed(context.parsed.y)}% · held ${formatHold(context.parsed.x)}`,
+        label: context => `${formatNumber(context.parsed.y, 2)}% · held ${formatHold(context.parsed.x)}`,
       },
     },
   });
@@ -933,7 +933,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                       {computedStats.monthlyPnL.map((month, idx) => (
                         <tr key={idx}>
                           <td>{month.month}</td>
-                          <td style={{ color: month.pnl >= 0 ? 'var(--ui-green-2)' : 'var(--accent-red)' }}>{currencyMark(activeCurrency)}{absAmount(month.pnl)}</td>
+                          <td style={{ color: month.pnl >= 0 ? 'var(--ui-green-2)' : 'var(--accent-red)' }}>{markAmount(currencyMark(activeCurrency), amount(month.pnl))}</td>
                           <td>{month.wins}</td>
                           <td>{month.losses}</td>
                           <td>{month.trades}</td>
@@ -975,7 +975,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                             <td style={{ color: 'var(--ui-green-2)' }}>{hour.wins}</td>
                             <td style={{ color: 'var(--accent-red)' }}>{hour.losses}</td>
                             <td>{formatNumberText(hour.winRate)}%</td>
-                            <td style={{ color: hour.pnl >= 0 ? 'var(--ui-green-2)' : 'var(--accent-red)' }}>{currencyMark(activeCurrency)}{absAmount(hour.pnl)}</td>
+                            <td style={{ color: hour.pnl >= 0 ? 'var(--ui-green-2)' : 'var(--accent-red)' }}>{markAmount(currencyMark(activeCurrency), amount(hour.pnl))}</td>
                           </tr>
                         )
                       ))}
@@ -1004,7 +1004,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
               </div>
               <ChartCard
                 title="Return over time"
-                value={latestReturn !== undefined && latestReturn !== null && !isFetching ? `${signed(latestReturn)}%` : null}
+                value={latestReturn !== undefined && latestReturn !== null && !isFetching ? `${formatNumber(latestReturn, 2)}%` : null}
                 tone={toneOf(latestReturn)}
                 caption="Latest"
                 explanation={`Time-weighted return on the capital recorded on the Capital page (deposits, withdrawals, transfers and currency exchanges in this currency), from the first trade on. Each day's P&L, including open positions at the day's close (futures by their price moves, not their contract value), is divided by the capital at the start of that day, and the days are compounded, so money moved in or out is not counted as a gain or loss. If the first trades are older than the first recorded deposit (your opening balance), the capital before it is that opening cash plus the positions then held, less the P&L made in between — and at least the value of the positions held. Optionally, dividends (after tax withheld), interest and broker fees from the Capital page count as gains or losses on their day.`}
@@ -1038,7 +1038,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
               <ChartCard
                 title="Cumulative P&L"
                 legend={[{ label: 'Total (incl. open)', color: COLORS.accent, kind: 'line' }, { label: 'Realised', color: COLORS.slate, kind: 'line' }]}
-                value={latestTotalPnl !== null && !isFetching ? `${latestTotalPnl < 0 ? '-' : latestTotalPnl > 0 ? '+' : ''}${mark}${absAmount(latestTotalPnl)}` : null}
+                value={latestTotalPnl !== null && !isFetching ? markAmount(mark, amount(latestTotalPnl)) : null}
                 tone={toneOf(latestTotalPnl)}
                 caption="Total incl. open"
                 explanation={`Cumulative P&L per day, from the first trade on. The blue line is realised P&L (closed trades and partial sells, on the day they happened) plus the unrealised P&L of positions open at that day’s close, valued at the symbol’s daily close. The grey line is realised P&L alone. Fees are included in both. With the switch on, dividends (after tax withheld), interest and broker fees from the Capital page are added on their day, to both lines.`}
@@ -1062,8 +1062,8 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
           {currentTab === 'holdings' && (() => {
             const h = computedStats.holdings;
             const mark = currencyMark(activeCurrency);
-            const money = (v) => (v === null || v === undefined ? '—' : `${mark}${absAmount(v)}`);
-            const pct = (v) => (v === null || v === undefined ? '—' : `${formatNumber(Math.abs(v), 2)}%`);
+            const money = (v) => (v === null || v === undefined ? '—' : markAmount(mark, amount(v)));
+            const pct = (v) => (v === null || v === undefined ? '—' : `${formatNumber(v, 2)}%`);
             return (
               <div>
                 <div className={styles.statsGrid}>
@@ -1141,7 +1141,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
 
                 <ChartCard
                   title="Allocation"
-                  value={allocationTotal > 0 ? `${mark}${absAmount(allocationTotal)}` : null}
+                  value={allocationTotal > 0 ? markAmount(mark, amount(allocationTotal)) : null}
                   caption="Market value"
                   explanation={`Share of each open stock/ETF position in the total market value (quantity × current price).`}
                 >
@@ -1350,9 +1350,9 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                     {computedStats.bestPerformingAssets.map((asset, idx) => (
                       <tr key={idx}>
                         <td>{asset.symbol}</td>
-                        <td style={{ color: pnlColor(asset.realizedPnl) }}>{currencyMark(activeCurrency)}{absAmount(asset.realizedPnl)}</td>
-                        <td style={{ color: pnlColor(asset.unrealizedPnl) }}>{currencyMark(activeCurrency)}{absAmount(asset.unrealizedPnl)}</td>
-                        <td style={{ color: pnlColor(asset.totalPnl) }}>{currencyMark(activeCurrency)}{absAmount(asset.totalPnl)}</td>
+                        <td style={{ color: pnlColor(asset.realizedPnl) }}>{markAmount(currencyMark(activeCurrency), amount(asset.realizedPnl))}</td>
+                        <td style={{ color: pnlColor(asset.unrealizedPnl) }}>{markAmount(currencyMark(activeCurrency), amount(asset.unrealizedPnl))}</td>
+                        <td style={{ color: pnlColor(asset.totalPnl) }}>{markAmount(currencyMark(activeCurrency), amount(asset.totalPnl))}</td>
                       </tr>
                     ))}
                   </tbody>
@@ -1450,7 +1450,7 @@ const Stats = ({ setCurrentView, onViewTrade, setCustomFilterDate, setCustomFilt
                       </div>
                       <div className={styles.headerRight}>
                         <span className={`${styles.pnlBadge} ${trade.return >= 0 ? styles.win : styles.loss}`}>
-                          {markAmount(currencyMark(activeCurrency), formatNumber((Math.abs(trade.return) || 0), 2))}
+                          {markAmount(currencyMark(activeCurrency), formatNumber(Number(trade.return) || 0, 2))}
                         </span>
                         <span className={styles.dateBadge}>{trade.openDate}</span>
                       </div>
