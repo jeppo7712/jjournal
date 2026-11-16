@@ -429,9 +429,11 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
       intersect: false,
     },
     layout: {
+      // Room for the hover labels drawn outside the plot: the P&L above,
+      // the date below (11px text 5px under the plot; 6 cut its bottom off).
       padding: {
         top: 18,
-        bottom: 6,
+        bottom: 18,
         right: 60,
       },
     },
