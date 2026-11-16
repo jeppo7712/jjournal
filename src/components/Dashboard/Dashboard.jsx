@@ -9,6 +9,8 @@ import 'react-datepicker/dist/react-datepicker.css';
 import TagFilterMenu from './TagFilterMenu';
 import styles from './Dashboard.module.css';
 import useScrollLock from '../../utils/useScrollLock';
+import useMediaQuery, { PHONE } from '../../utils/useMediaQuery';
+import useSheetDismiss from '../../utils/useSheetDismiss';
 import { computeUnrealisedSeries } from '../../utils/unrealisedSeries';
 import { loadDailyCloses, missingCloses, cachedCloses } from '../../utils/dailyCloses';
 import { sumByCurrency, formatTotals, toTotalsList, totalsSign } from '../../utils/currencyTotals';
@@ -136,6 +138,10 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
   const [showGraphPopup, setShowGraphPopup] = useState(false);
   const [isGraphHidden, setIsGraphHidden] = useState(false);
   useScrollLock(showGraphPopup);
+  // On phones the chart is a card from the bottom: swipe it down to close.
+  const graphSheetRef = useRef(null);
+  const phone = useMediaQuery(PHONE);
+  useSheetDismiss(graphSheetRef, { enabled: phone && showGraphPopup, onRequestClose: () => setShowGraphPopup(false) });
   // Whether the P&L chart panel is open (desktop/tablet). Remembered per
   // browser, so a collapsed chart stays out of the way of the trade list.
   const [chartOpen, setChartOpenState] = useState(() => {
@@ -1132,9 +1138,9 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
         // Phones: the chart as a sheet from the bottom, over everything
         // (rendered into <body> so the bottom bar can't cover it).
         <div className={styles.graphPopup} onMouseDown={e => { if (e.target === e.currentTarget) setShowGraphPopup(false); }}>
-          <div className={styles.graphPopupContent} role="dialog" aria-modal="true" aria-label={pnlChartType === 'realised' ? 'Realised P&L chart' : 'Unrealised P&L chart'}>
-            <div className={styles.graphPopupGrip} aria-hidden="true" />
-            <div className={styles.graphPopupHeader}>
+          <div ref={graphSheetRef} className={styles.graphPopupContent} role="dialog" aria-modal="true" aria-label={pnlChartType === 'realised' ? 'Realised P&L chart' : 'Unrealised P&L chart'}>
+            <div className={styles.graphPopupGrip} data-sheet-handle aria-hidden="true" />
+            <div className={styles.graphPopupHeader} data-sheet-handle>
               <div className={styles.chartTitle}>
                 {pnlChartType === 'realised' ? 'Realised P&L' : 'Unrealised P&L'}
                 <span className={styles.chartSubtitle}>{pnlChartType === 'realised' ? 'cumulative, by close date' : 'open positions over time'}</span>

@@ -1,6 +1,7 @@
 import React, { useRef, useLayoutEffect, useState, useEffect, useContext, useCallback, useMemo } from 'react';
 import useDraggableWindow from '../../utils/useDraggableWindow';
 import useScrollLock from '../../utils/useScrollLock';
+import useSheetDismiss from '../../utils/useSheetDismiss';
 import TradeChecklist from '../TradeModal/TradeChecklist';
 import IconButton from '../common/IconButton';
 import TagChip from '../common/TagChip';
@@ -13,6 +14,7 @@ import { loadStoredDisplayTimezone, storeDisplayTimezone, resolveDisplayZone, Ti
 import useTheme from '../../utils/useTheme';
 import { themeColor, fillMarkColor, recolorFillMarks } from '../../utils/theme';
 import styles from './TradeView.module.css';
+import sheet from '../common/Sheet.module.css';
 import { formatMoney, currencyMark } from '../../utils/formatMoney';
 import narrowMinus from '../common/narrowMinus';
 import { formatNumber } from '../../utils/numberFormat';
@@ -1688,6 +1690,9 @@ useEffect(() => {
   }, [showChart, showAvgStopLines, showBackAdjustedLines, trade, hasChartDataBars, dataVersion]);
 
 
+  // Phones: the window is a card from the bottom; swiping it down is the ×.
+  useSheetDismiss(modalRef, { enabled: isMobile && !!trade, onRequestClose: onClose });
+
   if (!trade) return null;
 
   const processedAttachments = (trade.attachments || []).map(att => ({
@@ -1751,16 +1756,11 @@ useEffect(() => {
   return (
     <div className={styles.overlay}>
       <div
-        className={`${styles.modal} ${drag.dragging ? styles.dragging : ''}`}
+        className={`${styles.modal} ${isMobile ? sheet.sheet : ''} ${drag.dragging ? styles.dragging : ''}`}
         ref={el => { modalRef.current = el; drag.setWindowEl(el); }}
         style={isMobile ? {
-          width: '100vw',
-          maxWidth: 'none',
-          // Not 100vh — see TradeModal.jsx's identical note: mobile browsers'
-          // collapsible address bar makes 100vh taller than what's actually
-          // visible, which is what was pushing the close button off-screen.
-          height: 'calc(var(--vh, 1vh) * 100)',
-          maxHeight: 'none',
+          // A card from the bottom: size and place from Sheet.module.css
+          // (from --app-height, not 100vh — see TradeModal.jsx).
           display: 'flex',
           flexDirection: 'column',
         } : {
@@ -1772,7 +1772,8 @@ useEffect(() => {
           ...drag.windowStyle,
         }}
       >
-        <div className={styles.headerRow} {...drag.dragHandleProps}>
+        {isMobile && <div className={sheet.grip} data-sheet-handle aria-hidden="true" />}
+        <div className={styles.headerRow} data-sheet-handle {...drag.dragHandleProps}>
           <span className={styles.title}>Trade View</span>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
             <span className={styles.headerTzLabel}>

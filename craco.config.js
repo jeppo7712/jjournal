@@ -1,3 +1,8 @@
+// The version and build time the app shows when the logo is clicked
+// (src/utils/appVersion.js). CRA passes REACT_APP_* variables into the bundle.
+process.env.REACT_APP_VERSION = require('./package.json').version;
+process.env.REACT_APP_BUILD_TIME = new Date().toISOString();
+
 module.exports = {
   webpack: {
     configure: (webpackConfig, { env }) => {

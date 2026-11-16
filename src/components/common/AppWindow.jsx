@@ -1,16 +1,20 @@
-import React, { useEffect, useId, useState } from 'react';
+import React, { useId, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import useDraggableWindow from '../../utils/useDraggableWindow';
 import useScrollLock from '../../utils/useScrollLock';
+import useMediaQuery, { PHONE } from '../../utils/useMediaQuery';
+import useSheetDismiss from '../../utils/useSheetDismiss';
 import styles from './AppWindow.module.css';
+import sheet from './Sheet.module.css';
 
 // The app's standard window for forms opened from a page (Settings'
 // account, symbol, exchange and rollover editors, ...), with the same look
 // as the trade and note windows:
 // - desktop: a centred card, movable by its title bar (double-click to
 //   centre again; the position is remembered per `storageKey`);
-// - phone: full screen, title bar on top and `footer` (the Save button)
-//   pinned to the bottom, only the content in between scrolls.
+// - phone: a card from the bottom (swipe it down to close), title bar on
+//   top and `footer` (the Save button) pinned to the bottom, only the
+//   content in between scrolls.
 // It's rendered into <body>, so nothing on the page (its scroll area, the
 // phone's bottom bar) can cover it or scroll instead of it.
 //
@@ -18,19 +22,6 @@ import styles from './AppWindow.module.css';
 // Footer: pass `onSave` for the usual Cancel + Save pair (`saveLabel`,
 // `busy` while saving, `leftActions` for e.g. a Delete button on the
 // left), or a custom `footer`.
-
-const PHONE = '(max-width: 600px)';
-
-function useIsPhone() {
-  const [phone, setPhone] = useState(() => window.matchMedia(PHONE).matches);
-  useEffect(() => {
-    const mq = window.matchMedia(PHONE);
-    const onChange = () => setPhone(mq.matches);
-    mq.addEventListener('change', onChange);
-    return () => mq.removeEventListener('change', onChange);
-  }, []);
-  return phone;
-}
 
 export function WindowButton({ variant = 'secondary', busy, disabled, children, ...rest }) {
   return (
@@ -45,22 +36,25 @@ export default function AppWindow({
   title, subtitle, onClose, storageKey, width = 640, className = '',
   onSave, saveLabel = 'Save', busy = false, leftActions, footer, children,
 }) {
-  const phone = useIsPhone();
+  const phone = useMediaQuery(PHONE);
   const drag = useDraggableWindow(storageKey, { enabled: !phone });
   const titleId = useId();
+  const windowRef = useRef(null);
   useScrollLock();
+  useSheetDismiss(windowRef, { enabled: phone, onRequestClose: onClose });
 
   return createPortal(
     <div className={styles.overlay}>
       <div
-        ref={drag.setWindowEl}
-        className={`${styles.window} ${drag.dragging ? styles.dragging : ''} ${className}`}
+        ref={el => { windowRef.current = el; drag.setWindowEl(el); }}
+        className={`${styles.window} ${phone ? sheet.sheet : ''} ${drag.dragging ? styles.dragging : ''} ${className}`}
         style={{ '--window-width': `${width}px`, ...(drag.windowStyle || {}) }}
         role="dialog"
         aria-modal="true"
         aria-labelledby={titleId}
       >
-        <div className={styles.header} {...drag.dragHandleProps}>
+        {phone && <div className={sheet.grip} data-sheet-handle aria-hidden="true" />}
+        <div className={styles.header} data-sheet-handle {...drag.dragHandleProps}>
           <div className={styles.titles}>
             <h2 id={titleId} className={styles.title}>{title}</h2>
             {subtitle && <p className={styles.subtitle}>{subtitle}</p>}

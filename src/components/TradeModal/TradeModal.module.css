@@ -884,8 +884,8 @@ ibkrModal {
   }
 
   .headerRow {
-    border-radius: 0; /* .modal itself is square-cornered full-screen on mobile */
-    padding: 10px 12px 6px;
+    border-radius: 0;
+    padding: 2px 12px 8px; /* the sheet's grip is above it */
   }
 
   /* footerRow holds up to 5 buttons (Fetch IBKR, Fetch TWS, Show/Hide Chart,

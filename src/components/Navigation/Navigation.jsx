@@ -9,6 +9,8 @@ import narrowMinus from '../common/narrowMinus';
 import { setNumberFormat } from '../../utils/numberFormat';
 import { descendantAccountIds } from '../../utils/accountTree';
 import AccountOptions from '../common/AccountOptions';
+import AboutCard from './AboutCard';
+import useSheetDismiss from '../../utils/useSheetDismiss';
 import { sumByCurrency, mergeTotals, toTotalsList } from '../../utils/currencyTotals';
 import { timeframeLabel } from '../../utils/timeframeLabel';
 
@@ -99,6 +101,11 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   const [navMode, setNavMode] = useState('wide');
   const [isLowHeight, setIsLowHeight] = useState(false);
   const [showStatusPopup, setShowStatusPopup] = useState(false);
+  // The logo: each click spins it; on the wide sidebar it opens the About
+  // card (version, build, a quote). Narrower, it opens the account popup,
+  // which has the same at its bottom.
+  const [showAbout, setShowAbout] = useState(false);
+  const [logoSpins, setLogoSpins] = useState(0);
   const [descendantTrades, setDescendantTrades] = useState([]);
   // holdings comes from TradeContext (shared with Capital.jsx, which is what
   // actually adds/redeems/deletes them) so this stays live instead of only
@@ -225,6 +232,24 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   }, [showLogoPopup]); //
 
   useEffect(() => {
+    if (!showAbout) return undefined;
+    const onPointerDown = (event) => {
+      if (logoRef.current && !logoRef.current.contains(event.target)) setShowAbout(false);
+    };
+    const onKey = (event) => { if (event.key === 'Escape') setShowAbout(false); };
+    document.addEventListener('pointerdown', onPointerDown);
+    document.addEventListener('keydown', onKey);
+    return () => {
+      document.removeEventListener('pointerdown', onPointerDown);
+      document.removeEventListener('keydown', onKey);
+    };
+  }, [showAbout]);
+
+  // On a phone the connection log is a card from the bottom: swipe it down
+  // to close (no backdrop of its own to fade).
+  useSheetDismiss(statusPopupRef, { enabled: navMode === 'small' && showStatusPopup, onRequestClose: () => setShowStatusPopup(false), fade: false });
+
+  useEffect(() => {
     const handleClickOutsideAction = (event) => {
       const plusButton = document.querySelector(`.${styles.plusButton}`); //
       if (plusButton && plusButton.contains(event.target)) {
@@ -260,8 +285,11 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
 
   const handleLogoClick = (e) => {
     e.stopPropagation(); //
+    setLogoSpins(n => n + 1);
     if (navMode !== 'wide') {
       setShowLogoPopup(!showLogoPopup); //
+    } else {
+      setShowAbout(open => !open);
     }
   };
 
@@ -493,8 +521,14 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   return (
     <nav className={`${styles.navigation} ${navMode === 'medium' && isLowHeight ? styles.mediumLowHeight : ''}`}> {/* */}
       <div className={styles.logo} ref={logoRef} onClick={handleLogoClick}> {/* */}
-        <img src="/logo192.png" alt="Logo" className={styles.logoImg} /> {/* */}
+        <img
+          key={logoSpins}
+          src="/logo192.png"
+          alt="Logo"
+          className={`${styles.logoImg} ${logoSpins > 0 ? styles.logoSpin : ''}`}
+        />
         <h1 className={styles.logoText}>Jay's Journal</h1> {/* */}
+        {showAbout && navMode === 'wide' && <AboutCard />}
         {showLogoPopup && navMode !== 'wide' && (
           <div
             className={`${styles.logoPopup} ${showLogoPopup ? styles.show : ''}`} //
@@ -502,6 +536,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
           >
             {renderAccountInfo()}
             {renderStatusLights()}
+            <AboutCard compact />
           </div>
         )}
       </div>
@@ -606,7 +641,8 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
       {/* Full WebSocket Status Popup - now can be triggered from any mode if accountInfo is visible */}
       {showStatusPopup && (
         <div className={styles.fullStatusPopup} ref={statusPopupRef}> {/* */}
-          <div className={styles.fullStatusHeader}> {/* */}
+          <div className={styles.statusSheetGrip} data-sheet-handle aria-hidden="true" />
+          <div className={styles.fullStatusHeader} data-sheet-handle> {/* */}
             <h4 className={styles.fullStatusTitle}>WebSocket Connection Logs</h4>
             <button onClick={() => setShowStatusPopup(false)} className={styles.closePopupBtn} title="Close">
               &times;

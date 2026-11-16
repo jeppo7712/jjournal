@@ -2,6 +2,7 @@ import React, { useContext, useState, useCallback, useRef, useEffect, useLayoutE
 import { createPortal } from 'react-dom';
 import useDraggableWindow from '../../utils/useDraggableWindow';
 import useScrollLock from '../../utils/useScrollLock';
+import useSheetDismiss from '../../utils/useSheetDismiss';
 import { newSaveKey, isNetworkError } from '../../utils/saveKey';
 import AppWindow from '../common/AppWindow';
 import ReactQuill from 'react-quill';
@@ -13,6 +14,7 @@ import { useDropzone } from 'react-dropzone';
 import 'react-quill/dist/quill.snow.css';
 import { TradeContext, calculateRisk, getEnabledTimeframesForSetting } from '../../context/TradeContext';
 import styles from './TradeModal.module.css';
+import sheet from '../common/Sheet.module.css';
 import { DateTime } from 'luxon';
 import { loadStoredDisplayTimezone, storeDisplayTimezone, resolveDisplayZone, TimezonePicker } from '../../utils/timezonePreference';
 import TradeFormChart from './TradeFormChart';
@@ -1033,6 +1035,12 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
     }
   };
 
+  // Phones: the window is a card from the bottom; swiping it down is the ×.
+  useSheetDismiss(modalRef, { enabled: isMobile, onRequestClose: handleRequestClose });
+  // The chart's own card over the form (phones), swiped down: chart hidden.
+  const chartSheetRef = useRef(null);
+  useSheetDismiss(chartSheetRef, { enabled: isMobile && showFormChart, onRequestClose: () => setShowFormChart(false), fade: false });
+
   const requestDelete = async () => {
     if (await confirmDialog('This trade and its notes will be deleted. This cannot be undone.', { title: 'Delete this trade?', confirmLabel: 'Delete', danger: true })) {
       deleteTrade();
@@ -1129,29 +1137,17 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
   return (
     <div className={styles.overlay}>
       <div
-        className={`${styles.modal} ${drag.dragging ? styles.dragging : ''}`}
+        className={`${styles.modal} ${isMobile ? sheet.sheet : ''} ${drag.dragging ? styles.dragging : ''}`}
         ref={el => { modalRef.current = el; drag.setWindowEl(el); }}
         style={isMobile ? {
+          // A card from the bottom: size and place from Sheet.module.css
+          // (from --app-height, not 100vh: with the browser's address bar
+          // showing, 100vh is taller than what's visible and pushed the
+          // footer's Save/Delete below the fold). The footer keeps clear of
+          // the home indicator itself, in its own colour.
           display: 'flex',
           flexDirection: 'column',
-          width: '100vw',
-          // Not 100vh: mobile browsers' collapsible address bar means 100vh
-          // reports a taller height than what's actually visible whenever
-          // the bar is showing — enough to push the footer's Save/Delete
-          // buttons below the fold, outside the modal's own overflow:hidden
-          // clip, genuinely unreachable rather than just requiring a scroll.
-          // --app-height (styles.css) is the visible height, or the real
-          // screen height in the iPhone home-screen app; .app/html/body use
-          // it the same way.
-          height: 'var(--app-height)',
-          maxHeight: 'none',
-          maxWidth: 'none',
           overflow: 'hidden',
-          borderRadius: 0,
-          // Clear of the status bar (see styles.css); the footer keeps
-          // clear of the home indicator itself, in its own colour.
-          paddingTop: 'var(--app-top)',
-          boxSizing: 'border-box',
         } : {
           display: 'flex',
           flexDirection: 'column',
@@ -1163,7 +1159,8 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
           ...drag.windowStyle,
         }}
       >
-        <div className={styles.headerRow} {...drag.dragHandleProps}>
+        {isMobile && <div className={sheet.grip} data-sheet-handle aria-hidden="true" />}
+        <div className={styles.headerRow} data-sheet-handle {...drag.dragHandleProps}>
           <span className={styles.title}>{isEditMode ? 'Edit Trade' : 'New Trade'}</span>
           <div style={{ display: 'flex', flexDirection: 'column', alignItems: 'flex-end', gap: '4px' }}>
             <span className={styles.headerTzLabel}>
@@ -1545,6 +1542,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                 sitting next to it — closer to how a native app would surface a
                 secondary panel. */}
             <div
+              ref={chartSheetRef}
               style={{
                 position: 'fixed', left: 0, right: 0, bottom: 0, zIndex: 1501,
                 height: 'calc(var(--vh, 1vh) * 82)', maxHeight: 'calc(var(--vh, 1vh) * 82)',
@@ -1554,7 +1552,9 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                 animation: 'tradeFormChartSheetUp 0.2s ease-out',
               }}
             >
-              <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--ui-handle)', margin: '10px auto 0' }} />
+              <div data-sheet-handle style={{ flexShrink: 0, padding: '10px 0 6px', margin: '0 auto -6px', width: 80, display: 'flex', justifyContent: 'center', touchAction: 'none' }}>
+                <div style={{ width: 40, height: 4, borderRadius: 2, background: 'var(--ui-handle)' }} />
+              </div>
               <TradeFormChart
                 symbol={form.symbol}
                 type={form.type}
@@ -1572,7 +1572,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
         )}
         </div>
         {selectedAttachment && (
-          <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
+          <div data-sheet-no-drag style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.8)', zIndex: 2000, display: 'flex', alignItems: 'center', justifyContent: 'center' }}>
             <div style={{ background: '#161A24', borderRadius: 18, padding: 16, maxWidth: '90vw', maxHeight: '90vh', position: 'relative', display: 'flex', flexDirection: 'column', alignItems: 'center' }}>
               <img src={selectedAttachment} alt="Full-size attachment" style={{ maxWidth: '100%', maxHeight: '80vh', borderRadius: 8, objectFit: 'contain' }} />
               <button

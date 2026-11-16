@@ -460,7 +460,8 @@ input[type="radio"]:checked + .radio-btn,
   }
 
   /* Full screen like the trade popups, clear of the status bar and home
-     indicator (see styles.css). */
+     indicator (see styles.css); shown as a card from the bottom
+     (common/Sheet.module.css), which starts below the status bar. */
   .modal {
     width: 100vw;
     max-width: 100vw;
@@ -475,6 +476,10 @@ input[type="radio"]:checked + .radio-btn,
   .headerRow,
   .footerRow {
     border-radius: 0;
+  }
+
+  .headerRow {
+    padding-top: 2px; /* the sheet's grip is above it */
   }
 
   .footerRow {

@@ -218,8 +218,9 @@
   to { transform: rotate(360deg); }
 }
 
-/* Phones: full screen. Title bar at the top (below the status bar), the
-   footer above the home indicator, the content in between scrolls. */
+/* Phones: a card from the bottom (common/Sheet.module.css sets its size
+   and place). Title bar at the top, the footer above the home indicator,
+   the content in between scrolls. */
 @media (max-width: 600px) {
   .overlay {
     padding: 0;
@@ -244,7 +245,7 @@
   }
 
   .header {
-    padding: 10px 10px 10px 16px;
+    padding: 2px 10px 10px 16px;
   }
 
   .header::before {

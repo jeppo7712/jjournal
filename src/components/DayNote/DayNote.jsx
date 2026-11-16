@@ -1,10 +1,13 @@
 import React, { useState, useEffect, useRef, useLayoutEffect, useContext } from 'react';
 import useDraggableWindow from '../../utils/useDraggableWindow';
 import useScrollLock from '../../utils/useScrollLock';
+import useMediaQuery, { PHONE } from '../../utils/useMediaQuery';
+import useSheetDismiss from '../../utils/useSheetDismiss';
 import ReactQuill from 'react-quill';
 import { useDropzone } from 'react-dropzone';
 import 'react-quill/dist/quill.snow.css';
 import styles from './DayNote.module.css';
+import sheet from '../common/Sheet.module.css';
 import { TradeContext } from '../../context/TradeContext';
 import { formatMoney } from '../../utils/formatMoney';
 import { sumByCurrency, toTotalsList } from '../../utils/currencyTotals';
@@ -124,8 +127,9 @@ export default function DayNote({ note, onClose }) {
 
   const modalRef = useRef(null);
 
-  // Movable window on desktop (phones show it full screen).
-  const drag = useDraggableWindow('dayNote', { enabled: window.matchMedia('(min-width: 601px)').matches });
+  // Movable window on desktop; on phones a card from the bottom.
+  const phone = useMediaQuery(PHONE);
+  const drag = useDraggableWindow('dayNote', { enabled: !phone });
   useScrollLock();
   const contentWrapperRef = useRef(null);
 
@@ -186,6 +190,9 @@ export default function DayNote({ note, onClose }) {
       onClose();
     }
   };
+
+  // Swiping the phone card down is the ×.
+  useSheetDismiss(modalRef, { enabled: phone, onRequestClose: handleRequestClose });
 
   const requestDelete = async () => {
     if (await confirmDialog('This day note will be deleted. This cannot be undone.', { title: 'Delete this note?', confirmLabel: 'Delete', danger: true })) {
@@ -375,11 +382,12 @@ export default function DayNote({ note, onClose }) {
   return (
     <div className={styles.overlay}>
       <div
-        className={`${styles.modal} ${drag.dragging ? styles.dragging : ''}`}
+        className={`${styles.modal} ${phone ? sheet.sheet : ''} ${drag.dragging ? styles.dragging : ''}`}
         ref={el => { modalRef.current = el; drag.setWindowEl(el); }}
         style={drag.windowStyle}
       >
-        <div className={styles.headerRow} {...drag.dragHandleProps}>
+        {phone && <div className={sheet.grip} data-sheet-handle aria-hidden="true" />}
+        <div className={styles.headerRow} data-sheet-handle {...drag.dragHandleProps}>
           <span className={styles.title}>{note ? 'Edit Day Note' : 'New Day Note'}</span>
           <button className={styles.closeBtn} onClick={handleRequestClose} aria-label="Close">×</button>
         </div>
@@ -540,6 +548,7 @@ export default function DayNote({ note, onClose }) {
         </div>
         {selectedAttachment && (
           <div
+            data-sheet-no-drag
             style={{
               position: 'fixed',
               inset: 0,

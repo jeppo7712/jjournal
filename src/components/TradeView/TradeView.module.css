@@ -901,7 +901,8 @@
     border-radius: 0;
     margin: 0;
     /* Clear of the status bar (see styles.css); the footer keeps clear of
-       the home indicator itself, in its own colour. */
+       the home indicator itself, in its own colour. As a card from the
+       bottom (common/Sheet.module.css) it starts below the status bar. */
     padding-top: var(--app-top);
     box-sizing: border-box;
   }
@@ -913,7 +914,7 @@
   }
 
   .headerRow {
-    padding: 10px 16px;
+    padding: 2px 16px 10px; /* the sheet's grip is above it */
     border-radius: 0;
     gap: 16px;
   }

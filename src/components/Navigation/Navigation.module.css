@@ -49,6 +49,141 @@
   white-space: nowrap;
 }
 
+/* Each click on the logo gives it a spin. */
+.logoSpin {
+  animation: logoSpin 0.7s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+
+@keyframes logoSpin {
+  0% { transform: rotate(0deg) scale(1); }
+  45% { transform: rotate(200deg) scale(1.15); }
+  100% { transform: rotate(360deg) scale(1); }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .logoSpin {
+    animation: none;
+  }
+}
+
+/* ---------- About (opened by the logo) ---------- */
+.aboutCard {
+  position: absolute;
+  top: calc(100% + 10px);
+  left: 0;
+  z-index: 1010;
+  width: 290px;
+  padding: 16px;
+  box-sizing: border-box;
+  background: var(--ui-popover);
+  border: 1px solid var(--ui-border);
+  border-radius: 16px;
+  box-shadow: 0 18px 48px rgba(var(--ui-shadow-rgb), calc(0.5 * var(--ui-shadow-k)));
+  cursor: default;
+  animation: fadeIn 0.2s ease-out;
+}
+
+.aboutCompact {
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--ui-border);
+  cursor: default;
+}
+
+.aboutHead {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.aboutLogo {
+  width: 44px;
+  height: 44px;
+  border-radius: 12px;
+  box-shadow: 0 6px 18px rgba(var(--ui-accent-rgb), 0.25);
+}
+
+.aboutName {
+  font-size: 15px;
+  font-weight: 650;
+  color: var(--ui-strong);
+  letter-spacing: -0.01em;
+}
+
+.aboutCompact .aboutName {
+  display: none;
+}
+
+.aboutVersion {
+  margin-top: 2px;
+  font-size: 12px;
+  color: var(--ui-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.aboutBuilt {
+  color: var(--ui-faint);
+  white-space: nowrap;
+}
+
+/* The wide card: the build on a line of its own. */
+.aboutCard .aboutSep {
+  display: none;
+}
+
+.aboutCard .aboutBuilt {
+  display: block;
+}
+
+.aboutCard .aboutBuilt::first-letter {
+  text-transform: uppercase;
+}
+
+.aboutQuote {
+  display: block;
+  width: 100%;
+  margin: 14px 0 0;
+  padding: 10px 12px;
+  border: none;
+  border-radius: 12px;
+  background: rgba(var(--ui-ink-rgb), 0.04);
+  color: var(--ui-text-2);
+  font: inherit;
+  font-size: 12.5px;
+  line-height: 1.45;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.aboutCompact .aboutQuote {
+  margin-top: 8px;
+  padding: 8px 10px;
+  font-size: 12px;
+}
+
+@media (hover: hover) {
+  .aboutQuote:hover {
+    background: rgba(var(--ui-ink-rgb), 0.08);
+  }
+}
+
+.aboutQuoteText {
+  display: block;
+  animation: quoteIn 0.25s ease-out;
+}
+
+@keyframes quoteIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.aboutQuoteBy {
+  display: block;
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--ui-faint);
+}
+
 /* ---------- New trade / new note ---------- */
 .actionButtons {
   display: flex;
@@ -912,4 +1047,51 @@
     top: calc(var(--app-height) - 60px - var(--safe-bottom, 0px));
     bottom: auto;
   }
+}
+
+/* Phones: the connection log is a card from the bottom over the bottom bar
+   (positioned against the bar, which is full width at the screen's bottom);
+   swipe it down to close (Navigation.jsx). */
+.statusSheetGrip {
+  display: none;
+}
+
+@media (max-width: 600px) {
+  .fullStatusPopup {
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: auto;
+    max-width: none;
+    max-height: calc(var(--app-height, 100dvh) * 0.7);
+    border-bottom: none;
+    border-radius: 18px 18px 0 0;
+    padding-bottom: var(--safe-bottom, 0px);
+    animation: statusSheetUp 0.28s cubic-bezier(0.2, 0.8, 0.2, 1);
+  }
+
+  .statusSheetGrip {
+    display: flex;
+    justify-content: center;
+    flex-shrink: 0;
+    padding-top: 8px;
+    touch-action: none;
+  }
+
+  .statusSheetGrip::before {
+    content: '';
+    width: 38px;
+    height: 5px;
+    border-radius: 3px;
+    background: var(--ui-handle);
+  }
+
+  .fullStatusPopup .fullStatusHeader {
+    padding-top: 8px;
+  }
+}
+
+@keyframes statusSheetUp {
+  from { transform: translateY(100%); }
+  to { transform: none; }
 }

@@ -1,0 +1,46 @@
+/* Phones: a window as a card risen from the bottom, its top a little below
+   the status bar so the page shows behind it. Swiped down, it closes
+   (src/utils/useSheetDismiss.js). The class is doubled to win over a
+   window's own full-screen phone rules. */
+.sheet.sheet {
+  --sheet-top: calc(var(--app-top, 0px) + 10px);
+  align-self: flex-start;
+  width: 100%;
+  min-width: 0;
+  max-width: none;
+  height: calc(var(--app-height, 100dvh) - var(--sheet-top));
+  max-height: none;
+  margin: var(--sheet-top) 0 0;
+  padding-top: 0;
+  box-sizing: border-box;
+  border: none;
+  border-top: 1px solid var(--ui-border);
+  border-radius: 16px 16px 0 0;
+  box-shadow: 0 -12px 40px rgba(var(--ui-shadow-rgb), calc(0.35 * var(--ui-shadow-k)));
+  animation: sheetUp 0.3s cubic-bezier(0.2, 0.8, 0.2, 1);
+  will-change: transform;
+}
+
+@keyframes sheetUp {
+  from { transform: translateY(100%); }
+  to { transform: none; }
+}
+
+/* The pill at the top: something to take hold of. */
+.grip {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  height: 14px;
+  padding-top: 4px;
+  touch-action: none;
+}
+
+.grip::before {
+  content: '';
+  width: 38px;
+  height: 5px;
+  border-radius: 3px;
+  background: var(--ui-handle);
+}
