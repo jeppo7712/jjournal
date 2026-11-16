@@ -2199,7 +2199,7 @@ useEffect(() => {
               margin: 0
             }}
           >
-            {isMobile && <div className={sheet.grip} data-sheet-handle aria-hidden="true" />}
+            {isMobile && <div className={`${sheet.grip} ${styles.chartGrip}`} data-sheet-handle aria-hidden="true" />}
             <div className={`${styles.headerRow} ${styles.chartHeaderRow} ${styles.chartBar}`} data-sheet-handle>
               <div className={styles.chartIdentity}>
                 <span className={styles.chartSymbol}>{trade.symbol}</span>

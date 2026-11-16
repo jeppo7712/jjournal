@@ -1674,6 +1674,13 @@
   display: none;
 }
 
+/* Phones: the card's grip strip in the bar's own colour (the bar's gradient
+   starts with it), so strip and bar read as one surface. */
+.chartGrip {
+  background: var(--ui-card-2);
+  border-radius: 16px 16px 0 0;
+}
+
 .chartIdentity {
   display: flex;
   align-items: center;
