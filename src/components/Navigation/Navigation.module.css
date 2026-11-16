@@ -1124,3 +1124,14 @@
   from { transform: translateY(100%); }
   to { transform: none; }
 }
+
+/* Tablet/phone: under an open popup, over the page (the bar and the popups
+   in it, z-index 1000, stay above). Catches the tap that closes the popup
+   so it doesn't also open whatever was under the finger. */
+.tapGuard {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: transparent;
+  -webkit-tap-highlight-color: transparent;
+}

@@ -1,4 +1,5 @@
 import React, { useCallback, useContext, useState, useEffect, useRef } from 'react';
+import { createPortal } from 'react-dom';
 import { DateTime } from 'luxon';
 import { TradeContext, getRealisedPnL, getTickMultiplier } from '../../context/TradeContext';
 import { useStatus } from '../../context/StatusContext';
@@ -118,6 +119,12 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   const logoPopupRef = useRef(null); //
   const statusPopupRef = useRef(null); //
   const statusBoxTriggerRef = useRef(null); // Renamed for clarity, ref for the status trigger area //
+  // Tablet/phone: while the account popup, the + menu or the connection log
+  // is open, an invisible layer covers the page behind it. A tap outside
+  // then only closes the popup — it used to also land on what was under the
+  // finger (a trade row opened the trade).
+  const tapGuardRef = useRef(null);
+  const onTapGuard = (target) => !!(tapGuardRef.current && tapGuardRef.current.contains(target));
   const [tradingViewStatus, setTradingViewStatus] = useState(null);
   const [ibkrDataStatus, setIbkrDataStatus] = useState(null);
   // What IBKR has waiting (BrokerAlertsContext). For the open account: a
@@ -217,6 +224,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
 
   useEffect(() => {
     const handleClickOutsideLogo = (event) => {
+      if (onTapGuard(event.target)) return; // the guard's own click closes it
       if (logoRef.current && !logoRef.current.contains(event.target) &&
           logoPopupRef.current && !logoPopupRef.current.contains(event.target)) { //
         setShowLogoPopup(false); //
@@ -239,6 +247,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
 
   useEffect(() => {
     const handleClickOutsideAction = (event) => {
+      if (onTapGuard(event.target)) return;
       const plusButton = document.querySelector(`.${styles.plusButton}`); //
       if (plusButton && plusButton.contains(event.target)) {
         return; //
@@ -257,6 +266,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
 
   useEffect(() => {
     const handleClickOutsideStatusPopup = (event) => {
+      if (onTapGuard(event.target)) return;
       if (statusPopupRef.current && !statusPopupRef.current.contains(event.target) &&
           statusBoxTriggerRef.current && !statusBoxTriggerRef.current.contains(event.target)) { //
         setShowStatusPopup(false); //
@@ -506,6 +516,8 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   const recentLogs = statusLogs.slice(-5);
   const allLogs = statusLogs.slice(-50);
 
+  const showTapGuard = navMode !== 'wide' && (showLogoPopup || showActionPopup || showStatusPopup);
+
   return (
     <nav className={`${styles.navigation} ${navMode === 'medium' && isLowHeight ? styles.mediumLowHeight : ''}`}> {/* */}
       <div className={styles.logo} ref={logoRef} onClick={handleLogoClick}> {/* */}
@@ -602,13 +614,13 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
               }`}
               ref={actionPopupRef} //
             >
-              <button className={styles.newTradeBtn} onClick={onNewTrade}> {/* */}
+              <button className={styles.newTradeBtn} onClick={() => { setShowActionPopup(false); onNewTrade(); }}> {/* */}
                 <svg className={styles.btnIcon} viewBox="0 0 20 20" fill="currentColor"> {/* */}
                   <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM14 11a1 1 0 011 1v1h1a1 1 0 110 2h-1v1a1 1 0 11-2 0v-1h-1a1 1 0 110-2h1v-1a1 1 0 011-1z" />
                 </svg>
                 <span className={styles.btnText}>New Trade</span>
               </button>
-              <button className={styles.noteBtn} onClick={onNewNote}> {/* */}
+              <button className={styles.noteBtn} onClick={() => { setShowActionPopup(false); onNewNote(); }}> {/* */}
                 <svg className={styles.btnIcon} viewBox="0 0 20 20" fill="currentColor"> {/* */}
                   <path d="M5 4a2 2 0 012-2h6a2 2 0 012 2v14l-5-2.5L5 18V4z" />
                 </svg>
@@ -627,6 +639,16 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
         </div>
       )}
       
+      {showTapGuard && createPortal(
+        <div
+          ref={tapGuardRef}
+          className={styles.tapGuard}
+          onClick={() => { setShowLogoPopup(false); setShowActionPopup(false); setShowStatusPopup(false); }}
+          aria-hidden="true"
+        />,
+        document.body
+      )}
+
       {/* Full WebSocket Status Popup - now can be triggered from any mode if accountInfo is visible */}
       {showStatusPopup && (
         <div className={styles.fullStatusPopup} ref={statusPopupRef}> {/* */}
