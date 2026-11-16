@@ -7,6 +7,7 @@ import { resolveDisplayZone } from '../../utils/timezonePreference';
 import useLiveSocket from '../../utils/useLiveSocket';
 import { formatNumber } from '../../utils/numberFormat';
 import { timeframeLabel } from '../../utils/timeframeLabel';
+import { useFetchStatus, fetchNearestStoredBars } from '../../utils/useChartWaiting';
 import useTheme from '../../utils/useTheme';
 import { themeColor, fillMarkColor, recolorFillMarks } from '../../utils/theme';
 
@@ -36,6 +37,9 @@ const BARS_PADDING = 60;
 // finally arrives). 1000 bars either side is generous context without ever
 // risking an unbounded payload.
 const BARS_PADDING_FULL = 1000;
+// Bars' time loaded when the window around the trade has none stored (see
+// fetchNearestStoredBars); the background load adds more.
+const NEAREST_BARS = 300;
 
 // Read-only reference chart shown while creating/editing a trade — helps
 // picking a Stop Loss / Target by seeing the price action around the actual
@@ -65,8 +69,15 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
   // affect the chart, and showed a second, redundant picker).
   const [loading, setLoading] = useState(true);
   const [awaitingData, setAwaitingData] = useState(false);
+  // The window around the trade had no stored bars, so the nearest ones are
+  // shown until a bar inside it is stored. Times of that window in seconds.
+  const [barsAwayFromTrade, setBarsAwayFromTrade] = useState(false);
+  const barsAwayFromTradeRef = useRef(false);
+  const initialWindowRef = useRef(null);
   const [error, setError] = useState(null);
   const [bars, setBars] = useState([]);
+  // What the server is downloading while the chart waits for its bars.
+  const fetchStatus = useFetchStatus(loading && awaitingData, symbol, timeframe);
   // Whether the initial padded fetch, and then the background full-history
   // fetch, have each completed once for the current symbol/type/timeframe —
   // mirrors TradeView's `initialDataLoaded`/`fullHistoryLoaded` state machine.
@@ -132,16 +143,35 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
     const centerMax = maxActionTime ?? DateTime.now().toSeconds();
     const startDate = DateTime.fromSeconds(centerMin - paddingSecs).toISO();
     const endDate = DateTime.fromSeconds(centerMax + paddingSecs).toISO();
+    if (isInitialLoad) initialWindowRef.current = { start: centerMin - paddingSecs, end: centerMax + paddingSecs };
     const url = `${process.env.REACT_APP_API_URL}/api/historical/db?symbol=${encodeURIComponent(symbol)}&type=${encodeURIComponent(type)}&timeframe=${timeframe}&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}${storedOnly ? '&noRefresh=true' : ''}`;
 
     const controller = requestControllerRef.current;
     try {
       const res = await fetch(url, { headers: { 'x-account-id': '1' }, signal: controller?.signal });
-      const responseData = await res.json();
+      let responseData = await res.json();
 
       if (!res.ok && res.status !== 202) {
         throw new Error(responseData?.error || responseData?.message || `HTTP error! status: ${res.status}`);
       }
+
+      // Nothing stored around the trade but bars elsewhere (a weekend, a
+      // trade before its first bar is complete): show the nearest ones
+      // instead of waiting for bars that come later or never.
+      const noBars = !Array.isArray(responseData) || responseData.length === 0;
+      if (isInitialLoad && noBars) {
+        const nearest = await fetchNearestStoredBars({
+          symbol, type, timeframe, windowStart: startDate, windowEnd: endDate,
+          bars: NEAREST_BARS, barSeconds: getBarDurationInSeconds(timeframe), signal: controller?.signal,
+        }).catch(err => { if (err.name === 'AbortError') throw err; return null; });
+        if (nearest) {
+          responseData = nearest;
+          barsAwayFromTradeRef.current = true;
+          setBarsAwayFromTrade(true);
+        }
+      }
+      // A wider load finding none keeps the bars already shown.
+      if (!isInitialLoad && noBars) return;
 
       if (responseData && typeof responseData === 'object' && !Array.isArray(responseData) && responseData.message) {
         // Backend has no data yet and has queued a population task — a real
@@ -161,6 +191,16 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
       }
 
       loadPhaseRef.current = isInitialLoad ? 'initial' : 'full';
+      // The trade's own bars have arrived: fills drawn again, view re-centred.
+      const win = initialWindowRef.current;
+      if (!isInitialLoad && barsAwayFromTradeRef.current && win && responseData.some(bar => {
+        const t = Date.parse(bar.time) / 1000;
+        return t >= win.start && t <= win.end;
+      })) {
+        barsAwayFromTradeRef.current = false;
+        setBarsAwayFromTrade(false);
+        hasAutoFitRef.current = false;
+      }
       setAwaitingData(false);
       setError(null);
       setBars(responseData);
@@ -195,6 +235,8 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
     if (!symbol) return;
     hasAutoFitRef.current = false;
     loadPhaseRef.current = 'initial';
+    barsAwayFromTradeRef.current = false;
+    setBarsAwayFromTrade(false);
     setBars([]);
     setInitialDataLoaded(false);
     setFullHistoryLoaded(false);
@@ -365,7 +407,8 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
     series.setData(chartData);
 
     if (typeof series.setMarkers === 'function') {
-      const markers = (actions || [])
+      // Not on bars away from the trade: its fills would sit on the wrong bar.
+      const markers = (barsAwayFromTradeRef.current ? [] : (actions || []))
         .filter(a => a.dateTime && a.dateTime.isValid && a.price !== '' && a.price != null && !isNaN(parseFloat(a.price)))
         .map(a => {
           const actionTime = Math.floor(a.dateTime.setZone(zone).toUnixInteger());
@@ -410,9 +453,11 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
         // fallback, the chart got data but its view was never set at all,
         // which rendered as a permanently blank chart with no error and no
         // loading indicator, no matter how long you waited.
+        // Bars away from the trade: the newest of them, not the trade's
+        // time past their end (that showed only the last bar or two).
         const centerTimes = markers.length > 0
           ? markers.map(m => m.time)
-          : (minActionTime != null && maxActionTime != null)
+          : (minActionTime != null && maxActionTime != null && !barsAwayFromTradeRef.current)
             ? [minActionTime, maxActionTime]
             : [chartData[chartData.length - 1].time];
         hasAutoFitRef.current = true;
@@ -436,7 +481,7 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
         chartRef.current.timeScale().setVisibleRange({ from, to });
       }
     }
-  }, [bars, actions, zone, timeframe, pricePrecision]);
+  }, [bars, actions, zone, timeframe, pricePrecision, barsAwayFromTrade]);
 
   // Desktop: an inline panel that sits alongside the form (see TradeModal.jsx,
   // which widens its modal and splits into a left column for the form /
@@ -484,8 +529,16 @@ export default function TradeFormChart({ symbol, type, actions, exchangeTimezone
           <div style={{ position: 'absolute', inset: 0, zIndex: 10, display: 'flex', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 10, background: 'var(--primary-dark)' }}>
             <Oval height="40" width="40" color="#3B82F6" ariaLabel="loading-indicator" secondaryColor="#ccc" strokeWidth={4} strokeWidthSecondary={4} />
             <p style={{ color: 'var(--ui-text-4)', fontSize: '0.9em', textAlign: 'center', padding: '0 20px' }}>
-              {awaitingData ? `Fetching ${symbol} (${timeframeLabel(timeframe)}) data for the first time — this can take a bit…` : `Loading ${timeframeLabel(timeframe)} chart…`}
+              {awaitingData ? `Fetching ${symbol} (${timeframeLabel(timeframe)}) data for the first time — this can take a bit… ${fetchStatus.elapsed}` : `Loading ${timeframeLabel(timeframe)} chart…`}
             </p>
+            {awaitingData && fetchStatus.status && (
+              <p style={{ margin: 0, color: 'var(--ui-muted)', fontSize: '0.85em', textAlign: 'center', padding: '0 20px', fontVariantNumeric: 'tabular-nums' }}>{fetchStatus.status}</p>
+            )}
+          </div>
+        )}
+        {!loading && !error && barsAwayFromTrade && (
+          <div role="status" style={{ position: 'absolute', top: 8, left: '50%', transform: 'translateX(-50%)', maxWidth: 'calc(100% - 24px)', zIndex: 10, pointerEvents: 'none', padding: '6px 12px', background: 'var(--ui-chart-msg)', color: 'var(--ui-text-3)', border: '1px solid var(--ui-border)', borderRadius: 8, fontSize: '0.8em', textAlign: 'center' }}>
+            No {timeframeLabel(timeframe)} bars around this trade yet; showing the nearest stored ones. The chart updates when they're stored.
           </div>
         )}
         {error && (

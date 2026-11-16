@@ -21,6 +21,7 @@ import { debounce } from 'lodash';
 import { Oval } from 'react-loader-spinner';
 import { notify, confirmDialog } from '../common/Dialogs';
 import { timeframeLabel } from '../../utils/timeframeLabel';
+import { useFetchStatus, fetchNearestStoredBars } from '../../utils/useChartWaiting';
 
 // Remembers the last chart timeframe picked per symbol (scoped by type too,
 // since a symbol string could in principle mean different things for STK vs
@@ -75,6 +76,10 @@ function createSimpleGuardedFetch() {
     return requestPromise;
   };
 }
+
+// Bars' time loaded when the window around a trade has none stored (see
+// fetchNearestStoredBars); the background load adds more.
+const NEAREST_BARS = 300;
 
 function getBarDurationInSeconds(timeframe) {
   switch (timeframe) {
@@ -382,6 +387,8 @@ export default function TradeView({ trade, onClose, onEdit }) {
   const risk = useMemo(() => calculateRisk(trade), [trade]);
   const [chartLoading, setChartLoading] = useState(false);
   const [hasChartDataBars, setHasChartDataBars] = useState(false);
+  // What the server is downloading while the chart waits for its bars.
+  const fetchStatus = useFetchStatus(showChart && chartLoading && awaitingData, trade?.symbol, timeframe);
 
   const hasSymbolSetting = useMemo(() => {
     if (!trade?.symbol || !trade?.type || !Array.isArray(futuresSettings)) return false;
@@ -427,6 +434,12 @@ export default function TradeView({ trade, onClose, onEdit }) {
   // snapshot taken before an async fetch starts is stale by the time that
   // fetch resolves if the user kept panning in the meantime).
   const hasAutoFittedRef = useRef(false);
+  // The window around the trade had no stored bars, so the nearest ones are
+  // shown (see fetchChartDataLogic) until a bar inside it is stored. Times
+  // of that window in seconds.
+  const [barsAwayFromTrade, setBarsAwayFromTrade] = useState(false);
+  const barsAwayFromTradeRef = useRef(false);
+  const initialWindowRef = useRef(null);
   // A view set with setVisibleRange only takes effect on the chart's next
   // frame; until then getVisibleRange still answers the old one. Data that
   // arrived in between (an edge chunk answers within milliseconds) used to
@@ -531,6 +544,7 @@ const [dataVersion, setDataVersion] = useState(0);
     if (storedOnly) url += '&noRefresh=true';
 
     // --- New logic to define the prioritized window ---
+    let initialWindow = null;
     if (isInitialLoad) {
       const BARS_PADDING = 60; // Number of bars to show before/after trade actions
       const barDurationSecs = getBarDurationInSeconds(timeframe);
@@ -543,7 +557,9 @@ const [dataVersion, setDataVersion] = useState(0);
         
         const startDate = DateTime.fromSeconds(minTime - paddingDuration).toISO();
         const endDate = DateTime.fromSeconds(maxTime + paddingDuration).toISO();
-        
+        initialWindow = { startDate, endDate };
+        initialWindowRef.current = { start: minTime - paddingDuration, end: maxTime + paddingDuration };
+
         url += `&startDate=${encodeURIComponent(startDate)}&endDate=${encodeURIComponent(endDate)}`;
       }
     } else {
@@ -572,7 +588,9 @@ const [dataVersion, setDataVersion] = useState(0);
 
   try {
     const guardedFetch = guardedFetchRef.current;
-      const { response, data: responseData } = await guardedFetch(url, { headers: { 'x-account-id': '1' } });
+      const fetched = await guardedFetch(url, { headers: { 'x-account-id': '1' } });
+      const { response } = fetched;
+      let responseData = fetched.data;
 
       if (!response.ok) {
         throw new Error(responseData.error || responseData.message || `HTTP error! status: ${response.status}`);
@@ -585,6 +603,28 @@ const [dataVersion, setDataVersion] = useState(0);
         setContractSeriesUnavailable(true);
         return;
       }
+
+      // Nothing stored around the trade, but bars elsewhere (a trade from
+      // this morning before its first bar is complete, a weekend): show the
+      // nearest ones. Before, the chart said "Awaiting data" until a bar
+      // inside the window was stored, also long after the download ended.
+      if (isInitialLoad && noBars && initialWindow) {
+        const nearest = await fetchNearestStoredBars({
+          symbol: trade.symbol, type: trade.type, timeframe,
+          contractMonth: useTradedContractSeries ? tradedContract : null,
+          windowStart: initialWindow.startDate, windowEnd: initialWindow.endDate,
+          bars: NEAREST_BARS, barSeconds: getBarDurationInSeconds(timeframe),
+        }).catch(() => null);
+        if (nearest) {
+          responseData = nearest;
+          barsAwayFromTradeRef.current = true;
+          setBarsAwayFromTrade(true);
+        }
+      }
+
+      // Once bars are on screen, a later load finding none (the wider
+      // window around a trade that only has bars away from it) keeps them.
+      if (!isInitialLoad && noBars && chartDataRef.current.length > 0) return;
 
       // Specifically check for the "task queued" message object that the server sends with a 202 status.
       if (responseData && typeof responseData === 'object' && !Array.isArray(responseData) && responseData.message) {
@@ -705,6 +745,15 @@ const [dataVersion, setDataVersion] = useState(0);
         });
         rawData.forEach(bar => mergedMap.set(bar.time, bar));
         chartDataRef.current = Array.from(mergedMap.values()).sort((a, b) => a.time - b.time);
+        // The trade's own bars have arrived: its fills are drawn again and
+        // the view centres on them once more.
+        const win = initialWindowRef.current;
+        if (barsAwayFromTradeRef.current && win && chartDataRef.current.some(bar => bar.time >= win.start && bar.time <= win.end)) {
+          barsAwayFromTradeRef.current = false;
+          setBarsAwayFromTrade(false);
+          hasAutoFittedRef.current = false;
+          pendingViewRef.current = null;
+        }
         setFullHistoryLoaded(true);
         setAwaitingData(false); // Ensure awaiting data is reset
         setDataVersion(prev => prev + 1); // Increment version
@@ -935,8 +984,9 @@ const [dataVersion, setDataVersion] = useState(0);
         const allMarkers = [];
 
       if (typeof candlestickSeriesRef.current.setMarkers === 'function') {
-        // 1. Action Markers (Buy/Sell)
-        if (trade.actions) {
+        // 1. Action Markers (Buy/Sell) — not on bars away from the trade,
+        // which would put its fills on the wrong bar.
+        if (trade.actions && !barsAwayFromTradeRef.current) {
           const actionMarkers = trade.actions
             .filter(action => action.dateTime && action.price != null)
             .map(action => {
@@ -1049,7 +1099,7 @@ const [dataVersion, setDataVersion] = useState(0);
         }
       }
     }
-}, [chartLoading, fullHistoryLoaded, showBackAdjustedLines, showChart, trade, timeframe, displayTimezone, exchangeTimezone, pricePrecision, hasChartDataBars, dataVersion]);
+}, [chartLoading, fullHistoryLoaded, showBackAdjustedLines, showChart, trade, timeframe, displayTimezone, exchangeTimezone, pricePrecision, hasChartDataBars, dataVersion, barsAwayFromTrade]);
 
   const debouncedFetchChartData = useMemo(
     () => debounce(fetchChartDataLogic, DEBOUNCE_DELAY),
@@ -1119,9 +1169,11 @@ useEffect(() => {
       // Only whether the symbol is set up matters (404 when it isn't), so a
       // week's window: without one this downloaded the symbol's whole
       // history (megabytes for an hourly future) each time a trade opened.
+      // Stored bars only: asking without noRefresh queued a download of the
+      // default timeframe ahead of the one the chart shows.
       const checkStart = encodeURIComponent(DateTime.now().minus({ days: 7 }).toISO());
       const checkEnd = encodeURIComponent(DateTime.now().toISO());
-      const historicalCheckRes = await guardedFetch(`${process.env.REACT_APP_API_URL}/api/historical/db?symbol=${encodeURIComponent(trade.symbol)}&type=${encodeURIComponent(trade.type)}&timeframe=${defaultTimeframe}&startDate=${checkStart}&endDate=${checkEnd}`, {
+      const historicalCheckRes = await guardedFetch(`${process.env.REACT_APP_API_URL}/api/historical/db?symbol=${encodeURIComponent(trade.symbol)}&type=${encodeURIComponent(trade.type)}&timeframe=${defaultTimeframe}&startDate=${checkStart}&endDate=${checkEnd}&noRefresh=true`, {
         headers: { 'x-account-id': '1' },
       });
 
@@ -1149,6 +1201,9 @@ useEffect(() => {
       // Reset so we always auto-center on the first load for this chart generation.
       hasAutoFittedRef.current = false;
       pendingViewRef.current = null;
+      barsAwayFromTradeRef.current = false;
+      setBarsAwayFromTrade(false);
+      initialWindowRef.current = null;
       setFullHistoryLoaded(false); // Reset full history flag
       setInitialDataLoaded(false); // *** ADD THIS RESET ***
       // New symbol/timeframe — neither edge has been confirmed exhausted yet.
@@ -2213,7 +2268,14 @@ useEffect(() => {
               {chartLoading && awaitingData && (
                 <div className={styles.chartMessageOverlay}>
                   <Oval height="40" width="40" color="#3B82F6" ariaLabel="loading-indicator" secondaryColor="#ccc" strokeWidth={4} strokeWidthSecondary={4} />
-                  <p style={{ marginTop: '10px' }}>Awaiting data for {timeframeLabel(timeframe)}...</p>
+                  <p style={{ marginTop: '10px' }}>Awaiting data for {timeframeLabel(timeframe)}... {fetchStatus.elapsed}</p>
+                  {fetchStatus.status && <p className={styles.chartFetchStatus}>{fetchStatus.status}</p>}
+                </div>
+              )}
+
+              {!chartLoading && barsAwayFromTrade && (
+                <div className={styles.chartNotice} role="status">
+                  No {timeframeLabel(timeframe)} bars around this trade yet; showing the nearest stored ones. The chart updates when they're stored.
                 </div>
               )}
 
