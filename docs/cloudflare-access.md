@@ -18,6 +18,8 @@ In Cloudflare Zero Trust → Access → Applications → Add → Self-hosted:
 
 Don't add Bypass rules to this application.
 
+The one exception is the app icon. Browsers and phones fetch `manifest.json` and the home-screen icon without the Access cookie, so behind the login they get the login page instead of an image and the icon is missing. Add a second Access application, with policy action **Bypass** (Include → Everyone), whose destinations are exactly these four paths on your hostname: `/favicon.ico`, `/logo192.png`, `/logo512.png`, `/manifest.json`. The journal itself lets only those exact four files (GET) through without a token, so even a too-wide Bypass rule can't open anything else.
+
 Then add the public hostname to your tunnel, pointing at the journal (e.g. `http://jjournal:3999`), and let Cloudflare create the DNS record.
 
 ## 2. TradingView webhook: keep it on its own hostname
@@ -46,5 +48,6 @@ Not affected:
 
 - Requests that don't come through Cloudflare (your LAN, your VPN) — they work exactly as before.
 - `/api/webhooks/*` — TradingView can't log in through Access; those routes check their own shared secret.
+- `GET` of `/favicon.ico`, `/logo192.png`, `/logo512.png` and `/manifest.json` — the app icon (see above).
 
 Implementation: `modules/cloudflare-access.js`.

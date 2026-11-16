@@ -24,6 +24,7 @@
 //     trusted-network model.
 //   - /api/webhooks/*: called by TradingView's servers, which can't log in
 //     through Access; those routes check their own shared secret.
+//   - GET of the app icon files and manifest.json (see PUBLIC_ASSETS).
 //
 // See docs/cloudflare-access.md.
 
@@ -42,9 +43,15 @@ function cameThroughCloudflare(headers) {
     return CLOUDFLARE_HEADERS.some(h => headers[h] !== undefined);
 }
 
-function isExemptPath(url) {
+// The app icon and manifest are fetched by browsers and phones without the
+// Access cookie (the web app manifest, Safari's home-screen icon), so they
+// can't sit behind the login. They're the same files as in the public repo.
+const PUBLIC_ASSETS = new Set(['/favicon.ico', '/logo192.png', '/logo512.png', '/manifest.json']);
+
+function isExemptPath(url, method = 'GET') {
     const path = (url || '').split('?')[0];
-    return path.startsWith('/api/webhooks/');
+    if (path.startsWith('/api/webhooks/')) return true;
+    return (method === 'GET' || method === 'HEAD') && PUBLIC_ASSETS.has(path);
 }
 
 function base64urlDecode(s) {
@@ -148,7 +155,7 @@ function createAccessGuard({ getConfig, fetchJson, now = Date.now, logger = cons
     /** Decides one request. Resolves to { ok, reason }. */
     async function check(req) {
         if (!cameThroughCloudflare(req.headers)) return { ok: true };
-        if (isExemptPath(req.url)) return { ok: true };
+        if (isExemptPath(req.url, req.method)) return { ok: true };
 
         let cfg;
         try {

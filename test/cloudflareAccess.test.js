@@ -68,6 +68,17 @@ test('webhooks are exempt (they check their own secret)', async () => {
     assert.strictEqual((await guard().check(req('/api/webhooksx', viaCf()))).ok, false);
 });
 
+test('only the exact icon/manifest files are public, and only for GET', async () => {
+    const g = guard();
+    for (const p of ['/favicon.ico', '/logo192.png', '/logo512.png', '/manifest.json', '/manifest.json?v=2']) {
+        assert.strictEqual((await g.check(req(p, viaCf()))).ok, true, p);
+    }
+    for (const p of ['/favicon.ico/x', '/logo192.png.bak', '/static/js/main.js', '/manifest.jsonx', '/index.html']) {
+        assert.strictEqual((await g.check(req(p, viaCf()))).ok, false, p);
+    }
+    assert.strictEqual((await g.check({ url: '/favicon.ico', method: 'POST', headers: viaCf() })).ok, false);
+});
+
 test('without a cloudflareAccess config nothing changes', async () => {
     assert.strictEqual((await guard(null).check(req('/', viaCf()))).ok, true);
 });
