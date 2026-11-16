@@ -1,4 +1,4 @@
-import React, { useContext, useState, useEffect, useRef } from 'react';
+import React, { useCallback, useContext, useState, useEffect, useRef } from 'react';
 import { DateTime } from 'luxon';
 import { TradeContext, getRealisedPnL, getTickMultiplier } from '../../context/TradeContext';
 import { useStatus } from '../../context/StatusContext';
@@ -9,7 +9,7 @@ import narrowMinus from '../common/narrowMinus';
 import { setNumberFormat } from '../../utils/numberFormat';
 import { descendantAccountIds } from '../../utils/accountTree';
 import AccountOptions from '../common/AccountOptions';
-import AboutCard from './AboutCard';
+import AboutCard, { AboutLine } from './AboutCard';
 import useSheetDismiss from '../../utils/useSheetDismiss';
 import { sumByCurrency, mergeTotals, toTotalsList } from '../../utils/currencyTotals';
 import { timeframeLabel } from '../../utils/timeframeLabel';
@@ -102,8 +102,8 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   const [isLowHeight, setIsLowHeight] = useState(false);
   const [showStatusPopup, setShowStatusPopup] = useState(false);
   // The logo: each click spins it; on the wide sidebar it opens the About
-  // card (version, build, a quote). Narrower, it opens the account popup,
-  // which has the same at its bottom.
+  // window (version, build, a quote). Narrower, it opens the account popup,
+  // which has the version at its bottom.
   const [showAbout, setShowAbout] = useState(false);
   const [logoSpins, setLogoSpins] = useState(0);
   const [descendantTrades, setDescendantTrades] = useState([]);
@@ -231,19 +231,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
     };
   }, [showLogoPopup]); //
 
-  useEffect(() => {
-    if (!showAbout) return undefined;
-    const onPointerDown = (event) => {
-      if (logoRef.current && !logoRef.current.contains(event.target)) setShowAbout(false);
-    };
-    const onKey = (event) => { if (event.key === 'Escape') setShowAbout(false); };
-    document.addEventListener('pointerdown', onPointerDown);
-    document.addEventListener('keydown', onKey);
-    return () => {
-      document.removeEventListener('pointerdown', onPointerDown);
-      document.removeEventListener('keydown', onKey);
-    };
-  }, [showAbout]);
+  const closeAbout = useCallback(() => setShowAbout(false), []);
 
   // On a phone the connection log is a card from the bottom: swipe it down
   // to close (no backdrop of its own to fade).
@@ -528,7 +516,6 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
           className={`${styles.logoImg} ${logoSpins > 0 ? styles.logoSpin : ''}`}
         />
         <h1 className={styles.logoText}>Jay's Journal</h1> {/* */}
-        {showAbout && navMode === 'wide' && <AboutCard />}
         {showLogoPopup && navMode !== 'wide' && (
           <div
             className={`${styles.logoPopup} ${showLogoPopup ? styles.show : ''}`} //
@@ -536,10 +523,12 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
           >
             {renderAccountInfo()}
             {renderStatusLights()}
-            <AboutCard compact />
+            <AboutLine />
           </div>
         )}
       </div>
+
+      {showAbout && navMode === 'wide' && <AboutCard onClose={closeAbout} />}
 
       {showRegularActionButtons && isDatabaseConnected && (
         <div className={styles.actionButtons}>

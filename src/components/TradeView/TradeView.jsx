@@ -1692,6 +1692,10 @@ useEffect(() => {
 
   // Phones: the window is a card from the bottom; swiping it down is the ×.
   useSheetDismiss(modalRef, { enabled: isMobile && !!trade, onRequestClose: onClose });
+  // The full-screen chart too, a card over the window: swiped down from its
+  // bar (never from the chart, whose drags move the chart), it closes.
+  const chartSheetRef = useRef(null);
+  useSheetDismiss(chartSheetRef, { enabled: isMobile && !!trade && showChart, onRequestClose: () => setShowChart(false) });
 
   if (!trade) return null;
 
@@ -2178,8 +2182,14 @@ useEffect(() => {
           }}
         >
           <div
-            className={styles.modal}
-            style={{
+            ref={chartSheetRef}
+            className={`${styles.modal} ${isMobile ? sheet.sheet : ''}`}
+            style={isMobile ? {
+              // A card from the bottom (Sheet.module.css sizes it).
+              display: 'flex',
+              flexDirection: 'column',
+              position: 'relative',
+            } : {
               width: '100vw',
               height: '100dvh',
               display: 'flex',
@@ -2189,7 +2199,8 @@ useEffect(() => {
               margin: 0
             }}
           >
-            <div className={`${styles.headerRow} ${styles.chartHeaderRow} ${styles.chartBar}`}>
+            {isMobile && <div className={sheet.grip} data-sheet-handle aria-hidden="true" />}
+            <div className={`${styles.headerRow} ${styles.chartHeaderRow} ${styles.chartBar}`} data-sheet-handle>
               <div className={styles.chartIdentity}>
                 <span className={styles.chartSymbol}>{trade.symbol}</span>
                 {trade.side && (
@@ -2259,6 +2270,7 @@ useEffect(() => {
             </div>
             <div
               ref={chartContainerRef}
+              data-sheet-no-drag
               className={styles.chartContainer}
               style={{ position: 'relative', flex: 1 }}
             >

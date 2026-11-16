@@ -67,98 +67,122 @@
 }
 
 /* ---------- About (opened by the logo) ---------- */
-.aboutCard {
-  position: absolute;
-  top: calc(100% + 10px);
-  left: 0;
-  z-index: 1010;
-  width: 290px;
-  padding: 16px;
-  box-sizing: border-box;
-  background: var(--ui-popover);
-  border: 1px solid var(--ui-border);
-  border-radius: 16px;
-  box-shadow: 0 18px 48px rgba(var(--ui-shadow-rgb), calc(0.5 * var(--ui-shadow-k)));
-  cursor: default;
-  animation: fadeIn 0.2s ease-out;
-}
-
-.aboutCompact {
-  padding: 10px 14px 12px;
-  border-top: 1px solid var(--ui-border);
-  cursor: default;
-}
-
-.aboutHead {
+/* Wide sidebar: a small window in the middle of the screen. */
+.aboutOverlay {
+  position: fixed;
+  inset: 0;
+  z-index: 2500; /* above windows (2000), below app dialogs (3000) */
   display: flex;
   align-items: center;
-  gap: 12px;
+  justify-content: center;
+  padding: 24px;
+  background: var(--ui-backdrop);
+  -webkit-backdrop-filter: blur(3px);
+  backdrop-filter: blur(3px);
+  animation: aboutFade 0.18s ease-out;
+}
+
+@keyframes aboutFade {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+.aboutCard {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  width: 340px;
+  max-width: 100%;
+  padding: 28px 24px 22px;
+  box-sizing: border-box;
+  background: linear-gradient(180deg, var(--ui-card-top) 0%, var(--ui-popover) 120px);
+  border: 1px solid var(--ui-border);
+  border-radius: 18px;
+  box-shadow: 0 30px 80px rgba(var(--ui-shadow-rgb), calc(0.55 * var(--ui-shadow-k)));
+  text-align: center;
+  animation: aboutIn 0.22s ease-out;
+}
+
+@keyframes aboutIn {
+  from { opacity: 0; transform: translateY(8px) scale(0.98); }
+  to { opacity: 1; transform: none; }
+}
+
+.aboutClose {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  border: none;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--ui-muted);
+  cursor: pointer;
+}
+
+@media (hover: hover) {
+  .aboutClose:hover {
+    background: rgba(var(--ui-ink-rgb), 0.07);
+    color: var(--ui-strong);
+  }
 }
 
 .aboutLogo {
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  box-shadow: 0 6px 18px rgba(var(--ui-accent-rgb), 0.25);
+  width: 64px;
+  height: 64px;
+  border-radius: 16px;
+  box-shadow: 0 10px 28px rgba(var(--ui-accent-rgb), 0.3);
+  animation: logoSpin 0.7s cubic-bezier(0.3, 0.7, 0.3, 1);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .aboutLogo {
+    animation: none;
+  }
 }
 
 .aboutName {
-  font-size: 15px;
+  margin-top: 14px;
+  font-size: 18px;
   font-weight: 650;
   color: var(--ui-strong);
   letter-spacing: -0.01em;
 }
 
-.aboutCompact .aboutName {
-  display: none;
-}
-
 .aboutVersion {
-  margin-top: 2px;
-  font-size: 12px;
+  margin-top: 4px;
+  font-size: 13px;
   color: var(--ui-muted);
   font-variant-numeric: tabular-nums;
 }
 
 .aboutBuilt {
+  font-size: 12px;
   color: var(--ui-faint);
   white-space: nowrap;
-}
-
-/* The wide card: the build on a line of its own. */
-.aboutCard .aboutSep {
-  display: none;
-}
-
-.aboutCard .aboutBuilt {
-  display: block;
-}
-
-.aboutCard .aboutBuilt::first-letter {
-  text-transform: uppercase;
 }
 
 .aboutQuote {
   display: block;
   width: 100%;
-  margin: 14px 0 0;
-  padding: 10px 12px;
+  margin: 18px 0 0;
+  padding: 12px 14px;
   border: none;
   border-radius: 12px;
   background: rgba(var(--ui-ink-rgb), 0.04);
   color: var(--ui-text-2);
   font: inherit;
-  font-size: 12.5px;
+  font-size: 13px;
   line-height: 1.45;
   text-align: left;
   cursor: pointer;
   transition: background 0.15s;
-}
-
-.aboutCompact .aboutQuote {
-  margin-top: 8px;
-  padding: 8px 10px;
-  font-size: 12px;
 }
 
 @media (hover: hover) {
@@ -169,19 +193,24 @@
 
 .aboutQuoteText {
   display: block;
-  animation: quoteIn 0.25s ease-out;
-}
-
-@keyframes quoteIn {
-  from { opacity: 0; }
-  to { opacity: 1; }
+  animation: aboutFade 0.25s ease-out;
 }
 
 .aboutQuoteBy {
   display: block;
   margin-top: 4px;
-  font-size: 11px;
+  font-size: 11.5px;
   color: var(--ui-faint);
+}
+
+/* Tablet/phone logo popup: the version line at its bottom. */
+.aboutCompact {
+  padding: 10px 14px 12px;
+  border-top: 1px solid var(--ui-border);
+  font-size: 12px;
+  color: var(--ui-muted);
+  font-variant-numeric: tabular-nums;
+  cursor: default;
 }
 
 /* ---------- New trade / new note ---------- */

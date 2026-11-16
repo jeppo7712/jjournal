@@ -47,7 +47,7 @@ export default function useSheetDismiss(sheetRef, { enabled, onRequestClose, fad
       timers.push(setTimeout(() => {
         if (closeRef.current) closeRef.current();
         // Still open: it asked first (unsaved changes) — show the window again.
-        timers.push(setTimeout(() => { if (mounted.current) slideBack(); }, 150));
+        timers.push(setTimeout(() => { if (mounted.current && sheet.isConnected) slideBack(); }, 150));
       }, OUT_MS));
     };
 
