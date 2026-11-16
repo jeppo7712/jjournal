@@ -14,6 +14,7 @@ import useTheme from '../../utils/useTheme';
 import { themeColor, fillMarkColor, recolorFillMarks } from '../../utils/theme';
 import styles from './TradeView.module.css';
 import { formatMoney, currencyMark } from '../../utils/formatMoney';
+import narrowMinus from '../common/narrowMinus';
 import { formatNumber } from '../../utils/numberFormat';
 import { createChart, LineType } from 'lightweight-charts';
 import { getRealisedPnL } from '../../context/TradeContext';
@@ -1811,7 +1812,7 @@ useEffect(() => {
             <div className={styles.tvPnl}>
               <span className={styles.tvPnlLabel}>{trade.status === 'OPEN' ? 'Total P&L (open)' : 'Net P&L'}</span>
               <span className={`${styles.tvPnlValue} ${pnlTone(trade.status === 'OPEN' && unrealisedPnL === null ? realisedPnL : totalPnL)}`}>
-                {formatMoney(trade.status === 'OPEN' && unrealisedPnL === null ? realisedPnL : totalPnL, trade.currency)}
+                {narrowMinus(formatMoney(trade.status === 'OPEN' && unrealisedPnL === null ? realisedPnL : totalPnL, trade.currency))}
               </span>
               <span className={styles.tvPnlSub}>
                 {returnPct !== null && returnPct !== undefined && !isNaN(returnPct) && (
@@ -1826,7 +1827,7 @@ useEffect(() => {
                 <div className={styles.tvSplit}>
                   <span className={styles.tvSplitItem} title="Locked in by partial closes so far">
                     <span className={styles.tvSplitDot} style={{ background: '#60A5FA' }} />
-                    Realised <strong className={pnlTone(realisedPnL)}>{formatMoney(realisedPnL, trade.currency)}</strong>
+                    Realised <strong className={pnlTone(realisedPnL)}>{narrowMinus(formatMoney(realisedPnL, trade.currency))}</strong>
                   </span>
                   <span
                     className={styles.tvSplitItem}
@@ -1836,7 +1837,7 @@ useEffect(() => {
                   >
                     <span className={styles.tvSplitDot} style={{ background: '#F59E0B' }} />
                     Unrealised <strong className={unrealisedPnL === null ? '' : pnlTone(unrealisedPnL)}>
-                      {unrealisedPnL === null ? (trade.priceUnavailable ? 'no live price' : '…') : formatMoney(unrealisedPnL, trade.currency)}
+                      {unrealisedPnL === null ? (trade.priceUnavailable ? 'no live price' : '…') : narrowMinus(formatMoney(unrealisedPnL, trade.currency))}
                     </strong>
                     {unrealisedPnL !== null && trade.priceAsOf && (
                       <span className={styles.tvStoredPrice}>stored price {DateTime.fromISO(trade.priceAsOf).toFormat('dd/MM HH:mm')}</span>
@@ -2196,7 +2197,7 @@ useEffect(() => {
                   </span>
                 )}
                 <span className={`${styles.chartPnl} ${pnlTone(trade.status === 'OPEN' && unrealisedPnL === null ? realisedPnL : totalPnL)}`}>
-                  {formatMoney(trade.status === 'OPEN' && unrealisedPnL === null ? realisedPnL : totalPnL, trade.currency)}
+                  {narrowMinus(formatMoney(trade.status === 'OPEN' && unrealisedPnL === null ? realisedPnL : totalPnL, trade.currency))}
                 </span>
                 {tradedContract && !showBackAdjustedLines && (
                   <span

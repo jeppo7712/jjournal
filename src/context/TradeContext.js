@@ -573,7 +573,8 @@ function computeStats(trades, futuresSettings) {
       Object.entries(lossSumByCurrency).map(([code, sum]) => [code, sum / lossCountByCurrency[code]])
     ),
     avgWinPct: winCount ? winReturnPctSum / winCount : 0,
-    avgLossPct: lossCount ? lossReturnPctSum / lossCount : 0,
+    // A size for AVG L's ring ("5%"), so positive, unlike the amount.
+    avgLossPct: lossCount ? -lossReturnPctSum / lossCount : 0,
     totalReturnByCurrency,
     totalTrades,
   };

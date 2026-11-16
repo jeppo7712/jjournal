@@ -5,6 +5,7 @@ import { useStatus } from '../../context/StatusContext';
 import { useBrokerAlerts } from '../../context/BrokerAlertsContext';
 import styles from './Navigation.module.css';
 import { formatMoney } from '../../utils/formatMoney';
+import narrowMinus from '../common/narrowMinus';
 import { setNumberFormat } from '../../utils/numberFormat';
 import { descendantAccountIds } from '../../utils/accountTree';
 import AccountOptions from '../common/AccountOptions';
@@ -377,7 +378,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
             key={currency}
             className={`${styles.accountBalance} ${amount >= 0 ? styles.positive : styles.negative}`}
           >
-            {formatMoney(amount, currency)}
+            {narrowMinus(formatMoney(amount, currency))}
           </span>
         ))}
       </span>

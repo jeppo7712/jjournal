@@ -20,6 +20,7 @@ import UnenteredFills from './UnenteredFills';
 import useTheme from '../../utils/useTheme';
 import { themeColor } from '../../utils/theme';
 import { polarityStroke, polarityFill } from '../Stats/chartTheme';
+import narrowMinus from '../common/narrowMinus';
 
 
 ChartJS.register(CategoryScale, LinearScale, PointElement, LineElement, Title, Tooltip, Legend, Filler);
@@ -605,7 +606,7 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
     const rows = stat.totals && list.length > 0 && tileCurrencies.length > 1 ? tileCurrencies : null;
     const lines = rows ? rows.length : Math.max(groupLines, list.length);
     if (lines <= 1) {
-      return <FitValue className={styles.statValue} style={{ color: stat.color }}>{stat.value}</FitValue>;
+      return <FitValue className={styles.statValue} style={{ color: stat.color }}>{narrowMinus(stat.value)}</FitValue>;
     }
     // Several currencies: one line each, at the same full size as a single
     // figure where the width allows (the tile row grows to fit the lines),
@@ -630,7 +631,7 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
           const ownColor = stat.signColored
             ? (amount >= 0 ? themeColor('--ui-green-2') : themeColor('--accent-red'))
             : undefined;
-          if (!stat.onCurrency) return <span key={currency} style={ownColor ? { color: ownColor } : undefined}>{text}</span>;
+          if (!stat.onCurrency) return <span key={currency} style={ownColor ? { color: ownColor } : undefined}>{narrowMinus(text)}</span>;
           // Each figure charts its own currency. Dimming the ones that are
           // not on the chart is the only cue that a choice is being made —
           // with a single currency there is no choice, so nothing is dimmed.
@@ -643,7 +644,7 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
               title={`Show ${currency} on the chart`}
               style={ownColor ? { color: ownColor } : undefined}
             >
-              {text}
+              {narrowMinus(text)}
             </span>
           );
         })}
@@ -663,9 +664,8 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
       { label: 'WASH', value: stats.wash, pct: stats.totalTrades ? Math.round((stats.wash / stats.totalTrades) * 100) + '%' : '0%', color: themeColor('--ui-text-3'), onClick: () => toggleFilter('WASH'), filterValue: 'WASH' },
     ],
     [
-      // Math.round, not toFixed(0): a -0.3% average must read "0%", not "-0%".
-      { label: 'AVG W', value: formatTotals(stats.avgWinByCurrency, { decimals: 0, emptyCurrency: displayedChartCurrency }), totals: stats.avgWinByCurrency, decimals: 0, pct: `${Math.round(stats.avgWinPct ?? 0) || 0}%`, color: themeColor('--ui-green-2') },
-      { label: 'AVG L', value: formatTotals(stats.avgLossByCurrency, { decimals: 0, emptyCurrency: displayedChartCurrency }), totals: stats.avgLossByCurrency, decimals: 0, pct: `${Math.round(stats.avgLossPct ?? 0) || 0}%`, color: themeColor('--accent-red') },
+      { label: 'AVG W', value: formatTotals(stats.avgWinByCurrency, { decimals: 0, emptyCurrency: displayedChartCurrency }), totals: stats.avgWinByCurrency, decimals: 0, pct: (stats.avgWinPct ?? 0).toFixed(0) + '%', color: themeColor('--ui-green-2') },
+      { label: 'AVG L', value: formatTotals(stats.avgLossByCurrency, { decimals: 0, emptyCurrency: displayedChartCurrency }), totals: stats.avgLossByCurrency, decimals: 0, pct: (stats.avgLossPct ?? 0).toFixed(0) + '%', color: themeColor('--accent-red') },
     ],
   ].map((row) => {
     // Every row is one side-by-side pair, so both boxes in it share a line
@@ -863,8 +863,7 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
   // One tile of the overview strip. Status tiles (WINS/LOSSES/OPEN/WASH)
   // toggle that status filter: include, exclude, off.
   const renderTile = (stat, { align = 'left', lines = stat.lines, ring = true, extraClass = '' } = {}) => {
-    // The ring shows a size: AVG L's "-2%" fills it like 2%.
-    const percentage = Math.abs(parseFloat(stat.pct) || 0);
+    const percentage = parseFloat(stat.pct) || 0;
     const circumference = 2 * Math.PI * 12;
     const strokeDashoffset = circumference - (Math.min(100, Math.max(0, percentage)) / 100) * circumference;
     const filterState = stat.filterValue ? filter.find(f => f.type === stat.filterValue) : null;
