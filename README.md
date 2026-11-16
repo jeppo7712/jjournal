@@ -84,7 +84,7 @@ If running via Docker, mount `/user_data` (holds `config.json` and log files) as
 
 ## Security
 
-The journal has no login, user accounts or any other access control, and the [external API](EXTERNAL_API.md) has no authentication either: anyone who can reach its address can read and change all your trades and notes, and change its settings (database connection, IBKR access). Securing the journal and the database is the responsibility of whoever runs it. For most people, running it on the home network (LAN) only, without exposing it to the internet, is probably good enough. To reach it from outside, put it behind a VPN or a reverse proxy that asks for a login, rather than opening a port to it.
+The journal has no login, user accounts or any other access control, and the [external API](EXTERNAL_API.md) has no authentication either: anyone who can reach its address can read and change all your trades and notes, and change its settings (database connection, IBKR access). Securing the journal and the database is the responsibility of whoever runs it. For most people, running it on the home network (LAN) only, without exposing it to the internet, is probably good enough. To reach it from outside, put it behind a VPN or a reverse proxy that asks for a login, rather than opening a port to it. One way to do that is Cloudflare Access, which the journal can also double-check itself: see [docs/cloudflare-access.md](docs/cloudflare-access.md).
 
 ## Disclaimer
 

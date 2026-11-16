@@ -23,6 +23,7 @@ const yahoo = require('./modules/yahoo.js');
 const { processHoldingsAccrual } = require('./modules/holdingsAccrual.js');
 const tradingViewStatus = require('./modules/tradingview-status.js');
 const ibkrDataStatus = require('./modules/ibkr-data-status.js');
+const { createAccessGuard } = require('./modules/cloudflare-access.js');
 
 const { getEnabledTimeframes } = historicalDataService;
 
@@ -39,6 +40,10 @@ const AbortController = globalThis.AbortController || require('abort-controller'
 // Number display styles the frontend offers (src/utils/numberFormat.js):
 // 123456.78, 1,234,567.89 and 1.234.567,89.
 const NUMBER_FORMATS = ['plain', 'comma', 'dot'];
+
+// Checks requests that came through Cloudflare (HTTP and WebSocket) for a
+// valid Cloudflare Access token, once config.json has `cloudflareAccess`.
+const cloudflareAccess = createAccessGuard({ getConfig: () => configManager.loadConfig(), logger });
 
 // WebSocket server
 const wss = new WebSocket.Server({ noServer: true });
@@ -162,8 +167,10 @@ async function startServer(newPort) {
   });
 
   server.on('upgrade', (request, socket, head) => {
-    wss.handleUpgrade(request, socket, head, (ws) => {
-      wss.emit('connection', ws, request);
+    cloudflareAccess.guardUpgrade(request, socket, () => {
+      wss.handleUpgrade(request, socket, head, (ws) => {
+        wss.emit('connection', ws, request);
+      });
     });
   });
 }
@@ -240,6 +247,10 @@ let brokerFills = null;
     logger.error('❌ Failed to initialize server:', { message: err.message, stack: err.stack });
   }
 })();
+
+// Must stay first: nothing else may answer a request that came through
+// Cloudflare without a valid Access token (see modules/cloudflare-access.js).
+app.use(cloudflareAccess.middleware);
 
 // General middleware
 app.use(cors());
