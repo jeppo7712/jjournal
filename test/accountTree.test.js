@@ -46,3 +46,15 @@ test('accountOptionGroups: archived accounts last, a parent taking its sub-accou
     ['Archived', ['0:Paper 2025', '1:Paper 2025 sub', '0:Old sub']],
   ]);
 });
+
+test('withoutRepeats: a sub-account item already in the own list comes once', async () => {
+  const { withoutRepeats } = await load();
+  // Just switched from Stocks (1) to Main (4): the own list still holds
+  // Stocks' trades while the sub-accounts' (Stocks + Allocation) arrive.
+  const own = [{ id: 10, account_id: 1 }, { id: 11, account_id: 1 }];
+  const sub = [{ id: 10, account_id: 1 }, { id: 11, account_id: 1 }, { id: 12, account_id: 6 }];
+  assert.deepEqual(withoutRepeats(own, sub).map(t => t.id), [10, 11, 12]);
+  // Same id in another account is a different item.
+  assert.equal(withoutRepeats([{ id: 5, account_id: 4 }], [{ id: 5, account_id: 1 }]).length, 2);
+  assert.equal(withoutRepeats([], sub).length, 3);
+});

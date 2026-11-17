@@ -4,7 +4,7 @@ import { debounce } from 'lodash';
 import { formatNumber } from '../utils/numberFormat';
 import { useTags } from './TagsContext';
 import { matchesTagFilter } from '../utils/tagFilter';
-import { descendantAccountIds } from '../utils/accountTree';
+import { descendantAccountIds, withoutRepeats } from '../utils/accountTree';
 import { replayLots, maxPosition } from '../utils/lots';
 
 // The trade list's hideable columns, in display order (TradeList.jsx renders
@@ -1338,11 +1338,11 @@ export const TradeProvider = ({ children }) => {
   // This account's trades and notes plus, when the toggle is on, its
   // sub-accounts'. What the Dashboard, Stats and the sidebar's P&L show.
   const scopedTrades = useMemo(
-    () => (withSubAccounts && subTrades.length ? [...trades, ...subTrades] : trades),
+    () => (withSubAccounts && subTrades.length ? withoutRepeats(trades, subTrades) : trades),
     [withSubAccounts, trades, subTrades]
   );
   const scopedDayNotes = useMemo(
-    () => (withSubAccounts && subDayNotes.length ? [...dayNotes, ...subDayNotes] : dayNotes),
+    () => (withSubAccounts && subDayNotes.length ? withoutRepeats(dayNotes, subDayNotes) : dayNotes),
     [withSubAccounts, dayNotes, subDayNotes]
   );
 

@@ -14,6 +14,17 @@ export function descendantAccountIds(accounts, accountId) {
   return ids;
 }
 
+// The account's own items plus its sub-accounts', leaving out any sub item
+// that is already among its own. Right after an account switch the own list
+// still holds the previous account's items until the new ones load; when that
+// previous account is one of the new account's sub-accounts, the same trades
+// came twice — two list rows with one key, and React left those rows on screen
+// under every account opened after.
+export function withoutRepeats(own, sub) {
+  const seen = new Set(own.map(item => `${item.account_id}:${item.id}`));
+  return [...own, ...sub.filter(item => !seen.has(`${item.account_id}:${item.id}`))];
+}
+
 // Accounts for a dropdown: Real first, then Paper (is_virtual — a sub-account
 // always shares its parent's), then Archived; each top-level account by name
 // with its sub-accounts right below it. depth is how far down the tree it
