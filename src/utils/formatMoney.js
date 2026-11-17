@@ -15,7 +15,7 @@
 // the user's number format setting (numberFormat.js), not the browser's
 // locale.
 
-import { formatNumber } from './numberFormat';
+import { formatNumber } from './numberFormat.js';
 
 const CURRENCY_SYMBOLS = {
   USD: '$',

@@ -37,7 +37,7 @@ Everything runs on your own machine/server against your own PostgreSQL database 
   </tr>
   <tr>
     <td width="50%"><img src="docs/screenshots/stats.webp" alt="Stats: headline numbers and the return over time chart"><br><sub><b>Stats</b>: headline numbers, return over time and cumulative P&L, plus a dozen more sections.</sub></td>
-    <td width="50%"><img src="docs/screenshots/calendar.webp" alt="Calendar: daily and weekly P&L"><br><sub><b>Calendar</b>: daily and weekly P&L. Click a day or week to filter the Dashboard.</sub></td>
+    <td width="50%"><img src="docs/screenshots/calendar.webp" alt="Calendar: daily and weekly P&L"><br><sub><b>Calendar</b>: daily and weekly P&L, scrolling through the weeks like a phone calendar. Click a day or week to filter the Dashboard.</sub></td>
   </tr>
 </table>
 
