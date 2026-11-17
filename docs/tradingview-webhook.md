@@ -10,7 +10,7 @@ TradingView alerts are evaluated and dispatched from TradingView's own cloud ser
 
 ## 1. The secret
 
-A `tradingViewWebhookSecret` is already generated in your `config.json` (added when this feature was set up). Anyone who can reach the webhook URL *and* knows this secret can write bars into your journal, so treat it like a password — it's what stands in for the "no auth, trusted network" model the rest of the app uses, since this one endpoint can't rely on that.
+Add a `tradingViewWebhookSecret` to your `config.json` — a long random string, e.g. the output of `openssl rand -hex 32`. It's read on every request, so no restart is needed. Until it's set, the webhook answers `503`, and the TV light in the navigation stays hidden. Anyone who can reach the webhook URL *and* knows this secret can write bars into your journal, so treat it like a password — it's what stands in for the "no auth, trusted network" model the rest of the app uses, since this one endpoint can't rely on that.
 
 ## 2. Expose just this one path
 

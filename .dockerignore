@@ -5,3 +5,8 @@ Dockerfile
 .git
 .gitignore
 .env.development
+config.json
+Uploads
+theme-preview
+.claude
+.vscode

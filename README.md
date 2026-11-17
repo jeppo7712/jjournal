@@ -19,10 +19,14 @@ Everything runs on your own machine/server against your own PostgreSQL database 
   - Yahoo Finance as a fast/always-available source; IBKR TWS as a higher-quality source that supersedes it where available
   - Each enabled timeframe is fetched as far back as the provider actually allows — Yahoo's limits are known in advance, IBKR's are discovered automatically and cached so the app doesn't keep re-requesting data that doesn't exist
   - Futures continuous contracts built automatically from individual IBKR contracts, with rollover detection
-- Stats dashboard: win rate, expectancy, Sharpe/Sortino, streaks, hourly/day-of-week breakdowns, return distribution
-- IBKR Flex Web Service import for reconciling trade activity/executions
+  - Optional live 1-minute bars from TradingView alerts, see [docs/tradingview-webhook.md](docs/tradingview-webhook.md)
+- Stats dashboard: win rate, expectancy, Sharpe/Sortino, streaks, hourly/day-of-week breakdowns, return distribution, return over time
+- IBKR imports: fills straight from TWS/IB Gateway in the trade form, and from the Flex Web Service, with fees corrected to IBKR's
+- Capital: a cash ledger per account and currency (deposits, withdrawals, transfers, conversions, dividends, fees), T-bill/bond holdings, and an IBKR cash sync whose items wait in an inbox and whose balances are checked against IBKR's
+- Accounts and sub-accounts, e.g. one IBKR account split into stocks and futures, each with its own trades and checklists
 - A [read/write external API](EXTERNAL_API.md) for feeding your data into another tool (e.g. an LLM-based trade analyzer) — no auth by design, see that doc before exposing it beyond localhost
 - Multi-currency: each symbol has its own currency, and money is shown per currency, never blended
+- Dark and light theme, and a layout for phones and tablets (it can be added to the home screen)
 
 ## Screenshots
 
@@ -36,6 +40,11 @@ Everything runs on your own machine/server against your own PostgreSQL database 
     <td width="50%"><img src="docs/screenshots/calendar.webp" alt="Calendar: daily and weekly P&L"><br><sub><b>Calendar</b>: daily and weekly P&L. Click a day or week to filter the Dashboard.</sub></td>
   </tr>
 </table>
+
+<p align="center">
+  <img src="docs/screenshots/trade-chart.webp" alt="Trade chart: the fills as arrows on 5-minute bars, with the stop, average entry and average exit" width="100%"><br>
+  <sub><b>Trade chart</b>: every fill on the price history, with the stop, average entry and exit. Any timeframe from 1m to 1W.</sub>
+</p>
 
 Works on phones too:
 

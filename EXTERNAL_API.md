@@ -16,7 +16,7 @@ If this server is ever reachable outside a network you trust, put it behind a re
 
 - All responses are JSON.
 - All timestamps are ISO 8601 in UTC (e.g. `2026-03-14T13:45:00.000Z`).
-- Money fields are plain numbers (no currency symbol), in account currency.
+- Money fields are plain numbers (no currency symbol), in the currency named next to them (a trade's `currency`, a cash row's or holding's `currency`). Nothing is converted between currencies.
 - Paginated list endpoints (`trades`, `accounts/:id/cash-transactions`, `holdings`) return an object with a `total` count, `limit`, `offset`, and the array under a named key, not a bare array. `daynotes` returns every matching note with a `total` count (no paging). Non-paginated list endpoints (`accounts`, `symbols`) return just the named key — no `total` field, since there's nothing to paginate.
 - Calendar dates without a time (a day note's `date`, a holding's `purchase_date`/`maturity_date`) are plain `YYYY-MM-DD`.
 - Errors are `{ "error": "message" }` with a non-2xx status code.
@@ -211,7 +211,7 @@ List trades across one or all accounts, with computed fields included so you don
     "confidence": 4,
     "execution_rating": 3,
     "ai_analysis": "This trade caught a clean breakout but the stop was tight relative to recent ATR...",
-    "ai_analysis_source": "hermes-gpt5",
+    "ai_analysis_source": "my-analyzer",
     "ai_analysis_updated_at": "2026-05-13T09:10:00.000Z"
   },
 
@@ -272,7 +272,7 @@ Write-back: attach your analysis to a trade. Stored separately from `notes_html`
 ```json
 {
   "analysis": "Free-text analysis, markdown or plain text.",
-  "source": "hermes-gpt5"
+  "source": "my-analyzer"
 }
 ```
 
