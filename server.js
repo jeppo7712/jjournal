@@ -393,6 +393,8 @@ apiRouter.get('/config/status', async (req, res) => {
       ibkrGatewayCommandAddress: config.ibkrGatewayCommandAddress || null,
       // How the frontend displays numbers (src/utils/numberFormat.js).
       numberFormat: config.numberFormat || 'plain',
+      // What the Todo page calls the external agent (its "agent" badge).
+      agentName: config.agentName || 'Agent',
       ibkrConnected: ibkr.isIbkrConnected(),
       ibkrDataConnected: ibkr.data.isIbkrConnected(),
       status: db.getIsConnected() ? 'Connected' : config.databaseUrl ? 'Connection failed' : 'Not configured',
@@ -468,7 +470,7 @@ apiRouter.post('/config', async (req, res) => {
     databaseUrl, port, ibkrAddresses, ibkrDataAddresses, ibkrGatewayCommandAddress,
     ibkrFlexTokenReal, ibkrFlexQueryIdActivityReal, ibkrFlexQueryIdTradeConfReal,
     ibkrFlexTokenPaper, ibkrFlexQueryIdActivityPaper, ibkrFlexQueryIdTradeConfPaper,
-    tradingViewWebhookSecret, numberFormat,
+    tradingViewWebhookSecret, numberFormat, agentName,
   } = req.body;
 
   try {
@@ -523,6 +525,12 @@ apiRouter.post('/config', async (req, res) => {
         return res.status(400).json({ error: `numberFormat must be one of: ${NUMBER_FORMATS.join(', ')}` });
       }
       config.numberFormat = numberFormat;
+    }
+    if (agentName !== undefined) {
+      const name = typeof agentName === 'string' ? agentName.trim() : '';
+      if (name.length > 30) return res.status(400).json({ error: 'The agent name is at most 30 characters' });
+      if (name) config.agentName = name;
+      else delete config.agentName;
     }
 
     await configManager.saveConfig(config);

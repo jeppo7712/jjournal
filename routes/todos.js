@@ -33,10 +33,11 @@ function appRouter(service) {
         } catch (err) { fail(res, err, 'listing todos'); }
     });
 
-    // The user has seen the fired items (opened the Todo page).
+    // The user has seen the fired items (opened the Todo page): { ids } the
+    // ones on screen, or every one without a body.
     router.post('/todos/seen', async (req, res) => {
         try {
-            res.json({ success: true, seen: await service.markSeen('app') });
+            res.json({ success: true, seen: await service.markSeen('app', req.body?.ids ?? null) });
         } catch (err) { fail(res, err, 'marking todos seen'); }
     });
 

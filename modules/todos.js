@@ -508,8 +508,12 @@ function createTodoStore(getPool) {
             const { rows: [row] } = await runner.query('DELETE FROM todos WHERE id = $1 RETURNING id, key', [todoId]);
             return row || null;
         },
-        markSeen: async () => {
-            const { rowCount } = await runner.query(`UPDATE todos SET seen_at = NOW() WHERE status = 'fired' AND seen_at IS NULL`);
+        // ids: only these (the ones on screen); null: every fired item.
+        markSeen: async (ids = null) => {
+            const { rowCount } = await runner.query(
+                `UPDATE todos SET seen_at = NOW() WHERE status = 'fired' AND seen_at IS NULL AND ($1::int[] IS NULL OR id = ANY($1))`,
+                [ids]
+            );
             return rowCount;
         },
         account: async (accountId) => {
@@ -664,9 +668,13 @@ function createTodoService(store, { onChange = () => {}, now = () => new Date() 
         return item;
     }
 
-    // The user has seen every fired item (the Todo page was opened).
-    async function markSeen(origin = 'app') {
-        const count = await store.markSeen();
+    // The user has seen the fired items (the Todo page was opened): the
+    // ones with these ids, or every one without ids.
+    async function markSeen(origin = 'app', ids = null) {
+        if (ids !== null && (!Array.isArray(ids) || !ids.every(i => Number.isInteger(i) && i > 0))) {
+            throw bad('ids must be a list of whole numbers');
+        }
+        const count = await store.markSeen(ids);
         if (count > 0) onChange({ id: null, key: null, change: 'seen', origin });
         return count;
     }

@@ -18,6 +18,7 @@ import { notify, confirmDialog } from '../common/Dialogs';
 import { timeframeLabel } from '../../utils/timeframeLabel';
 import { appBadgeState, requestAppBadgePermission } from '../../utils/appBadge';
 import { THEME_CHOICES, getThemeChoice, setThemeChoice } from '../../utils/theme';
+import { getAgentName, setAgentName, DEFAULT_AGENT_NAME } from '../../utils/agentName';
 
 // The sections of the Settings page, in menu order, in two groups: what
 // applies to the account open in the menu bar only, and what the whole
@@ -564,6 +565,29 @@ export default function Settings() {
       setNumberFormat(value);
     } catch (err) {
       setNumberFormatChoice(previous);
+      notify(err.message);
+    }
+  };
+
+  // What the Todo page calls the external agent; saved on leaving the field.
+  const [agentNameInput, setAgentNameInput] = useState(getAgentName);
+  const saveAgentName = async () => {
+    const value = agentNameInput.trim() || DEFAULT_AGENT_NAME;
+    setAgentNameInput(value);
+    if (value === getAgentName()) return;
+    try {
+      const res = await fetch(`${apiBaseUrl}/api/config`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ agentName: value }),
+      });
+      if (!res.ok) {
+        const error = await res.json().catch(() => ({}));
+        throw new Error(error.error || 'Failed to save the agent name');
+      }
+      setAgentName(value);
+    } catch (err) {
+      setAgentNameInput(getAgentName());
       notify(err.message);
     }
   };
@@ -1609,6 +1633,19 @@ export default function Settings() {
                     ))}
                   </select>
                   <span className={styles.fieldHint}>On this device. "Match the system" follows its light or dark mode.</span>
+                </div>
+                <div className={styles.formField}>
+                  <label htmlFor="agentName">Agent name</label>
+                  <input
+                    id="agentName"
+                    value={agentNameInput}
+                    onChange={(e) => setAgentNameInput(e.target.value)}
+                    onBlur={saveAgentName}
+                    onKeyDown={(e) => { if (e.key === 'Enter') e.target.blur(); }}
+                    maxLength={30}
+                    className={styles.inputBubble}
+                  />
+                  <span className={styles.fieldHint}>What the Todo list calls the agent that writes to it through the external API. On every device.</span>
                 </div>
               </div>
             </section>

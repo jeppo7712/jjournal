@@ -1,0 +1,629 @@
+/* The Todo page and its form (Todo.jsx, TodoForm.jsx). Laid out like the
+   Capital page. */
+
+.page {
+  padding: 24px;
+  max-width: 1100px;
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  margin: 0 auto;
+  color: var(--ui-text-4);
+  display: flex;
+  flex-direction: column;
+  gap: 20px;
+}
+
+.header {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+
+.title {
+  font-size: 1.4rem;
+  font-weight: 600;
+  color: var(--ui-strong);
+  margin: 0;
+}
+
+.headerActions {
+  display: flex;
+  gap: 8px;
+}
+
+.addBtn {
+  background: var(--ui-accent);
+  color: #fff;
+  border: none;
+  border-radius: 10px;
+  padding: 9px 16px;
+  font-size: 0.9rem;
+  font-weight: 600;
+  cursor: pointer;
+}
+
+.addBtn:hover {
+  filter: brightness(1.1);
+}
+
+.subNote {
+  opacity: 0.7;
+  font-size: 0.85rem;
+  margin: -12px 0 0;
+}
+
+.section {
+  background: var(--ui-section);
+  border: 1px solid var(--ui-border-2);
+  border-radius: 12px;
+  padding: 16px 20px;
+}
+
+.sectionTitle {
+  display: flex;
+  align-items: baseline;
+  gap: 8px;
+  margin: 0 0 10px;
+  font-size: 1.05rem;
+  font-weight: 600;
+  color: var(--ui-strong);
+}
+
+.count {
+  font-size: 0.8rem;
+  font-weight: 500;
+  color: var(--ui-text-3);
+}
+
+.sectionHint {
+  font-size: 0.75rem;
+  font-weight: 400;
+  color: var(--ui-faint);
+}
+
+.sectionToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  background: none;
+  border: none;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  cursor: pointer;
+}
+
+.chevron {
+  display: inline-block;
+  transition: transform 0.15s;
+  font-size: 1.2rem;
+  line-height: 1;
+}
+
+.chevronOpen {
+  transform: rotate(90deg);
+}
+
+.group + .group {
+  margin-top: 10px;
+}
+
+.groupTitle {
+  margin: 6px 0 2px;
+  font-size: 0.78rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.5px;
+  color: var(--ui-text-3);
+}
+
+.list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 10px 0;
+  border-top: 1px solid var(--ui-row-line);
+}
+
+.list > .row:first-child {
+  border-top: none;
+}
+
+.rowDim {
+  opacity: 0.55;
+}
+
+.rowFired {
+  box-shadow: inset 3px 0 0 var(--ui-amber);
+  padding-left: 12px;
+}
+
+.rowOverdue {
+  box-shadow: inset 3px 0 0 var(--ui-red);
+  padding-left: 12px;
+}
+
+.rowMain {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 3px;
+}
+
+.rowTitleLine {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.rowTitle {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--ui-strong);
+  font: inherit;
+  font-weight: 600;
+  font-size: 0.95rem;
+  text-align: left;
+  cursor: pointer;
+  overflow-wrap: anywhere;
+}
+
+.rowTitle:hover {
+  text-decoration: underline;
+}
+
+.rowDetail {
+  font-size: 0.85rem;
+  color: var(--ui-text-2);
+  font-variant-numeric: tabular-nums;
+}
+
+.rowSub {
+  font-size: 0.85rem;
+  color: var(--ui-text-3);
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+}
+
+.thenMark {
+  font-size: 0.7rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--ui-faint);
+  margin-right: 2px;
+}
+
+.firedLine {
+  font-size: 0.85rem;
+  color: var(--ui-amber-text-2);
+}
+
+.meta {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 10px;
+  font-size: 0.75rem;
+  color: var(--ui-faint);
+}
+
+.metaLate {
+  color: var(--ui-red);
+}
+
+.metaTime {
+  color: var(--ui-text-3);
+}
+
+.kindChip,
+.statusChip,
+.newChip,
+.byChip {
+  display: inline-block;
+  border-radius: 999px;
+  padding: 1px 8px;
+  font-size: 0.7rem;
+  font-weight: 600;
+  line-height: 1.5;
+  white-space: nowrap;
+}
+
+.kindChip {
+  background: var(--ui-raised);
+  color: var(--ui-text-2);
+}
+
+.kind_trigger {
+  background: rgba(var(--ui-violet-rgb), 0.16);
+  color: var(--ui-violet-text);
+}
+
+.kind_order {
+  background: rgba(var(--ui-sky-rgb), 0.16);
+  color: var(--ui-accent-text-2);
+}
+
+.statusChip {
+  background: var(--ui-raised);
+  color: var(--ui-text-3);
+}
+
+.status_fired {
+  background: rgba(var(--ui-amber-rgb), 0.18);
+  color: var(--ui-amber-text-2);
+}
+
+.status_done {
+  background: rgba(var(--ui-green-rgb), 0.15);
+  color: var(--ui-green-text);
+}
+
+.newChip {
+  background: var(--ui-amber);
+  color: #111;
+}
+
+.byChip {
+  background: var(--ui-raised);
+  color: var(--ui-text-3);
+  font-weight: 500;
+}
+
+.byAgent {
+  background: rgba(var(--ui-teal-rgb), 0.16);
+  color: var(--ui-text-2);
+}
+
+.rowActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 6px;
+  flex-shrink: 0;
+  max-width: 50%;
+}
+
+.actBtn {
+  background: var(--ui-btn);
+  color: var(--ui-text);
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 5px 10px;
+  font-size: 0.8rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.actBtn:hover {
+  background: var(--ui-btn-hover);
+}
+
+.actPrimary {
+  background: rgba(var(--ui-accent-rgb), 0.2);
+  color: var(--ui-accent-text-2);
+}
+
+.actPrimary:hover {
+  background: rgba(var(--ui-accent-rgb), 0.3);
+}
+
+.linkBtn {
+  background: none;
+  border: none;
+  padding: 0;
+  color: var(--ui-accent);
+  font: inherit;
+  cursor: pointer;
+}
+
+.linkBtn:hover {
+  text-decoration: underline;
+}
+
+.snoozeWrap {
+  position: relative;
+}
+
+.snoozeMenu {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 4px);
+  z-index: 20;
+  min-width: 230px;
+  background: var(--ui-popover-glass);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  box-shadow: 0 10px 28px rgba(0, 0, 0, 0.3);
+  padding: 6px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.snoozeMenu > button {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  background: none;
+  border: none;
+  border-radius: 6px;
+  padding: 7px 8px;
+  color: var(--ui-text);
+  font-size: 0.85rem;
+  text-align: left;
+  cursor: pointer;
+}
+
+.snoozeMenu > button span {
+  color: var(--ui-text-3);
+}
+
+.snoozeMenu > button:hover {
+  background: var(--ui-raised);
+}
+
+.snoozePick {
+  display: flex;
+  gap: 4px;
+  padding: 6px 4px 2px;
+  border-top: 1px solid var(--ui-border-soft);
+}
+
+.snoozePick input {
+  min-width: 0;
+  flex: 1;
+  background: var(--ui-input);
+  border: 1px solid var(--ui-border);
+  border-radius: 6px;
+  color: var(--ui-text);
+  padding: 4px 6px;
+  font-size: 0.8rem;
+  font-family: inherit;
+}
+
+.snoozePick button {
+  background: var(--ui-accent);
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 0.8rem;
+  cursor: pointer;
+}
+
+.empty {
+  text-align: center;
+  padding: 28px 0;
+  color: var(--ui-text-3);
+}
+
+.empty p {
+  margin: 0 0 12px;
+}
+
+.emptyActions {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 8px;
+}
+
+.emptyLine {
+  margin: 0 0 8px;
+  font-size: 0.85rem;
+  color: var(--ui-faint);
+}
+
+/* --- The form --- */
+
+.tabRow {
+  display: flex;
+  gap: 4px;
+  margin-bottom: 18px;
+  border-bottom: 1px solid var(--ui-border-2);
+  overflow-x: auto;
+}
+
+.tabBtn {
+  background: transparent;
+  border: none;
+  border-bottom: 3px solid transparent;
+  border-radius: 6px 6px 0 0;
+  padding: 9px 14px;
+  color: var(--ui-text-3);
+  font-size: 0.9rem;
+  font-weight: 500;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.tabBtn:hover {
+  background: var(--ui-raised);
+  color: var(--ui-strong);
+}
+
+.tabBtnActive {
+  color: var(--ui-strong);
+  border-bottom-color: var(--ui-accent);
+  background: var(--ui-raised);
+}
+
+.formGrid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px 16px;
+}
+
+.formField {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+
+.formFieldWide {
+  grid-column: 1 / -1;
+}
+
+.formField > label {
+  color: var(--ui-label);
+  font-size: 0.8rem;
+  font-weight: 500;
+}
+
+.input {
+  width: 100%;
+  min-width: 0;
+  box-sizing: border-box;
+  padding: 9px 11px;
+  background: var(--ui-input);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  color: var(--ui-text);
+  font-family: inherit;
+  font-size: 0.92rem;
+  outline: none;
+}
+
+/* Safari draws its own select box otherwise (as in Settings). */
+select.input {
+  -webkit-appearance: none;
+  appearance: none;
+  padding-right: 34px;
+  background-image: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="%238B93A3"><path d="M5.3 7.3a1 1 0 011.4 0L10 10.6l3.3-3.3a1 1 0 111.4 1.4l-4 4a1 1 0 01-1.4 0l-4-4a1 1 0 010-1.4z"/></svg>');
+  background-repeat: no-repeat;
+  background-position: right 10px center;
+  background-size: 16px;
+  cursor: pointer;
+}
+
+.input:focus {
+  border-color: var(--ui-accent);
+  box-shadow: 0 0 0 3px rgba(var(--ui-accent-rgb), 0.18);
+}
+
+.input:disabled {
+  opacity: 0.5;
+}
+
+.textarea {
+  resize: vertical;
+  min-height: 64px;
+}
+
+.fieldHint {
+  font-size: 0.75rem;
+  color: var(--ui-faint);
+}
+
+.gridNote {
+  margin: -8px 0 0;
+}
+
+.dateTime {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+
+.dateTime .input {
+  flex: 1;
+}
+
+.clearBtn {
+  flex-shrink: 0;
+  background: none;
+  border: none;
+  color: var(--ui-text-3);
+  font-size: 1.2rem;
+  cursor: pointer;
+  padding: 0 4px;
+}
+
+.checkLine {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  font-size: 0.9rem;
+  color: var(--ui-text);
+}
+
+.toggle {
+  display: flex;
+  background: var(--ui-input);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 3px;
+}
+
+.toggleBtn {
+  flex: 1;
+  background: none;
+  border: none;
+  border-radius: 7px;
+  padding: 6px 8px;
+  color: var(--ui-text-3);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.toggleBtnActive {
+  background: var(--ui-raised);
+  color: var(--ui-strong);
+}
+
+.formError {
+  margin: 14px 0 0;
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: rgba(var(--ui-red-rgb), 0.12);
+  border: 1px solid rgba(var(--ui-red-rgb), 0.35);
+  color: var(--ui-red-text-2);
+  font-size: 0.85rem;
+}
+
+@media (max-width: 600px) {
+  .page {
+    padding: 16px 12px;
+  }
+
+  .section {
+    padding: 14px;
+  }
+
+  .row {
+    flex-direction: column;
+    gap: 8px;
+  }
+
+  .rowActions {
+    justify-content: flex-start;
+    max-width: none;
+  }
+
+  .snoozeMenu {
+    left: 0;
+    right: auto;
+  }
+
+  .formGrid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}

@@ -51,10 +51,10 @@ function memoryStore(clock) {
             rows.delete(id);
             return { id, key: row.key };
         },
-        markSeen: async () => {
+        markSeen: async (ids = null) => {
             let n = 0;
             for (const row of rows.values()) {
-                if (row.status === 'fired' && !row.seen_at) { row.seen_at = clock().toISOString(); n++; }
+                if (row.status === 'fired' && !row.seen_at && (!ids || ids.includes(row.id))) { row.seen_at = clock().toISOString(); n++; }
             }
             return n;
         },
@@ -312,6 +312,12 @@ test('markSeen marks fired items once', async () => {
     const refired = await service.update(a.id, { status: 'fired' }, 'agent');
     assert.strictEqual(refired.seen_at, null);
     assert.strictEqual(changes.filter(c => c.change === 'seen').length, 1);
+    // Only the ones on screen.
+    const b = await service.create(alertBody({ status: 'fired' }), 'agent');
+    assert.strictEqual(await service.markSeen('app', [a.id]), 1, 'a fired again above');
+    assert.strictEqual((await service.get(b.id)).seen_at, null, 'b was not on screen');
+    assert.strictEqual(await service.markSeen('app', [b.id]), 1);
+    await rejects400(service.markSeen('app', ['x']), /ids must be a list/);
 });
 
 // --- Listing ---

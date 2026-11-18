@@ -4,10 +4,12 @@ import { DateTime } from 'luxon';
 import { TradeContext, getRealisedPnL, getTickMultiplier } from '../../context/TradeContext';
 import { useStatus } from '../../context/StatusContext';
 import { useBrokerAlerts } from '../../context/BrokerAlertsContext';
+import { useTodos } from '../../context/TodosContext';
 import styles from './Navigation.module.css';
 import { formatMoney } from '../../utils/formatMoney';
 import narrowMinus from '../common/narrowMinus';
 import { setNumberFormat } from '../../utils/numberFormat';
+import { setAgentName } from '../../utils/agentName';
 import { descendantAccountIds } from '../../utils/accountTree';
 import AccountOptions from '../common/AccountOptions';
 import AboutCard, { AboutLine } from './AboutCard';
@@ -81,6 +83,7 @@ function describeIbkrDataLight(status) {
 const NAV_ICONS = {
   dashboard: <path d="M5 3a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2V5a2 2 0 00-2-2H5zM5 11a2 2 0 00-2 2v2a2 2 0 002 2h2a2 2 0 002-2v-2a2 2 0 00-2-2H5zM11 5a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V5zM11 13a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z" />,
   stats: <path fillRule="evenodd" d="M5 3a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2V5a2 2 0 00-2-2H5zm9 4a1 1 0 10-2 0v6a1 1 0 102 0V7zm-3 2a1 1 0 10-2 0v4a1 1 0 102 0V9zm-3 3a1 1 0 10-2 0v1a1 1 0 102 0v-1z" clipRule="evenodd" />,
+  todo: <path fillRule="evenodd" d="M6 2a1 1 0 00-1 1v1H4a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V6a2 2 0 00-2-2h-1V3a1 1 0 10-2 0v1H7V3a1 1 0 00-1-1zm7.7 7.7a1 1 0 00-1.4-1.4L9 11.58 7.7 10.3a1 1 0 00-1.4 1.4l2 2a1 1 0 001.4 0l4-4z" clipRule="evenodd" />,
   capital: <><path d="M4 4a2 2 0 00-2 2v1h16V6a2 2 0 00-2-2H4z" /><path fillRule="evenodd" d="M18 9H2v5a2 2 0 002 2h12a2 2 0 002-2V9zM4 13a1 1 0 011-1h1a1 1 0 110 2H5a1 1 0 01-1-1zm5-1a1 1 0 100 2h1a1 1 0 100-2H9z" clipRule="evenodd" /></>,
   settings: <path fillRule="evenodd" d="M11.49 3.17c-.38-1.56-2.6-1.56-2.98 0a1.532 1.532 0 01-2.286.948c-1.372-.836-2.942.734-2.106 2.106.54.886.061 2.042-.947 2.287-1.561.379-1.561 2.6 0 2.978a1.532 1.532 0 01.947 2.287c-.836 1.372.734 2.942 2.106 2.106a1.532 1.532 0 012.287.947c.379 1.561 2.6 1.561 2.978 0a1.533 1.533 0 012.287-.947c1.372.836 2.942-.734 2.106-2.106a1.533 1.533 0 01.947-2.287c1.561-.379 1.561-2.6 0-2.978a1.532 1.532 0 01-.947-2.287c.836-1.372-.734-2.942-2.106-2.106a1.532 1.532 0 01-2.287-.947zM10 13a3 3 0 100-6 3 3 0 000 6z" clipRule="evenodd" />,
 };
@@ -90,7 +93,8 @@ const NAV_PAGES = [
   { view: 'dashboard', label: 'Dashboard', key: '1' },
   { view: 'stats', label: 'Stats', key: '2' },
   { view: 'capital', label: 'Capital', key: '3' },
-  { view: 'settings', label: 'Settings', key: '4' },
+  { view: 'todo', label: 'Todo', key: '4' },
+  { view: 'settings', label: 'Settings', key: '5' },
 ];
 
 const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
@@ -133,6 +137,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   // in the account list; the badge next to its label is the total over all
   // accounts (same number as the app icon's).
   const { capital: brokerPending, rootOf, countsByAccount, total: alertsTotal } = useBrokerAlerts();
+  const { badge: todoBadge } = useTodos();
 
   useEffect(() => {
     // WebSocket connection is handled by StatusProvider.
@@ -150,6 +155,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
         // The number format is a server setting, so a change made on
         // another device arrives here too.
         if (data.numberFormat) setNumberFormat(data.numberFormat);
+        if (data.agentName) setAgentName(data.agentName);
       } catch (err) {
         console.error('Error fetching database status:', err);
         setIsDatabaseConnected(false);
@@ -589,6 +595,15 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
                 aria-label={`${currentAlerts.capital} thing${currentAlerts.capital > 1 ? 's' : ''} to do on the Capital page`}
               >
                 {currentAlerts.capital > 99 ? '99+' : currentAlerts.capital}
+              </span>
+            )}
+            {page.view === 'todo' && todoBadge > 0 && (
+              <span
+                className={styles.navBadge}
+                title="On the Todo list: fired alerts not seen yet, and what's due today or overdue"
+                aria-label={`${todoBadge} thing${todoBadge > 1 ? 's' : ''} to do`}
+              >
+                {todoBadge > 99 ? '99+' : todoBadge}
               </span>
             )}
             <kbd className={styles.navKey}>{page.key}</kbd>

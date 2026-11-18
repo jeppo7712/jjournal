@@ -7,10 +7,12 @@ import DayNote from './components/DayNote/DayNote';
 import Settings from './components/Settings/Settings';
 import Stats from './components/Stats/Stats';
 import Capital from './components/Capital/Capital';
+import Todo from './components/Todo/Todo';
 import LoadingIndicator from './components/LoadingIndicator';
 import { TradeProvider } from './context/TradeContext';
 import { TagsProvider } from './context/TagsContext';
 import { BrokerAlertsProvider } from './context/BrokerAlertsContext';
+import { TodosProvider } from './context/TodosContext';
 import { StatusProvider } from './context/StatusContext';
 import { getNumberFormat, subscribeNumberFormat } from './utils/numberFormat';
 import ErrorBoundary, { PageBoundary } from './components/common/ErrorBoundary';
@@ -114,11 +116,11 @@ function App() {
     setSelectedDayNote(null);
   };
 
-  // Keyboard shortcuts: N new trade, J new day note, 1-4 switch pages. Only
+  // Keyboard shortcuts: N new trade, J new day note, 1-5 switch pages. Only
   // when no trade/note window is open and nothing is being typed into.
   const anyWindowOpen = showTradeModal || showTradeView || showDayNote;
   useEffect(() => {
-    const VIEWS = { '1': 'dashboard', '2': 'stats', '3': 'capital', '4': 'settings' };
+    const VIEWS = { '1': 'dashboard', '2': 'stats', '3': 'capital', '4': 'todo', '5': 'settings' };
     const onKeyDown = (e) => {
       if (anyWindowOpen || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
       const el = e.target;
@@ -146,6 +148,7 @@ function App() {
       <TagsProvider>
       <TradeProvider>
       <BrokerAlertsProvider>
+      <TodosProvider>
         <div className="app">
           <ErrorBoundary>
             <Navigation
@@ -182,6 +185,9 @@ function App() {
             {currentView === 'capital' && (
               <Capital />
             )}
+            {currentView === 'todo' && (
+              <Todo onViewTrade={handleViewTrade} />
+            )}
             </PageBoundary>
           </main>
           <ErrorBoundary resetKey={`${selectedTrade?.id}|${selectedDayNote?.id}|${showTradeModal}|${showTradeView}|${showDayNote}`}>
@@ -209,6 +215,7 @@ function App() {
           <LoadingIndicator />
           <DialogHost />
         </div>
+      </TodosProvider>
       </BrokerAlertsProvider>
       </TradeProvider>
       </TagsProvider>
