@@ -19,6 +19,7 @@ import { formatNumber } from '../../utils/numberFormat';
 import { DateTime } from 'luxon';
 import { getRealisedPnL } from '../../context/TradeContext';
 import UnenteredFills from './UnenteredFills';
+import TodayTodos from './TodayTodos';
 import useTheme from '../../utils/useTheme';
 import { themeColor } from '../../utils/theme';
 import { polarityStroke, polarityFill } from '../Stats/chartTheme';
@@ -98,7 +99,7 @@ const ringFontSize = (text) => {
   return Math.min(8.5, Math.round((RING_TEXT_WIDTH / ems) * 10) / 10);
 };
 
-const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, customFilterDate, customFilterWeek, onCustomFilterApplied }) => {
+const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, customFilterDate, customFilterWeek, onCustomFilterApplied, onOpenTodo }) => {
   // Colours drawn in JavaScript (the chart, the tiles' rings) come from the
   // theme's tokens; a theme change re-renders with the new ones.
   useTheme();
@@ -955,6 +956,7 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
   return (
     <div className={styles.dashboard}>
       <UnenteredFills onAddFills={onAddFills} />
+      <TodayTodos onOpen={onOpenTodo} />
       <div className={styles.topRow}>
         <div className={styles.statsContainer}>
           <div className={styles.statsGrid}>

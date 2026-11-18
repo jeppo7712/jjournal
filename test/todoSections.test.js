@@ -110,3 +110,38 @@ test('form times round-trip through the zone; snooze choices', async () => {
   assert.equal(t.whenText('2026-03-05T19:00:00Z', NOW, ZONE), '14:00');
   assert.equal(t.dayHeading('2026-03-06', NOW, ZONE), 'Tomorrow');
 });
+
+test('calendar: the day each item sits on, and the weeks shown', async () => {
+  const t = await load();
+  assert.equal(t.calendarDayOf(item({ due_at: '2026-03-06T04:00:00Z' }), ZONE), '2026-03-05', 'its day in the zone');
+  assert.equal(t.calendarDayOf(item({ kind: 'order', due_at: '2026-03-06T15:00:00Z', order: { good_till: '2026-03-20' } }), ZONE), '2026-03-20');
+  assert.equal(t.calendarDayOf(item({ kind: 'order', due_at: '2026-03-06T15:00:00Z', order: { tif: 'GTC' } }), ZONE), '2026-03-06');
+  assert.equal(t.calendarDayOf(item({ kind: 'trigger', status: 'fired', fired_at: '2026-03-04T21:00:00Z', due_at: '2026-03-10T15:00:00Z' }), ZONE), '2026-03-04');
+  assert.equal(t.calendarDayOf(item({ kind: 'trigger' }), ZONE), null);
+  const byDay = t.itemsByDay([item({ due_at: '2026-03-05T20:00:00Z', title: 'b' }), item({ due_at: '2026-03-05T16:00:00Z', title: 'a' }), item({})], ZONE);
+  assert.deepEqual(Object.keys(byDay), ['2026-03-05']);
+  assert.deepEqual(byDay['2026-03-05'].map(i => i.title), ['a', 'b']);
+
+  const weeks = t.todoCalendarWeeks([], '2026-03-05');
+  assert.equal(weeks[0], '2026-01-26', 'the Monday on or before 1 Feb');
+  assert.equal(weeks.at(-1), '2026-04-27', 'the week holding 30 Apr');
+  const far = t.todoCalendarWeeks(['2027-01-15', '2025-12-31'], '2026-03-05');
+  assert.equal(far[0], '2025-12-01');
+  assert.ok(far.at(-1) >= '2027-01-25' && far.at(-1) <= '2027-01-31');
+});
+
+test('todaySummary: what the dashboard card counts', async () => {
+  const t = await load();
+  const s = t.todaySummary([
+    item({ kind: 'trigger', status: 'fired', seen_at: null }),
+    item({ kind: 'trigger', status: 'fired', seen_at: '2026-03-05T14:00:00Z' }),
+    item({ kind: 'trigger' }),
+    item({ kind: 'order' }),
+    item({ kind: 'order', due_at: '2026-03-05T12:00:00Z' }),
+    item({ due_at: '2026-03-05T20:00:00Z' }),
+    item({ due_at: '2026-03-09T20:00:00Z' }),
+    item({ status: 'done', due_at: '2026-03-05T12:00:00Z' }),
+  ], NOW, ZONE);
+  assert.deepEqual({ ...s, top: s.top.length }, { overdue: 1, dueToday: 1, fired: 1, orders: 2, alerts: 1, top: 3 });
+  assert.equal(s.top[0].status, 'fired');
+});

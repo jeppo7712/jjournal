@@ -14,6 +14,7 @@ import { loadStoredDisplayTimezone, storeDisplayTimezone, resolveDisplayZone, Ti
 import useTheme from '../../utils/useTheme';
 import { themeColor, fillMarkColor, recolorFillMarks } from '../../utils/theme';
 import styles from './TradeView.module.css';
+import TradeTodos from '../Todo/TradeTodos';
 import sheet from '../common/Sheet.module.css';
 import { formatMoney, currencyMark } from '../../utils/formatMoney';
 import narrowMinus from '../common/narrowMinus';
@@ -2035,6 +2036,8 @@ useEffect(() => {
               )}
             </div>
           </section>
+          {/* The Todo items linked to this trade (Todo page, TodoForm's Trade). */}
+          <TradeTodos trade={trade} cardClass={styles.tvCard} headerClass={styles.tvCardHeader} />
           {error && (
             <div className={styles.error} style={{ color: 'var(--accent-red)', marginTop: '16px' }}>
               {error}

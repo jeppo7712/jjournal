@@ -556,15 +556,14 @@ function createTodoStore(getPool) {
 // onChange({ id, key, change, origin }): after every write that changed
 // something, change 'created' | 'updated' | 'deleted'.
 function createTodoService(store, { onChange = () => {}, now = () => new Date() } = {}) {
-    // The links an item points at: they must exist, and an order's account
-    // must be a real (not paper), not archived one. Only checked for a
-    // value the request sets, so an item whose account was archived later
-    // can still be edited and closed.
+    // The links an item points at: they must exist, and an account must not
+    // be archived (paper ones are fine: orders on a paper account are
+    // pending orders too). Only checked for a value the request sets, so an
+    // item whose account was archived later can still be edited and closed.
     async function checkLinks(tx, patch, item) {
         if (patch.account_id) {
             const account = await tx.account(patch.account_id);
             if (!account) throw bad(`account_id ${patch.account_id} doesn't exist`);
-            if (item.kind === 'order' && account.is_virtual) throw bad('account_id must be a real account for an order, not a paper one');
             if (account.archived) throw bad(`account_id ${patch.account_id} is archived`);
         }
         if (patch.trade_id) {

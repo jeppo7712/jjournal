@@ -428,6 +428,115 @@
   color: var(--ui-faint);
 }
 
+/* --- List / Calendar --- */
+
+.viewToggle {
+  display: flex;
+  background: var(--ui-input);
+  border: 1px solid var(--ui-border);
+  border-radius: 10px;
+  padding: 3px;
+  gap: 3px;
+}
+
+.viewBtn {
+  background: none;
+  border: none;
+  border-radius: 7px;
+  padding: 6px 12px;
+  color: var(--ui-text-3);
+  font-size: 0.85rem;
+  font-weight: 500;
+  cursor: pointer;
+}
+
+.viewBtnActive {
+  background: var(--ui-raised);
+  color: var(--ui-strong);
+}
+
+/* The calendar (TodoCalendar.jsx), on the trade calendar's styles. */
+.todoScroller {
+  height: calc(100vh - 260px);
+}
+
+/* Seven days, no week-total column (two classes: beats the trade
+   calendar's own .week). */
+.todoCalendar .todoWeek {
+  grid-template-columns: repeat(7, minmax(0, 1fr));
+}
+
+.todoDay {
+  min-height: 96px;
+}
+
+.todoDayBusy {
+  background: rgba(var(--ui-accent-rgb), 0.06);
+  border-color: rgba(var(--ui-accent-rgb), 0.25);
+}
+
+.todoDayLate {
+  border-color: rgba(var(--ui-red-rgb), 0.45);
+}
+
+.dayItems {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+
+.dayItem {
+  font-size: 11.5px;
+  line-height: 1.35;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding-left: 6px;
+  border-left: 2px solid var(--ui-text-3);
+  color: var(--ui-text-2);
+}
+
+.dayItem_trigger {
+  border-color: var(--ui-violet-text);
+  background-color: var(--ui-violet-text);
+}
+
+.dayItem_order {
+  border-color: var(--ui-accent);
+  background-color: var(--ui-accent);
+}
+
+.dayItem.dayItem_trigger,
+.dayItem.dayItem_order {
+  background-color: transparent;
+}
+
+.dayItemClosed {
+  opacity: 0.45;
+  text-decoration: line-through;
+}
+
+.dayMore {
+  font-size: 11px;
+  color: var(--ui-faint);
+}
+
+.dayDots {
+  display: none;
+  gap: 3px;
+}
+
+.dot {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background-color: var(--ui-text-3);
+}
+
 /* --- The form --- */
 
 .tabRow {
@@ -625,5 +734,21 @@ select.input {
 
   .formGrid {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .todoScroller {
+    height: calc(100vh - 300px);
+  }
+
+  .todoDay {
+    min-height: 54px;
+  }
+
+  .dayItems {
+    display: none;
+  }
+
+  .dayDots {
+    display: flex;
   }
 }

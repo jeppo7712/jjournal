@@ -127,7 +127,8 @@ test('orders: the prices, TIF and bracket the type needs', async () => {
     await rejects400(service.create(order({ order_type: 'MOC', limit_price: null, tif: 'DAY', good_till: null, quantity: 0 }), 'app'), /order\.quantity must be a positive number/);
     await rejects400(service.create(order({ stop_loss: 96 }), 'app'), /stop_loss must be below the entry price for a BUY/);
     await rejects400(service.create(order({ side: 'SELL', profit_target: 99 }), 'app'), /profit_target must be below the entry price for a SELL/);
-    await rejects400(service.create(orderBody({ account_id: 4 }), 'app'), /real account/);
+    const paper = await service.create(orderBody({ account_id: 4 }), 'app');
+    assert.strictEqual(paper.account_name, 'Paper', 'a paper account takes orders too');
     await rejects400(service.create(orderBody({ account_id: 5 }), 'app'), /archived/);
     await rejects400(service.create(orderBody({ account_id: 99 }), 'app'), /account_id 99 doesn't exist/);
     await rejects400(service.create({ kind: 'todo', title: 'x', trade_id: 99 }, 'app'), /trade_id 99 doesn't exist/);
@@ -378,7 +379,7 @@ async function withServer(fn) {
     const clock = () => now;
     const notify = todoRoutes.changeNotifier({
         broadcast: (m) => broadcasts.push(m),
-        loadConfig: async () => ({ kateEventsUrl: 'http://listener.invalid/event', kateEventsToken: 't' }),
+        loadConfig: async () => ({ agentEventsUrl: 'http://listener.invalid/event', agentEventsToken: 't' }),
         send: async (config, event, data) => { sent.push({ event, data }); },
     });
     const service = createTodoService(memoryStore(clock), { onChange: notify, now: clock });

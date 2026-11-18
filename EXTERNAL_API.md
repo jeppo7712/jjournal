@@ -548,7 +548,7 @@ Implementation: `routes/todos.js`, rules in `modules/todos.js`.
 | `status` | `open` (default), `fired`, `done`, `dismissed`, `expired`. For orders the app shows Working / Filled / Cancelled / Expired. |
 | `created_by` | `user` for items written in the app, `agent` for items written here. Set by the journal; can't be sent. |
 | `source` | Where it came from, e.g. `daily-report`, `chat`. At most 60. The app's items have `app`. |
-| `account_id` | Optional; required for an order, and then a real (not paper) account. `account_name` comes with it. |
+| `account_id` | Optional; required for an order. Not an archived account. `account_name` comes with it. |
 | `trade_id` | Optional: the trade it belongs to (shown on that trade). `trade_symbol` comes with it. |
 | `due_at` | When: a todo's time, or for any item when to remind. |
 | `alert` | Ping at `due_at`. Defaults to `true` when a `due_at` is first set; always `false` without one. |

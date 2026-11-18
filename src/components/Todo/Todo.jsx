@@ -1,143 +1,20 @@
-import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { TradeContext } from '../../context/TradeContext';
 import { useTodos, CLOSED_DAYS } from '../../context/TodosContext';
 import { notify } from '../common/Dialogs';
-import { getAgentName, subscribeAgentName } from '../../utils/agentName';
-import {
-  groupTodos, isLapsing, describeTrigger, describeOrder, describeOrderTerms, statusLabel, plainPrice,
-  whenText, dayHeading, snoozeTimes, toUtcIso, fromUtcIso,
-} from '../../utils/todos';
-import TodoForm from './TodoForm';
+import { groupTodos, dayHeading } from '../../utils/todos';
+import { useTodoRows } from './TodoRow';
+import TodoCalendar from './TodoCalendar';
 import styles from './Todo.module.css';
 
 // The Todo page: one list of things to do, price alerts and pending orders,
 // from the user and from the agent (EXTERNAL_API.md, "Todos"), in sections
 // (utils/todos.js, groupTodos). It follows the account picker (TodosContext).
 // Opening it marks the fired items as seen; the ones that were new stay
-// marked "new" while the page is open.
+// marked "new" while the page is open. A calendar view (TodoCalendar) shows
+// the same items by day.
 
-const KIND_LABEL = { todo: 'Todo', trigger: 'Price alert', order: 'Order' };
-
-function SnoozeMenu({ item, now, zone, onSnooze, onClose }) {
-  const times = snoozeTimes(item, now, zone);
-  const start = fromUtcIso(times.tomorrow, zone);
-  const [date, setDate] = useState(start.date);
-  const [time, setTime] = useState(start.time);
-  const ref = useRef(null);
-  useEffect(() => {
-    const outside = (e) => { if (ref.current && !ref.current.contains(e.target)) onClose(); };
-    const esc = (e) => { if (e.key === 'Escape') onClose(); };
-    document.addEventListener('pointerdown', outside);
-    document.addEventListener('keydown', esc);
-    return () => { document.removeEventListener('pointerdown', outside); document.removeEventListener('keydown', esc); };
-  }, [onClose]);
-  return (
-    <div className={styles.snoozeMenu} ref={ref} role="menu">
-      <button type="button" role="menuitem" onClick={() => onSnooze(times.hour)}>In an hour <span>{whenText(times.hour, now, zone)}</span></button>
-      <button type="button" role="menuitem" onClick={() => onSnooze(times.tomorrow)}>Tomorrow <span>{whenText(times.tomorrow, now, zone)}</span></button>
-      <div className={styles.snoozePick}>
-        <input type="date" value={date} onChange={e => setDate(e.target.value)} aria-label="Snooze until: date" />
-        <input type="time" value={time} onChange={e => setTime(e.target.value)} aria-label="Snooze until: time" />
-        <button type="button" onClick={() => { const iso = toUtcIso(date, time, zone); if (iso) onSnooze(iso); }} disabled={!date}>Set</button>
-      </div>
-    </div>
-  );
-}
-
-function TodoRow({ item, isNew, agentName, now, zone, onEdit, onPatch, onOpenTrade, canOpenTrade, showAccount }) {
-  const [snoozing, setSnoozing] = useState(false);
-  const closed = ['done', 'dismissed', 'expired'].includes(item.status);
-  const lapsing = isLapsing(item, now);
-  const overdue = item.status === 'open' && item.due_at && Date.parse(item.due_at) <= now.getTime();
-  const detail = item.kind === 'trigger' ? describeTrigger(item.trigger) : item.kind === 'order' ? describeOrder(item.order) : '';
-  // A title made from the alert or order itself: no need to say it twice.
-  const plainDetail = item.kind === 'trigger' ? describeTrigger(item.trigger, plainPrice) : item.kind === 'order' ? describeOrder(item.order, plainPrice) : '';
-  const titleIsDetail = detail && (item.title === detail || item.title === plainDetail);
-  const terms = item.kind === 'order' ? describeOrderTerms(item.order) : '';
-  const sub = item.then || item.notes;
-
-  const act = (body, message) => onPatch(item, body, message);
-  const buttons = [];
-  if (closed) {
-    buttons.push({ label: 'Reopen', onClick: () => act({ status: 'open' }) });
-  } else if (item.kind === 'order') {
-    buttons.push({ label: 'Filled', primary: true, onClick: () => act({ status: 'done', closed_note: 'filled' }, 'Marked filled') });
-    buttons.push({ label: 'Cancelled', onClick: () => act({ status: 'dismissed', closed_note: 'cancelled' }, 'Marked cancelled') });
-  } else {
-    buttons.push({ label: 'Done', primary: true, onClick: () => act({ status: 'done' }, 'Done') });
-    buttons.push({ label: 'Dismiss', onClick: () => act({ status: 'dismissed' }, 'Dismissed') });
-    if (item.kind === 'trigger' && item.status === 'fired') buttons.push({ label: 'Re-arm', onClick: () => act({ status: 'open' }, 'Watching again') });
-  }
-  const canSnooze = !closed && (item.due_at || item.kind === 'todo');
-
-  return (
-    <li className={`${styles.row} ${closed || lapsing ? styles.rowDim : ''} ${item.status === 'fired' ? styles.rowFired : ''} ${overdue ? styles.rowOverdue : ''}`}>
-      <div className={styles.rowMain}>
-        <div className={styles.rowTitleLine}>
-          {item.kind !== 'todo' && <span className={`${styles.kindChip} ${styles[`kind_${item.kind}`]}`}>{KIND_LABEL[item.kind]}</span>}
-          <button type="button" className={styles.rowTitle} onClick={() => onEdit(item)} title="Edit">{item.title}</button>
-          {isNew && item.status === 'fired' && <span className={styles.newChip}>new</span>}
-          {(item.status !== 'open' || item.kind === 'order') && (
-            <span className={`${styles.statusChip} ${styles[`status_${item.status}`]}`}>{statusLabel(item)}</span>
-          )}
-          {lapsing && <span className={styles.statusChip}>Past expiry</span>}
-        </div>
-        {detail && !titleIsDetail && <div className={styles.rowDetail}>{detail}</div>}
-        {terms && <div className={styles.rowDetail}>{terms}</div>}
-        {item.status === 'fired' && (
-          <div className={styles.firedLine}>
-            {item.fired_note || 'Fired'}
-            {item.fired_at && <span className={styles.metaTime}> · {whenText(item.fired_at, now, zone)}</span>}
-          </div>
-        )}
-        {sub && <div className={styles.rowSub}>{item.then ? <><span className={styles.thenMark}>Then</span> {item.then}</> : item.notes}</div>}
-        {item.then && item.notes && <div className={styles.rowSub}>{item.notes}</div>}
-        {closed && item.closed_note && <div className={styles.rowSub}>{item.closed_note}</div>}
-        <div className={styles.meta}>
-          <span className={`${styles.byChip} ${item.created_by === 'agent' ? styles.byAgent : ''}`}>{item.created_by === 'agent' ? agentName : 'you'}</span>
-          {item.source && item.source !== 'app' && <span>{item.source}</span>}
-          {item.due_at && (
-            <span className={overdue ? styles.metaLate : ''}>
-              {item.kind === 'todo' ? '' : 'remind '}{whenText(item.due_at, now, zone)}
-              {item.alert ? '' : ' (no ping)'}
-              {item.reminded_at && !closed ? ' · pinged' : ''}
-            </span>
-          )}
-          {item.expires_at && !closed && <span>expires {whenText(item.expires_at, now, zone)}</span>}
-          {closed && item.closed_at && <span>{statusLabel(item).toLowerCase()} {whenText(item.closed_at, now, zone)}</span>}
-          {showAccount && item.account_name && <span>{item.account_name}</span>}
-          {item.trade_id && (
-            canOpenTrade
-              ? <button type="button" className={styles.linkBtn} onClick={() => onOpenTrade(item.trade_id)}>{item.trade_symbol || 'trade'} trade</button>
-              : <span title="The trade is in another account">{item.trade_symbol || 'trade'} trade</span>
-          )}
-        </div>
-      </div>
-      <div className={styles.rowActions}>
-        {buttons.map(b => (
-          <button key={b.label} type="button" className={`${styles.actBtn} ${b.primary ? styles.actPrimary : ''}`} onClick={b.onClick}>{b.label}</button>
-        ))}
-        {canSnooze && (
-          <span className={styles.snoozeWrap}>
-            <button type="button" className={styles.actBtn} onClick={() => setSnoozing(s => !s)} aria-expanded={snoozing}>
-              {item.due_at ? 'Snooze' : 'Date'}
-            </button>
-            {snoozing && (
-              <SnoozeMenu
-                item={item}
-                now={now}
-                zone={zone}
-                onClose={() => setSnoozing(false)}
-                onSnooze={(iso) => { setSnoozing(false); act({ due_at: iso }, `Moved to ${whenText(iso, now, zone)}`); }}
-              />
-            )}
-          </span>
-        )}
-        <button type="button" className={styles.actBtn} onClick={() => onEdit(item)}>Edit</button>
-      </div>
-    </li>
-  );
-}
+const VIEW_KEY = 'jjournal_todo_view';
 
 function Section({ title, count, hint, children, collapsible, open, onToggle }) {
   return (
@@ -158,13 +35,18 @@ function Section({ title, count, hint, children, collapsible, open, onToggle }) 
 }
 
 export default function Todo({ onViewTrade }) {
-  const { accounts, currentAccountId, scopedTrades } = useContext(TradeContext);
-  const { scoped, loaded, zone, now, save, markSeen, loadOlderClosed } = useTodos();
-  const [agentName, setAgentNameState] = useState(getAgentName);
-  useEffect(() => subscribeAgentName(setAgentNameState), []);
-  const [editing, setEditing] = useState(null);
+  const { accounts, currentAccountId } = useContext(TradeContext);
+  const { scoped, loaded, zone, now, markSeen, loadOlderClosed } = useTodos();
   const [showClosed, setShowClosed] = useState(false);
   const [older, setOlder] = useState(null);
+  // List or calendar, remembered in this browser.
+  const [view, setView] = useState(() => {
+    try { return localStorage.getItem(VIEW_KEY) === 'calendar' ? 'calendar' : 'list'; } catch { return 'list'; }
+  });
+  const chooseView = (next) => {
+    setView(next);
+    try { localStorage.setItem(VIEW_KEY, next); } catch { /* not remembered */ }
+  };
 
   // Fired items not seen yet: "new" for as long as the page is open, then
   // marked seen (the menu badge drops them).
@@ -176,38 +58,10 @@ export default function Todo({ onViewTrade }) {
     markSeen(unseen);
   }, [scoped, markSeen]);
 
+  const { list, openForm, form } = useTodoRows({ onViewTrade, newIds });
   const groups = useMemo(() => groupTodos(scoped, now, zone), [scoped, now, zone]);
   const currentAccount = (accounts || []).find(a => String(a.id) === String(currentAccountId));
   const hasSubAccounts = (accounts || []).some(a => String(a.parent_account_id) === String(currentAccountId));
-  const tradesById = useMemo(() => new Map((scopedTrades || []).map(t => [String(t.id), t])), [scopedTrades]);
-
-  const patch = async (item, body, message) => {
-    try {
-      await save(item.id, body);
-      if (message) notify(`${message}: ${item.title}`, 'success');
-    } catch (err) {
-      notify(err.message, 'error');
-    }
-  };
-
-  const openTrade = (tradeId) => {
-    const trade = tradesById.get(String(tradeId));
-    if (trade) onViewTrade(trade);
-  };
-
-  const rowProps = (item) => ({
-    item,
-    isNew: newIds.has(item.id),
-    agentName,
-    now,
-    zone,
-    onEdit: setEditing,
-    onPatch: patch,
-    onOpenTrade: openTrade,
-    canOpenTrade: tradesById.has(String(item.trade_id)),
-    showAccount: hasSubAccounts || item.kind !== 'order',
-  });
-  const list = (items) => <ul className={styles.list}>{items.map(item => <TodoRow key={item.id} {...rowProps(item)} />)}</ul>;
 
   const openCount = scoped.length - groups.closed.length;
   const upcomingCount = groups.upcoming.reduce((n, d) => n + d.items.length, 0);
@@ -226,25 +80,35 @@ export default function Todo({ onViewTrade }) {
       <div className={styles.header}>
         <h2 className={styles.title}>Todo — {currentAccount?.name}</h2>
         <div className={styles.headerActions}>
-          <button type="button" className={styles.addBtn} onClick={() => setEditing({ kind: 'todo' })}>+ Add</button>
+          <div className={styles.viewToggle} role="group" aria-label="View">
+            {[['list', 'List'], ['calendar', 'Calendar']].map(([value, label]) => (
+              <button key={value} type="button" aria-pressed={view === value} className={`${styles.viewBtn} ${view === value ? styles.viewBtnActive : ''}`} onClick={() => chooseView(value)}>{label}</button>
+            ))}
+          </div>
+          <button type="button" className={styles.addBtn} onClick={() => openForm(null, { kind: 'todo' })}>+ Add</button>
         </div>
       </div>
       <p className={styles.subNote}>
         Things to do, price alerts and pending orders for this account{hasSubAccounts ? ' and its sub-accounts' : ''}, and the ones for all accounts.
-        {' '}{agentName} watches the prices and the clock and pings you; the journal only keeps the list.
+        {' '}The journal only keeps the list: watching prices and sending alerts is the job of an external agent, which reads and updates it through the external API.
       </p>
 
-      {loaded && openCount === 0 && (
+      {view === 'calendar' && (
+        <TodoCalendar items={scoped} zone={zone} now={now} list={list} openForm={openForm} />
+      )}
+
+      {view === 'list' && loaded && openCount === 0 && (
         <div className={styles.empty}>
           <p>Nothing to do.</p>
           <div className={styles.emptyActions}>
-            <button type="button" className={styles.actBtn} onClick={() => setEditing({ kind: 'todo' })}>Add a todo</button>
-            <button type="button" className={styles.actBtn} onClick={() => setEditing({ kind: 'trigger' })}>Add a price alert</button>
-            <button type="button" className={styles.actBtn} onClick={() => setEditing({ kind: 'order' })}>Add a pending order</button>
+            <button type="button" className={styles.actBtn} onClick={() => openForm(null, { kind: 'todo' })}>Add a todo</button>
+            <button type="button" className={styles.actBtn} onClick={() => openForm(null, { kind: 'trigger' })}>Add a price alert</button>
+            <button type="button" className={styles.actBtn} onClick={() => openForm(null, { kind: 'order' })}>Add a pending order</button>
           </div>
         </div>
       )}
 
+      {view === 'list' && (<>
       {groups.needs.length > 0 && (
         <Section title="Needs you" count={groups.needs.length}>{list(groups.needs)}</Section>
       )}
@@ -292,14 +156,9 @@ export default function Todo({ onViewTrade }) {
           ) : older.length > 0 ? list(older) : <p className={styles.emptyLine}>Nothing older.</p>}
         </Section>
       )}
+      </>)}
 
-      {editing && (
-        <TodoForm
-          item={editing.id ? editing : null}
-          kind={editing.id ? undefined : editing.kind}
-          onClose={() => setEditing(null)}
-        />
-      )}
+      {form}
     </div>
   );
 }

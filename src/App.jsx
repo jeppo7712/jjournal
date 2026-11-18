@@ -169,6 +169,7 @@ function App() {
                 customFilterDate={customFilterDate}
                 customFilterWeek={customFilterWeek}
                 onCustomFilterApplied={clearCalendarFilter}
+                onOpenTodo={() => setCurrentView('todo')}
               />
             )}
             {currentView === 'settings' && (

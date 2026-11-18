@@ -238,3 +238,68 @@ export function snoozeTimes(item, now, zone) {
     tomorrow: tomorrow.toUTC().toISO(),
   };
 }
+
+// --- The Todo calendar ---
+
+// The day an item sits on in the Todo calendar ('yyyy-MM-dd' in `zone`), or
+// null: a fired item on the day it fired, an order on its good-till date
+// (else its reminder), anything else on its due_at.
+export function calendarDayOf(item, zone) {
+  if (item.status === 'fired' && item.fired_at) return at(item.fired_at, zone).toISODate();
+  if (item.kind === 'order' && item.order?.good_till) return item.order.good_till;
+  return item.due_at ? at(item.due_at, zone).toISODate() : null;
+}
+
+// { 'yyyy-MM-dd': [items] }, each day's items by time.
+export function itemsByDay(items, zone) {
+  const days = {};
+  for (const item of items) {
+    const day = calendarDayOf(item, zone);
+    if (day) (days[day] = days[day] || []).push(item);
+  }
+  for (const list of Object.values(days)) list.sort(byDue);
+  return days;
+}
+
+// The weeks the Todo calendar runs through (Mondays, 'yyyy-MM-dd'): from the
+// month before today's (or the earliest item's month) to the end of the
+// month after today's (or the latest item's month), so a far-off order's
+// good-till date can be scrolled to.
+export function todoCalendarWeeks(dayKeys, todayKey) {
+  const monthStart = key => DateTime.fromISO(`${key.slice(0, 7)}-01`);
+  const today = monthStart(todayKey);
+  let first = today.minus({ months: 1 });
+  let last = today.plus({ months: 1 });
+  for (const key of dayKeys) {
+    const m = monthStart(key);
+    if (m < first) first = m;
+    if (m > last) last = m;
+  }
+  const end = last.endOf('month').toISODate();
+  const weeks = [];
+  for (let monday = first.minus({ days: first.weekday - 1 }); monday.toISODate() <= end; monday = monday.plus({ weeks: 1 })) {
+    weeks.push(monday.toISODate());
+  }
+  return weeks;
+}
+
+// What the Dashboard's Today card counts, over the items in scope:
+// overdue and due today (open), fired ones not seen yet, working orders and
+// armed price alerts.
+export function todaySummary(items, now, zone) {
+  const out = { overdue: 0, dueToday: 0, fired: 0, orders: 0, alerts: 0, top: [] };
+  for (const item of items) {
+    if (item.status === 'fired') {
+      if (!item.seen_at) { out.fired += 1; out.top.push(item); }
+      continue;
+    }
+    if (item.status !== 'open') continue;
+    if (item.kind === 'order') out.orders += 1;
+    if (item.kind === 'trigger') out.alerts += 1;
+    const section = sectionOf(item, now, zone);
+    if (section === 'needs') { out.overdue += 1; out.top.push(item); }
+    else if (section === 'today') { out.dueToday += 1; out.top.push(item); }
+  }
+  out.top.sort((a, b) => (b.status === 'fired') - (a.status === 'fired') || byDue(a, b));
+  return out;
+}

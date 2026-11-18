@@ -26,22 +26,28 @@ const needsStop = type => ['STP', 'STP LMT'].includes(type);
 const str = value => (value === null || value === undefined ? '' : String(value));
 const num = value => (String(value).trim() === '' ? null : Number(String(value).replace(',', '.')));
 
-function initialForm(item, kind, defaultOrderAccount, zone) {
+// preset (a new item only), what to start from: { trade_id, dueDate }, and
+// from a trade its symbol, type, contract_month and account_id.
+function initialForm(item, kind, defaultOrderAccount, zone, preset) {
   const due = fromUtcIso(item?.due_at, zone);
   const expires = fromUtcIso(item?.expires_at, zone);
-  const t = item?.trigger || {};
-  const o = item?.order || {};
+  const fromTrade = !item && preset?.symbol
+    ? { symbol: preset.symbol, type: preset.type === 'FUT' ? 'FUT' : 'STK', contract_month: preset.type === 'FUT' ? preset.contract_month : null }
+    : {};
+  const t = item?.trigger || fromTrade;
+  const o = item?.order || fromTrade;
+  const presetAccount = !item && preset?.account_id ? str(preset.account_id) : null;
   return {
     kind: item?.kind || kind || 'todo',
     title: str(item?.title),
     notes: str(item?.notes),
     then: str(item?.then),
-    dueDate: due.date,
-    dueTime: due.time,
+    dueDate: item ? due.date : (preset?.dueDate || ''),
+    dueTime: item ? due.time : (preset?.dueDate ? '09:00' : ''),
     alert: item ? !!item.alert : true,
-    tradeId: str(item?.trade_id),
-    accountId: item ? str(item.account_id) : '',
-    orderAccountId: item?.kind === 'order' ? str(item.account_id) : str(defaultOrderAccount),
+    tradeId: str(item ? item.trade_id : preset?.trade_id),
+    accountId: item ? str(item.account_id) : (presetAccount || ''),
+    orderAccountId: item?.kind === 'order' ? str(item.account_id) : (presetAccount || str(defaultOrderAccount)),
     expiresDate: expires.date,
     expiresTime: expires.time,
     tSymbol: str(t.symbol),
@@ -151,18 +157,17 @@ function Toggle({ options, value, onChange }) {
   );
 }
 
-export default function TodoForm({ item, kind, onClose }) {
+export default function TodoForm({ item, kind, preset, onClose }) {
   const { accounts, currentAccountId, scopedTrades } = useContext(TradeContext);
   const { zone, save, remove } = useTodos();
 
   const groups = useMemo(() => accountOptionGroups(accounts), [accounts]);
-  const realAccounts = useMemo(() => (groups.find(g => g.key === 'real')?.options || []), [groups]);
   const usableAccounts = useMemo(() => groups.filter(g => g.key !== 'archived'), [groups]);
-  const defaultOrderAccount = realAccounts.some(o => String(o.account.id) === String(currentAccountId))
-    ? currentAccountId
-    : realAccounts[0]?.account.id;
+  // An order goes on the account that's picked, unless it's archived.
+  const usableIds = usableAccounts.flatMap(g => g.options.map(o => String(o.account.id)));
+  const defaultOrderAccount = usableIds.includes(String(currentAccountId)) ? currentAccountId : usableIds[0];
 
-  const [form, setForm] = useState(() => initialForm(item, kind, defaultOrderAccount, zone));
+  const [form, setForm] = useState(() => initialForm(item, kind, defaultOrderAccount, zone, preset));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const set = (field) => (e) => {
@@ -175,11 +180,12 @@ export default function TodoForm({ item, kind, onClose }) {
     const list = [...(scopedTrades || [])]
       .sort((a, b) => String(b.firstActionDate || b.created_at || '').localeCompare(String(a.firstActionDate || a.created_at || '')))
       .slice(0, 100);
-    if (item?.trade_id && !list.some(t => String(t.id) === String(item.trade_id))) {
-      list.unshift({ id: item.trade_id, symbol: item.trade_symbol || `Trade ${item.trade_id}`, openDate: '' });
+    const linked = item?.trade_id || preset?.trade_id;
+    if (linked && !list.some(t => String(t.id) === String(linked))) {
+      list.unshift({ id: linked, symbol: item?.trade_symbol || preset?.trade_symbol || `Trade ${linked}`, openDate: '' });
     }
     return list;
-  }, [scopedTrades, item]);
+  }, [scopedTrades, item, preset]);
 
   const submit = async () => {
     setBusy(true);
@@ -234,10 +240,10 @@ export default function TodoForm({ item, kind, onClose }) {
     </Field>
   );
 
-  const accountSelect = (field, { realOnly } = {}) => (
+  const accountSelect = (field, { required } = {}) => (
     <select className={styles.input} value={form[field]} onChange={set(field)}>
-      {!realOnly && <option value="">All accounts</option>}
-      {(realOnly ? [{ key: 'real', label: 'Real', options: realAccounts }] : usableAccounts).map(g => (
+      {!required && <option value="">All accounts</option>}
+      {usableAccounts.map(g => (
         <optgroup key={g.key} label={g.label}>
           {g.options.map(({ account, depth }) => (
             <option key={account.id} value={account.id}>{`${'  '.repeat(depth)}${account.name}`}</option>
@@ -330,7 +336,7 @@ export default function TodoForm({ item, kind, onClose }) {
 
         {form.kind === 'order' && (
           <>
-            <Field label="Account">{accountSelect('orderAccountId', { realOnly: true })}</Field>
+            <Field label="Account">{accountSelect('orderAccountId', { required: true })}</Field>
             <Field label="Symbol">
               <input className={styles.input} value={form.oSymbol} onChange={set('oSymbol')} placeholder="ABC, ETFA.DE, MES" autoCapitalize="characters" />
             </Field>
