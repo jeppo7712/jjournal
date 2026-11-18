@@ -98,7 +98,7 @@ const ringFontSize = (text) => {
   return Math.min(8.5, Math.round((RING_TEXT_WIDTH / ems) * 10) / 10);
 };
 
-const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, customFilterDate, customFilterWeek }) => {
+const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, customFilterDate, customFilterWeek, onCustomFilterApplied }) => {
   // Colours drawn in JavaScript (the chart, the tiles' rings) come from the
   // theme's tokens; a theme change re-renders with the new ones.
   useTheme();
@@ -199,7 +199,8 @@ const Dashboard = ({ onAddFills, onViewTrade, onEditTrade, onViewDayNote, custom
       setTimeFilter('CUSTOM');
       setShowDatePicker(false);
     }
-  }, [customFilterDate, customFilterWeek, setCustomStartDate, setCustomEndDate, setTimeFilter]);
+    if ((customFilterDate || customFilterWeek) && onCustomFilterApplied) onCustomFilterApplied();
+  }, [customFilterDate, customFilterWeek, onCustomFilterApplied, setCustomStartDate, setCustomEndDate, setTimeFilter]);
 
   useEffect(() => {
     const handleClickOutside = (event) => {

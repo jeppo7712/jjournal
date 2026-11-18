@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import Dashboard from './components/Dashboard/Dashboard';
 import Navigation from './components/Navigation/Navigation';
 import TradeModal from './components/TradeModal/TradeModal';
@@ -133,21 +133,13 @@ function App() {
     return () => window.removeEventListener('keydown', onKeyDown);
   });
 
-  const handleDayClick = (date, trades) => {
-    if (trades.length === 1) {
-      handleViewTrade(trades[0]);
-    } else if (trades.length > 1) {
-      setCustomFilterDate(date);
-      setCustomFilterWeek(null);
-      setCurrentView('dashboard');
-    }
-  };
-
-  const handleWeekClick = (weekStart, weekEnd) => {
-    setCustomFilterWeek({ start: weekStart, end: weekEnd });
+  // A calendar day or week is a one-off request: the Dashboard applies it
+  // to its filter and then drops it, so a filter cleared afterwards stays
+  // cleared when the Dashboard is opened again.
+  const clearCalendarFilter = useCallback(() => {
     setCustomFilterDate(null);
-    setCurrentView('dashboard');
-  };
+    setCustomFilterWeek(null);
+  }, []);
 
   return (
     <StatusProvider>
@@ -173,6 +165,7 @@ function App() {
                 onViewDayNote={handleViewDayNote}
                 customFilterDate={customFilterDate}
                 customFilterWeek={customFilterWeek}
+                onCustomFilterApplied={clearCalendarFilter}
               />
             )}
             {currentView === 'settings' && (
