@@ -57,6 +57,13 @@ module.exports = (db, historicalDataService, yahoo, broadcastStatus, uuidv4, tas
                 'GET    /api/external/v1/symbols',
                 'GET    /api/external/v1/historical',
                 'GET    /api/external/v1/quote/:symbol',
+                'GET    /api/external/v1/todos',
+                'GET    /api/external/v1/todos/:id',
+                'GET    /api/external/v1/todos/key/:key',
+                'POST   /api/external/v1/todos',
+                'PUT    /api/external/v1/todos/key/:key',
+                'PATCH  /api/external/v1/todos/:id',
+                'DELETE /api/external/v1/todos/:id',
             ],
         });
     });

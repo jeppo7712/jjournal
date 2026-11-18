@@ -878,6 +878,7 @@ ON trades (symbol, type, contract_month);
     // --- End New General Indexes ---
 
     await createTagTables(client);
+    await createTodoTables(client);
 
     const { rows: accounts } = await client.query('SELECT * FROM accounts');
     if (accounts.length === 0) {
@@ -1020,6 +1021,49 @@ async function createTagTables(client) {
     }
     if (rows.length) logger.info(`[Tags] Carried over the tags of ${rows.length} trades`);
   }
+}
+
+// The Todo list (modules/todos.js): things to do, price alerts and pending
+// orders, from the user and from the external agent. One table: the plain
+// fields as columns, an alert's and an order's details as JSONB (only one
+// of them, matching the kind). then_text / trigger_spec / order_spec are
+// `then`, `trigger` and `order` in the API (THEN and ORDER are SQL words).
+async function createTodoTables(client) {
+  await client.query(`
+    CREATE TABLE IF NOT EXISTS todos (
+      id SERIAL PRIMARY KEY,
+      -- The agent's own name for an item it keeps updating (PUT by key).
+      key VARCHAR(200) UNIQUE,
+      kind VARCHAR(10) NOT NULL CHECK (kind IN ('todo', 'trigger', 'order')),
+      title VARCHAR(300) NOT NULL,
+      then_text VARCHAR(300),
+      notes TEXT,
+      status VARCHAR(10) NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'fired', 'done', 'dismissed', 'expired')),
+      created_by VARCHAR(10) NOT NULL CHECK (created_by IN ('user', 'agent')),
+      source VARCHAR(60),
+      -- An item outlives the account or trade it pointed at.
+      account_id INTEGER REFERENCES accounts(id) ON DELETE SET NULL,
+      trade_id INTEGER REFERENCES trades(id) ON DELETE SET NULL,
+      due_at TIMESTAMP WITH TIME ZONE,
+      alert BOOLEAN NOT NULL DEFAULT false,
+      -- The agent pinged for this due_at (cleared when due_at moves).
+      reminded_at TIMESTAMP WITH TIME ZONE,
+      expires_at TIMESTAMP WITH TIME ZONE,
+      -- The agent only counts what happens after this.
+      armed_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      fired_at TIMESTAMP WITH TIME ZONE,
+      fired_note VARCHAR(300),
+      closed_at TIMESTAMP WITH TIME ZONE,
+      closed_note VARCHAR(300),
+      -- The user has seen it fire (the Todo page was opened since).
+      seen_at TIMESTAMP WITH TIME ZONE,
+      trigger_spec JSONB,
+      order_spec JSONB,
+      created_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW(),
+      updated_at TIMESTAMP WITH TIME ZONE NOT NULL DEFAULT NOW()
+    );
+  `);
+  await client.query(`CREATE INDEX IF NOT EXISTS idx_todos_trade ON todos (trade_id) WHERE trade_id IS NOT NULL`);
 }
 
 // "breakout, #News ,breakout" → ['breakout', 'News']
@@ -1196,4 +1240,5 @@ module.exports = {
   handlePoolErrors,
   getIsConnected,
   parseLegacyTags,
+  createTodoTables,
 };

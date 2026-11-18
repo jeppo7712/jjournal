@@ -1,6 +1,6 @@
 # External API (v1)
 
-A read/write API for external tools — an AI trade-analysis project, a script, whatever — to consume this journal's data: accounts (including capital allocation/cash balance and paper-vs-real), trades (with computed side/status/PnL/return%), a cash ledger and non-trade holdings (T-bills/bonds), day notes, attachments, symbol settings, and historic/current prices. It also has one narrow write-back endpoint so an external tool can attach its analysis to a trade.
+A read/write API for external tools — an AI trade-analysis project, a script, whatever — to consume this journal's data: accounts (including capital allocation/cash balance and paper-vs-real), trades (with computed side/status/PnL/return%), a cash ledger and non-trade holdings (T-bills/bonds), day notes, attachments, symbol settings, and historic/current prices. It also has two places an external tool can write to: its analysis on a trade, and the Todo list (things to do, price alerts and pending orders).
 
 Base URL: `http://<host>:<port>/api/external/v1`
 
@@ -17,7 +17,7 @@ If this server is ever reachable outside a network you trust, put it behind a re
 - All responses are JSON.
 - All timestamps are ISO 8601 in UTC (e.g. `2026-03-14T13:45:00.000Z`).
 - Money fields are plain numbers (no currency symbol), in the currency named next to them (a trade's `currency`, a cash row's or holding's `currency`). Nothing is converted between currencies.
-- Paginated list endpoints (`trades`, `accounts/:id/cash-transactions`, `holdings`) return an object with a `total` count, `limit`, `offset`, and the array under a named key, not a bare array. `daynotes` returns every matching note with a `total` count (no paging). Non-paginated list endpoints (`accounts`, `symbols`) return just the named key — no `total` field, since there's nothing to paginate.
+- Paginated list endpoints (`trades`, `accounts/:id/cash-transactions`, `holdings`, `todos`) return an object with a `total` count, `limit`, `offset`, and the array under a named key, not a bare array. `daynotes` returns every matching note with a `total` count (no paging). Non-paginated list endpoints (`accounts`, `symbols`) return just the named key — no `total` field, since there's nothing to paginate.
 - Calendar dates without a time (a day note's `date`, a holding's `purchase_date`/`maturity_date`) are plain `YYYY-MM-DD`.
 - Errors are `{ "error": "message" }` with a non-2xx status code.
 - `GET /api/external/v1/` returns a small discovery document listing every endpoint.
@@ -484,6 +484,190 @@ Yahoo's quote endpoint occasionally fails server-side (e.g. crumb/auth issues on
 ```
 
 `price_source` starting with `historical_bar_fallback` (rather than `regularMarketPrice`/`bid`/`ask`/etc.) means this — check it if you need to know whether the price came from Yahoo's live quote or our own stored data. `502` is only returned if the live quote fails **and** there's no stored data at all to fall back to.
+
+---
+
+## Todos
+
+One list for everything that needs doing, written by the user in the app (the Todo page) and by an agent through these endpoints. Three kinds of item:
+
+- **`todo`** — something to do, optionally at a time (`due_at`), optionally with a ping then (`alert`).
+- **`trigger`** — a price alert: a condition on a price and what to do when it happens. The app calls it "Price alert".
+- **`order`** — a resting order at the broker that hasn't filled yet. The app calls it "Pending order".
+
+**The journal never evaluates prices and never sends notifications.** It stores, shows and serves the list. The agent watches prices and the clock, pings the user, and reports back: it marks an alert `fired` when its condition happened, and sets `reminded_at` when it pinged for a `due_at`.
+
+Implementation: `routes/todos.js`, rules in `modules/todos.js`.
+
+### The item
+
+```json
+{
+  "id": 21,
+  "key": null,
+  "kind": "order",
+  "title": "Buy ETFA.DE on the dip",
+  "then": null,
+  "notes": null,
+  "status": "open",
+  "created_by": "user",
+  "source": "app",
+  "account_id": 3,
+  "account_name": "Broker Main",
+  "trade_id": null,
+  "trade_symbol": null,
+  "due_at": "2026-03-20T16:00:00.000Z",
+  "alert": true,
+  "reminded_at": null,
+  "expires_at": null,
+  "armed_at": "2026-03-02T09:12:00.000Z",
+  "fired_at": null,
+  "fired_note": null,
+  "closed_at": null,
+  "closed_note": null,
+  "seen_at": null,
+  "created_at": "2026-03-02T09:12:00.000Z",
+  "updated_at": "2026-03-02T09:12:00.000Z",
+  "trigger": null,
+  "order": {
+    "symbol": "ETFA.DE", "type": "STK", "contract_month": null,
+    "side": "BUY", "quantity": 10, "order_type": "LMT", "limit_price": 95.5, "stop_price": null,
+    "tif": "GTD", "good_till": "2026-03-20", "currency": null,
+    "stop_loss": null, "profit_target": null
+  }
+}
+```
+
+| Field | Notes |
+|---|---|
+| `key` | Optional, unique. The agent's own stable name for an item it keeps updating (`PUT /todos/key/:key`). Letters, digits and `. _ : ~ -`, at most 200. The user's own items have none. |
+| `kind` | `todo`, `trigger` or `order`. Required. |
+| `title` | Required, at most 300 characters. |
+| `then` | What to do when it happens, or a short instruction. At most 300. |
+| `notes` | Free text, at most 10,000. |
+| `status` | `open` (default), `fired`, `done`, `dismissed`, `expired`. For orders the app shows Working / Filled / Cancelled / Expired. |
+| `created_by` | `user` for items written in the app, `agent` for items written here. Set by the journal; can't be sent. |
+| `source` | Where it came from, e.g. `daily-report`, `chat`. At most 60. The app's items have `app`. |
+| `account_id` | Optional; required for an order, and then a real (not paper) account. `account_name` comes with it. |
+| `trade_id` | Optional: the trade it belongs to (shown on that trade). `trade_symbol` comes with it. |
+| `due_at` | When: a todo's time, or for any item when to remind. |
+| `alert` | Ping at `due_at`. Defaults to `true` when a `due_at` is first set; always `false` without one. |
+| `reminded_at` | Set by the agent when it pinged for this `due_at`. Cleared when `due_at` moves (a snooze) and when the item reopens. |
+| `expires_at` | After this the item no longer matters: the agent sets it to `expired`; the app greys it out until then. |
+| `armed_at` | Since when it's watching. Count only what happens after this. See the rules below. |
+| `fired_at`, `fired_note` | When it happened and what, e.g. `week close 41.80 on 2026-03-06` (at most 300). |
+| `closed_at`, `closed_note` | When it became `done`, `dismissed` or `expired`, and why (at most 300). |
+| `seen_at` | When the user saw it fired (opened the Todo page). |
+| `trigger` | Required for `kind: trigger`, otherwise `null`. |
+| `order` | Required for `kind: order`, otherwise `null`. |
+
+Times are sent and answered as ISO 8601 with a zone (`2026-03-20T16:00:00Z` or `...+01:00`); a time without one is refused, it would be ambiguous. Answers are always UTC.
+
+`trigger`:
+
+| Field | Values |
+|---|---|
+| `symbol` | Required, no spaces: `ABC`, `ETFA.DE`, an index such as `^IDX`, a futures root such as `MES`. Stored in capitals. |
+| `type` | `STK` or `FUT`. |
+| `contract_month` | Futures only, optional, e.g. `202606`. Without it: the front month. |
+| `condition` | `touch` (any trade through the level), `close_1m` (a 1-minute close; futures only), `close_1d` (a daily close), `close_1w` (a weekly close). |
+| `direction` | `above` or `below`. |
+| `level` | Positive number, in the symbol's own units. |
+| `void_above`, `void_below` | Optional positive numbers: if price trades there first, the alert no longer applies (a stop or target already hit). |
+
+`order`:
+
+| Field | Values |
+|---|---|
+| `symbol` | Required, no spaces. |
+| `type` | `STK` (default) or `FUT`. |
+| `contract_month` | Futures only, optional, e.g. `202606`. |
+| `side` | `BUY` or `SELL`. |
+| `quantity` | Positive number. |
+| `order_type` | `LMT`, `STP`, `STP LMT`, `MOC`, `LOC`. |
+| `limit_price`, `stop_price` | As the type needs, and only then: `LMT` and `LOC` a limit price, `STP` a stop price, `STP LMT` both, `MOC` neither. |
+| `tif` | `DAY`, `GTC`, `GTD`. |
+| `good_till` | A date (`2026-03-20`); required with `GTD`, refused otherwise. |
+| `currency` | Optional 3-letter code; the symbol's own otherwise. |
+| `stop_loss`, `profit_target` | Optional: a bracket's protective stop and target. For a `BUY` the stop must be below the entry price and the target above (the other way round for a `SELL`). |
+
+### Rules the journal keeps
+
+- Bad input is `400 {"error": "..."}` naming the field, e.g. `trigger.level is required`, `account_id is required for kind order`, `trigger.condition close_1m is for futures only (trigger.type FUT)`.
+- Fields not sent stay as they are; `null` clears one. Read-only fields sent back (`id`, `account_name`, `created_at`, ...) are ignored. Changing `kind` drops the old kind's `trigger` / `order`.
+- `closed_at` is set when the status becomes `done`, `dismissed` or `expired`. `fired_at` is set when it becomes `fired` (to the request's `fired_at` if it sent one, else now). Back to `open` clears both (and their notes) and `reminded_at`.
+- `armed_at` is set on create, whenever the trigger's `symbol`, `type`, `contract_month`, `condition`, `direction` or `level` changes or `due_at` changes, and when the status goes back to `open`.
+- An item that `fired` or `expired` and is then re-armed that way (a new level, a new `due_at`) goes back to `open`, unless the same request sends a `status`. A `done` or `dismissed` item keeps its status.
+- An item the user marked `done` or `dismissed` is their decision: `PUT /todos/key/:key` doesn't change it (see there).
+- Items are not deleted automatically.
+
+### GET /todos
+
+| Parameter | Notes |
+|---|---|
+| `status` | Comma list, e.g. `open,fired`. |
+| `kind` | Comma list, e.g. `order`. |
+| `created_by` | `user` or `agent`. |
+| `account_id`, `trade_id` | Items linked to that account / trade. |
+| `from`, `to` | Filter `due_at` (items without one are left out). A date is a UTC day (`to` includes the whole day); give a time with a zone for another boundary. |
+| `updated_since` | Items changed at or after this time (e.g. to catch up after missed events). |
+| `closed_since` | Closed items only from this time on; open and fired items always. |
+| `limit`, `offset` | Default 200, at most 1000. |
+
+Sorted fired first, then by `due_at` (items without one last), then by `created_at`.
+
+```json
+{ "total": 1, "limit": 200, "offset": 0, "todos": [ { "id": 21, ... } ] }
+```
+
+### GET /todos/:id, GET /todos/key/:key
+
+One item. `404` if there's none.
+
+### POST /todos
+
+Creates an item from the body; `201` with the item. A `key` that's already in use is `409` (use `PUT /todos/key/:key` to update that item).
+
+### PUT /todos/key/:key
+
+Creates the item with that key (`201`) or updates it (`200`), with the item in either case. The body is the same as for `POST`; the URL's key wins over one in the body.
+
+On an item the user closed (`done` or `dismissed`) it changes nothing and answers `409 {"error": "closed by the user", "todo": {...}}`, unless the body has `"reopen": true`: then the update is applied and the item is `open` again (or the `status` the body sends).
+
+A weekly-close alert:
+
+```bash
+curl -X PUT "http://localhost:3999/api/external/v1/todos/key/abc-1w-below-42.5" \
+  -H "Content-Type: application/json" \
+  -d '{"kind": "trigger", "title": "ABC weekly close under the line",
+       "then": "review the position", "source": "daily-report",
+       "trigger": {"symbol": "ABC", "type": "STK", "condition": "close_1w", "direction": "below", "level": 42.5},
+       "expires_at": "2026-04-30T00:00:00Z"}'
+```
+
+### PATCH /todos/:id
+
+Changes the fields sent; `200` with the item. Marking an alert fired:
+
+```bash
+curl -X PATCH "http://localhost:3999/api/external/v1/todos/17" \
+  -H "Content-Type: application/json" \
+  -d '{"status": "fired", "fired_note": "week close 41.80 on 2026-03-06"}'
+```
+
+Recording that a reminder went out: `{"reminded_at": "2026-03-20T16:00:05Z"}`. Lapsing an item: `{"status": "expired"}`.
+
+### DELETE /todos/:id
+
+```json
+{ "success": true }
+```
+
+`404` if there's no such item.
+
+### Changes made in the app
+
+When the user creates, changes or deletes an item in the app, the journal can send a `todo` event to a listener (`{"id": 21, "key": null, "change": "updated"}`); writes through this API send none. See [docs/tradingview-webhook.md](docs/tradingview-webhook.md#5-optional-push-events-to-an-external-listener).
 
 ---
 

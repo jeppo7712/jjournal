@@ -24,6 +24,9 @@ const { processHoldingsAccrual } = require('./modules/holdingsAccrual.js');
 const tradingViewStatus = require('./modules/tradingview-status.js');
 const ibkrDataStatus = require('./modules/ibkr-data-status.js');
 const { createAccessGuard } = require('./modules/cloudflare-access.js');
+const kateEvents = require('./modules/kate-events.js');
+const { createTodoStore, createTodoService } = require('./modules/todos.js');
+const todoRoutes = require('./routes/todos.js');
 
 const { getEnabledTimeframes } = historicalDataService;
 
@@ -219,6 +222,7 @@ let brokerFills = null;
     brokerActivity = require('./routes/brokerActivity.js')(lazyPool, broadcastStatus, uuidv4);
     brokerFills = require('./routes/brokerFills.js')(lazyPool);
     const tagsRouter = require('./routes/tags.js')(lazyPool);
+    const todosRouter = todoRoutes.appRouter(todoService);
 
     apiRouter.use('/', tradesRouter);
     apiRouter.use('/accounts', accountsRouter);
@@ -229,6 +233,7 @@ let brokerFills = null;
     apiRouter.use('/', brokerActivity.router);
     apiRouter.use('/', brokerFills.router);
     apiRouter.use('/', tagsRouter);
+    apiRouter.use('/', todosRouter);
 
     await startServer(PORT); // Start the HTTP server
 
@@ -267,6 +272,23 @@ app.use(compression());
 app.use(express.json({ limit: '200kb' }));
 app.use('/uploads', express.static(path.join(__dirname, 'Uploads')));
 
+// The Todo list (modules/todos.js, routes/todos.js), written from the app
+// (/api/todos) and by the agent (/api/external/v1/todos).
+const todoService = createTodoService(createTodoStore(() => db.getPool()), {
+  onChange: todoRoutes.changeNotifier({
+    broadcast: (message) => {
+      const text = JSON.stringify(message);
+      wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) client.send(text);
+      });
+    },
+    loadConfig: () => configManager.loadConfig(),
+    send: kateEvents.send,
+  }),
+});
+// Mounted before externalRouter (below): its last handler answers 404.
+app.use('/api/external/v1', todoRoutes.externalRouter(todoService));
+
 // External API (routes/external.js) — mounted directly on `app`, and
 // registered before `app.use('/api', apiRouter)` below, so it never passes
 // through apiRouter's internal middleware (the X-Account-ID requirement in
@@ -304,7 +326,8 @@ apiRouter.use((req, res, next) => {
     '/yahoo-finance',
     '/ibkr',
     '/tags', // shared by all accounts
-    '/tag-groups'
+    '/tag-groups',
+    '/todos', // one list for all accounts
   ];
   if (exemptPaths.some(path => req.path.startsWith(path)) || (req.path === '/accounts' && req.method === 'POST')) {
     req.accountId = parseInt(accountId, 10) || null; // Set accountId if provided, else null
@@ -336,6 +359,7 @@ apiRouter.use((req, res, next) => {
     '/cash-transactions',
     '/holdings',
     '/dividends',
+    '/todos',
   ];
   if (databaseEndpoints.some(endpoint => req.path.startsWith(endpoint)) && !db.getIsConnected()) {
     return res.status(503).json({ error: 'Database not configured or not connected' });

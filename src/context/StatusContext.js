@@ -37,6 +37,11 @@ export const StatusProvider = ({ children }) => {
       websocket.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
+          // The Todo list changed (routes/todos.js): not a status line.
+          if (data.type === 'todosChanged') {
+            window.dispatchEvent(new CustomEvent('todos-changed', { detail: data }));
+            return;
+          }
           addLog({
             id: `ws-msg-${Date.now()}-${Math.random()}`,
             requestId: data.requestId || null,
