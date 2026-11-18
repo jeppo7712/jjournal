@@ -12,7 +12,7 @@ function secretMatches(given, expected) {
 }
 const { logger } = require('../modules/logger.js');
 const tradingViewStatus = require('../modules/tradingview-status.js');
-const kateEvents = require('../modules/kate-events.js');
+const agentEvents = require('../modules/agent-events.js');
 
 // Receives live bars pushed from a TradingView alert webhook (e.g. a
 // 1-minute chart with an alert firing "once per bar close"). TradingView's
@@ -90,7 +90,7 @@ module.exports = (db, configManager, broadcastStatus, uuidv4, wss, WebSocket) =>
 
             tradingViewStatus.recordBar({ symbol: upperSymbol, timeframe, time });
             // Not awaited: never delays or fails the insert or the reply.
-            kateEvents.send(config, 'bar', kateEvents.withoutSecret(req.body));
+            agentEvents.send(config, 'bar', agentEvents.withoutSecret(req.body));
 
             wss.clients.forEach(wsClient => {
                 if (wsClient.readyState === WebSocket.OPEN) {
@@ -115,11 +115,11 @@ module.exports = (db, configManager, broadcastStatus, uuidv4, wss, WebSocket) =>
     });
 
     // Relay for TradingView alerts meant for the external listener (see
-    // modules/kate-events.js): same secret as the bar feed, then the body
+    // modules/agent-events.js): same secret as the bar feed, then the body
     // minus the secret is forwarded untouched. No validation, no storage —
     // the journal doesn't read these messages. Answers 200 straight away,
     // whether or not the listener is reachable.
-    router.post('/kate', async (req, res) => {
+    router.post('/agent', async (req, res) => {
         try {
             const config = await configManager.loadConfig();
             const expectedSecret = config.tradingViewWebhookSecret;
@@ -131,7 +131,7 @@ module.exports = (db, configManager, broadcastStatus, uuidv4, wss, WebSocket) =>
                 logger.warn('[TradingView relay] Rejected: missing or incorrect secret.');
                 return res.status(401).json({ error: 'Unauthorized' });
             }
-            kateEvents.send(config, 'tradingview', kateEvents.withoutSecret(req.body));
+            agentEvents.send(config, 'tradingview', agentEvents.withoutSecret(req.body));
             logger.debug('[TradingView relay] Forwarded a TradingView alert.');
             res.json({ success: true });
         } catch (err) {

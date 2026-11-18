@@ -24,7 +24,7 @@ const { processHoldingsAccrual } = require('./modules/holdingsAccrual.js');
 const tradingViewStatus = require('./modules/tradingview-status.js');
 const ibkrDataStatus = require('./modules/ibkr-data-status.js');
 const { createAccessGuard } = require('./modules/cloudflare-access.js');
-const kateEvents = require('./modules/kate-events.js');
+const agentEvents = require('./modules/agent-events.js');
 const { createTodoStore, createTodoService } = require('./modules/todos.js');
 const todoRoutes = require('./routes/todos.js');
 
@@ -283,7 +283,7 @@ const todoService = createTodoService(createTodoStore(() => db.getPool()), {
       });
     },
     loadConfig: () => configManager.loadConfig(),
-    send: kateEvents.send,
+    send: agentEvents.send,
   }),
 });
 // Mounted before externalRouter (below): its last handler answers 404.

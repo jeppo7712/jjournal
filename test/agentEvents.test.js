@@ -1,7 +1,7 @@
 const test = require('node:test');
 const assert = require('node:assert');
 const http = require('node:http');
-const kateEvents = require('../modules/kate-events.js');
+const agentEvents = require('../modules/agent-events.js');
 
 function listener(handler) {
     return new Promise(resolve => {
@@ -23,7 +23,7 @@ function listener(handler) {
 test('posts {event, data} with the bearer token', async () => {
     const l = await listener((req, res) => { res.statusCode = 202; res.end('{"ok":true}'); });
     try {
-        await kateEvents.send({ kateEventsUrl: l.url, kateEventsToken: 'tok' }, 'bar', { symbol: 'MNQ', close: 1 });
+        await agentEvents.send({ agentEventsUrl: l.url, agentEventsToken: 'tok' }, 'bar', { symbol: 'MNQ', close: 1 });
         assert.strictEqual(l.received.length, 1);
         const r = l.received[0];
         assert.strictEqual(r.method, 'POST');
@@ -39,10 +39,10 @@ test('posts {event, data} with the bearer token', async () => {
 test('sends nothing when either key is unset', async () => {
     const l = await listener((req, res) => { res.statusCode = 202; res.end(); });
     try {
-        await kateEvents.send({ kateEventsUrl: l.url }, 'bar', {});
-        await kateEvents.send({ kateEventsToken: 'tok' }, 'bar', {});
-        await kateEvents.send({}, 'bar', {});
-        await kateEvents.send(undefined, 'bar', {});
+        await agentEvents.send({ agentEventsUrl: l.url }, 'bar', {});
+        await agentEvents.send({ agentEventsToken: 'tok' }, 'bar', {});
+        await agentEvents.send({}, 'bar', {});
+        await agentEvents.send(undefined, 'bar', {});
         assert.strictEqual(l.received.length, 0);
     } finally {
         l.server.close();
@@ -50,11 +50,11 @@ test('sends nothing when either key is unset', async () => {
 });
 
 test('a listener that never answers resolves after the timeout, without throwing', async () => {
-    kateEvents._resetForTests();
+    agentEvents._resetForTests();
     const l = await listener(() => { /* never responds */ });
     try {
         const started = Date.now();
-        await kateEvents.send({ kateEventsUrl: l.url, kateEventsToken: 'tok' }, 'bar', {});
+        await agentEvents.send({ agentEventsUrl: l.url, agentEventsToken: 'tok' }, 'bar', {});
         const took = Date.now() - started;
         assert.ok(took >= 2900 && took < 4500, `took ${took} ms`);
     } finally {
@@ -64,11 +64,11 @@ test('a listener that never answers resolves after the timeout, without throwing
 });
 
 test('an unreachable listener and a non-202 answer resolve quietly', async () => {
-    kateEvents._resetForTests();
-    await kateEvents.send({ kateEventsUrl: 'http://127.0.0.1:1/x', kateEventsToken: 'tok' }, 'bar', {});
+    agentEvents._resetForTests();
+    await agentEvents.send({ agentEventsUrl: 'http://127.0.0.1:1/x', agentEventsToken: 'tok' }, 'bar', {});
     const l = await listener((req, res) => { res.statusCode = 401; res.end(); });
     try {
-        await kateEvents.send({ kateEventsUrl: l.url, kateEventsToken: 'tok' }, 'bar', {});
+        await agentEvents.send({ agentEventsUrl: l.url, agentEventsToken: 'tok' }, 'bar', {});
         assert.strictEqual(l.received.length, 1);
     } finally {
         l.server.close();
@@ -78,7 +78,7 @@ test('an unreachable listener and a non-202 answer resolve quietly', async () =>
 test('a body over 16 KB is not sent', async () => {
     const l = await listener((req, res) => { res.statusCode = 202; res.end(); });
     try {
-        await kateEvents.send({ kateEventsUrl: l.url, kateEventsToken: 'tok' }, 'tradingview', { note: 'x'.repeat(17 * 1024) });
+        await agentEvents.send({ agentEventsUrl: l.url, agentEventsToken: 'tok' }, 'tradingview', { note: 'x'.repeat(17 * 1024) });
         assert.strictEqual(l.received.length, 0);
     } finally {
         l.server.close();
@@ -86,6 +86,6 @@ test('a body over 16 KB is not sent', async () => {
 });
 
 test('withoutSecret drops only the secret', () => {
-    assert.deepStrictEqual(kateEvents.withoutSecret({ secret: 's', type: 'trade-idea', tp2: null }), { type: 'trade-idea', tp2: null });
-    assert.deepStrictEqual(kateEvents.withoutSecret(undefined), {});
+    assert.deepStrictEqual(agentEvents.withoutSecret({ secret: 's', type: 'trade-idea', tp2: null }), { type: 'trade-idea', tp2: null });
+    assert.deepStrictEqual(agentEvents.withoutSecret(undefined), {});
 });

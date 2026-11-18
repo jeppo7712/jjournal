@@ -45,7 +45,7 @@ cloudflared tunnel run jjournal-webhook
 
 Your public webhook URL is now `https://tv-webhook.yourdomain.com/api/webhooks/tradingview-bar` — nothing else on your network is reachable through it.
 
-If you also use the relay in section 5, let the tunnel pass that path too, e.g. `path: ^/api/webhooks/(tradingview-bar|kate)$`.
+If you also use the relay in section 5, let the tunnel pass that path too, e.g. `path: ^/api/webhooks/(tradingview-bar|agent)$`.
 
 (No domain on Cloudflare? A [Quick Tunnel](https://developers.cloudflare.com/cloudflare-one/connections/connect-networks/do-more-with-tunnels/trycloudflare/) — `cloudflared tunnel --url http://192.168.1.50:3999` — gets you a temporary `*.trycloudflare.com` URL with no DNS setup, good for testing before committing to the config above.)
 
@@ -93,15 +93,15 @@ Instead of polling the journal for new bars, another service (for example an age
 
 ```json
 {
-  "kateEventsUrl": "http://listener-host:port/api/journal-event",
-  "kateEventsToken": "the-listener's-bearer-token"
+  "agentEventsUrl": "http://listener-host:port/api/journal-event",
+  "agentEventsToken": "the-listener's-bearer-token"
 }
 ```
 
-With both set, the journal sends `POST <kateEventsUrl>` with `Authorization: Bearer <kateEventsToken>` and a JSON body `{"event": "...", "data": {...}}`:
+With both set, the journal sends `POST <agentEventsUrl>` with `Authorization: Bearer <agentEventsToken>` and a JSON body `{"event": "...", "data": {...}}`:
 
 - **`bar`** — after every bar stored by `/api/webhooks/tradingview-bar`; `data` is the alert body as received, minus `secret`.
-- **`tradingview`** — for every alert sent to the relay route `POST /api/webhooks/kate`. It uses the same `tradingViewWebhookSecret` check as the bar feed (401 wrong secret, 503 none configured), removes `secret`, forwards the rest untouched and answers `200 {"success": true}`. The journal doesn't validate or store these messages, so a new kind of alert needs no journal change.
+- **`tradingview`** — for every alert sent to the relay route `POST /api/webhooks/agent`. It uses the same `tradingViewWebhookSecret` check as the bar feed (401 wrong secret, 503 none configured), removes `secret`, forwards the rest untouched and answers `200 {"success": true}`. The journal doesn't validate or store these messages, so a new kind of alert needs no journal change.
 - **`todo`** — when an item on the Todo list is created, changed or deleted **in the app** (not through the external API, so an agent never hears its own writes): `{"id": 21, "key": null, "change": "created" | "updated" | "deleted"}`. `key` is the item's key when it has one. Fetch the item with `GET /api/external/v1/todos/:id` (see [EXTERNAL_API.md](../EXTERNAL_API.md#todos)).
 
-Delivery is fire and forget: one attempt, 3 s timeout, no retries, bodies over 16 KB are dropped. Failures (and answers other than `202`) are logged as `[Kate events]` at most once a minute and never affect the bar insert, the Todo change or the reply to TradingView. Either key unset: nothing is sent — leave them unset on a second (dev) copy fed by the same alerts, or the listener sees every bar twice.
+Delivery is fire and forget: one attempt, 3 s timeout, no retries, bodies over 16 KB are dropped. Failures (and answers other than `202`) are logged as `[Agent events]` at most once a minute and never affect the bar insert, the Todo change or the reply to TradingView. Either key unset: nothing is sent — leave them unset on a second (dev) copy fed by the same alerts, or the listener sees every bar twice.

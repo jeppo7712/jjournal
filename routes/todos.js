@@ -117,7 +117,7 @@ function externalRouter(service) {
 
 // The service's onChange: every change refreshes the open apps (a
 // "todosChanged" message on the WebSocket), and a change made in the app is
-// sent to the agent as a "todo" event (modules/kate-events.js send()); one
+// sent to the agent as a "todo" event (modules/agent-events.js send()); one
 // the agent made itself through the external API, and the user having seen
 // the fired items, are not.
 //   broadcast(message)  sends a message to every open app

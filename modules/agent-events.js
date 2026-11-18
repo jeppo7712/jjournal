@@ -1,13 +1,14 @@
 const { logger } = require('./logger.js');
 
-// Forwards TradingView traffic to an external listener (an agent that would
-// otherwise have to poll the journal), as {"event": <name>, "data": <body>}.
-// The journal never reads `data`: it passes the body along minus the webhook
-// secret, so a new kind of TradingView message needs no change here.
+// Tells an external listener (an agent that would otherwise have to poll the
+// journal) about TradingView traffic and Todo list changes, as
+// {"event": <name>, "data": <body>}. TradingView bodies are passed along
+// minus the webhook secret and never read, so a new kind of TradingView
+// message needs no change here.
 //
 // Configured by two config.json keys, read on every call (no restart needed):
-//   kateEventsUrl    e.g. http://<host>:<port>/api/journal-event
-//   kateEventsToken  sent as "Authorization: Bearer <token>"
+//   agentEventsUrl    e.g. http://<host>:<port>/api/journal-event
+//   agentEventsToken  sent as "Authorization: Bearer <token>"
 // Either one unset: nothing is sent. Leave them unset on a dev copy that
 // shares the same TradingView feed, or the listener gets every bar twice.
 //
@@ -32,7 +33,7 @@ function warnThrottled(message) {
     const extra = suppressed > 0 ? ` (${suppressed} similar since the last message)` : '';
     lastLogAt = now;
     suppressed = 0;
-    logger.warn(`[Kate events] ${message}${extra}`);
+    logger.warn(`[Agent events] ${message}${extra}`);
 }
 
 function withoutSecret(body) {
@@ -65,8 +66,8 @@ async function post(url, token, event, data) {
 // config: an already-loaded config object. Returns a promise that always
 // resolves (only tests await it).
 function send(config, event, data) {
-    const url = config?.kateEventsUrl;
-    const token = config?.kateEventsToken;
+    const url = config?.agentEventsUrl;
+    const token = config?.agentEventsToken;
     if (!url || !token) return Promise.resolve();
     return post(url, token, event, data).catch(() => {});
 }
