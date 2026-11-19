@@ -86,6 +86,7 @@
   min-height: 360px;
   margin: 0 -6px;
   padding: 0 6px 6px;
+  scrollbar-gutter: stable;
 }
 
 .week {
@@ -96,29 +97,13 @@
 }
 
 .dayNames {
-  position: sticky;
-  /* One pixel higher than the edge, so no sliver of a row shows above it
-     when the box sits on a fractional pixel. */
-  top: -1px;
-  padding-top: 1px;
-  z-index: 1;
-  margin-bottom: 6px;
-  /* Opaque so the weeks pass underneath it. */
-  background: var(--ui-card);
-}
-
-/* Safari can leave the header a pixel or two below the scroller's edge
-   while scrolling (sticky rounding), showing a sliver of the weeks above
-   it. This strip above the header covers that gap; with no gap it is
-   outside the scroller and clipped away. */
-.dayNames::before {
-  content: '';
-  position: absolute;
-  left: 0;
-  right: 0;
-  bottom: 100%;
-  height: 8px;
-  background: var(--ui-card);
+  /* Above the scroller, not sticky inside it: Safari drew a pixel line of
+     the weeks above a sticky header. The scroller's side margins and
+     scrollbar gutter, so the columns line up with the weeks'. */
+  margin: 0 -6px 6px;
+  padding: 0 6px;
+  overflow: hidden;
+  scrollbar-gutter: stable;
 }
 
 .dayName {
@@ -342,6 +327,10 @@
     grid-template-columns: repeat(7, minmax(0, 1fr));
     gap: 3px;
     margin-bottom: 8px;
+  }
+  .dayNames {
+    margin: 0 -2px 8px;
+    padding: 0 2px;
   }
   .weekName {
     display: none;

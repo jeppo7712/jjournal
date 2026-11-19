@@ -3,6 +3,7 @@ import { DateTime } from 'luxon';
 import AppWindow from '../common/AppWindow';
 import { mondayOf, monthKey, weekDays, weekMonth, addMonths } from '../../utils/calendarWeeks';
 import { itemsByDay, todoCalendarWeeks, dayHeading, CLOSED_STATUSES } from '../../utils/todos';
+import { useFillHeight } from '../Calendar/Calendar';
 import cal from '../Calendar/Calendar.module.css';
 import styles from './Todo.module.css';
 
@@ -20,7 +21,9 @@ const SHOWN_PER_DAY = 3;
 const monthTitle = month => DateTime.fromISO(`${month}-01`).toFormat('LLLL yyyy');
 const monthShort = key => DateTime.fromISO(key).toFormat('LLL');
 
-export default function TodoCalendar({ items, zone, now, list, openForm }) {
+//   layoutKey  changes when something above the calendar appears or goes
+//             (the page's note): the scroller is measured again
+export default function TodoCalendar({ items, zone, now, list, openForm, layoutKey }) {
   const byDay = useMemo(() => itemsByDay(items, zone), [items, zone]);
   const todayKey = DateTime.fromJSDate(now, { zone }).toISODate();
   const weeks = useMemo(() => todoCalendarWeeks(Object.keys(byDay), todayKey), [byDay, todayKey]);
@@ -28,7 +31,6 @@ export default function TodoCalendar({ items, zone, now, list, openForm }) {
   const [focusMonth, setFocusMonth] = useState(thisMonth);
   const [openDay, setOpenDay] = useState(null);
   const scrollerRef = useRef(null);
-  const headRef = useRef(null);
   const frameRef = useRef(0);
   const firstMonth = weeks.length ? monthKey(weekDays(weeks[0])[6]) : thisMonth;
   const lastMonth = weeks.length ? weekMonth(weeks[weeks.length - 1]) : thisMonth;
@@ -37,7 +39,7 @@ export default function TodoCalendar({ items, zone, now, list, openForm }) {
     const scroller = scrollerRef.current;
     const row = scroller && scroller.querySelector(`[data-week="${mondayOf(`${month}-01`)}"]`);
     if (!row) return;
-    scroller.scrollTo({ top: row.offsetTop - (headRef.current?.offsetHeight || 0), behavior: smooth ? 'smooth' : 'auto' });
+    scroller.scrollTo({ top: row.offsetTop, behavior: smooth ? 'smooth' : 'auto' });
   }, []);
 
   // The title follows the month of the week in the middle of the view.
@@ -54,13 +56,15 @@ export default function TodoCalendar({ items, zone, now, list, openForm }) {
     if (found) setFocusMonth(weekMonth(found.dataset.week));
   }, []);
 
+  // Fill the page, then open on this month.
+  const height = useFillHeight(scrollerRef, layoutKey);
   const opened = useRef(false);
   useLayoutEffect(() => {
-    if (opened.current || !weeks.length) return;
+    if (opened.current || height == null || !weeks.length) return;
     opened.current = true;
     scrollToMonth(thisMonth, false);
     updateFocus();
-  }, [weeks.length, scrollToMonth, thisMonth, updateFocus]);
+  }, [height, weeks.length, scrollToMonth, thisMonth, updateFocus]);
   useLayoutEffect(() => () => cancelAnimationFrame(frameRef.current), []);
 
   const dayItems = openDay ? (byDay[openDay] || []) : [];
@@ -75,14 +79,15 @@ export default function TodoCalendar({ items, zone, now, list, openForm }) {
           <button type="button" onClick={() => scrollToMonth(addMonths(focusMonth, 1), true)} aria-label="Next month" className={cal.navButton} disabled={focusMonth >= lastMonth}>►</button>
         </div>
       </div>
+      <div className={`${cal.week} ${styles.todoWeek} ${cal.dayNames}`}>
+        {DAY_NAMES.map(name => <div key={name} className={cal.dayName}>{name}</div>)}
+      </div>
       <div
         ref={scrollerRef}
-        className={`${cal.scroller} ${styles.todoScroller}`}
+        className={cal.scroller}
+        style={height ? { height } : undefined}
         onScroll={() => { if (!frameRef.current) frameRef.current = requestAnimationFrame(updateFocus); }}
       >
-        <div ref={headRef} className={`${cal.week} ${styles.todoWeek} ${cal.dayNames}`}>
-          {DAY_NAMES.map(name => <div key={name} className={cal.dayName}>{name}</div>)}
-        </div>
         {weeks.map(monday => (
           <div key={monday} data-week={monday} className={`${cal.week} ${styles.todoWeek}`}>
             {weekDays(monday).map(dateKey => {

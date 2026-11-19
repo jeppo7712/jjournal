@@ -68,6 +68,7 @@ export default function Todo({ onViewTrade }) {
   const hasSubAccounts = (accounts || []).some(a => String(a.parent_account_id) === String(currentAccountId));
 
   const openCount = scoped.length - groups.closed.length;
+  const noteShown = showInfo || (loaded && openCount === 0);
   const upcomingCount = groups.upcoming.reduce((n, d) => n + d.items.length, 0);
   const ordersCount = groups.orders.reduce((n, g) => n + g.items.length, 0);
 
@@ -108,13 +109,13 @@ export default function Todo({ onViewTrade }) {
           <button type="button" className={styles.addBtn} onClick={() => openForm(null, { kind: 'todo' })}>+ Add</button>
         </div>
       </div>
-      {(showInfo || (loaded && openCount === 0)) && <p className={styles.subNote}>
+      {noteShown && <p className={styles.subNote}>
         Things to do, price alerts and pending orders for this account{hasSubAccounts ? ' and its sub-accounts' : ''}, and the ones for all accounts.
         {' '}The journal only keeps the list: watching prices and sending alerts is the job of an external agent, which reads and updates it through the external API.
       </p>}
 
       {view === 'calendar' && (
-        <TodoCalendar items={scoped} zone={zone} now={now} list={list} openForm={openForm} />
+        <TodoCalendar items={scoped} zone={zone} now={now} list={list} openForm={openForm} layoutKey={noteShown} />
       )}
 
       {view === 'list' && loaded && openCount === 0 && (

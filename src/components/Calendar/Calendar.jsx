@@ -6,6 +6,39 @@ import { TradeContext, matchLotsFIFO, getTickMultiplier } from '../../context/Tr
 import styles from './Calendar.module.css';
 import { DateTime } from 'luxon';
 
+// The height for a calendar's scroller that fills the page's scroll area
+// down to its bottom (above the bottom bar on a phone), at least 360 px;
+// null until measured. Measured again on resize and when `layoutKey`
+// changes (something above it appeared or went).
+export function useFillHeight(scrollerRef, layoutKey) {
+  const [height, setHeight] = useState(null);
+  useLayoutEffect(() => {
+    const measure = () => {
+      const scroller = scrollerRef.current;
+      if (!scroller) return;
+      let area = scroller.parentElement;
+      while (area && !/(auto|scroll)/.test(getComputedStyle(area).overflowY)) area = area.parentElement;
+      const bottom = area ? area.getBoundingClientRect().bottom : window.innerHeight;
+      // Escaped: a CSS-module class can hold a "+" ("Calendar_calendar__vKx+D").
+      const card = scroller.closest(`.${CSS.escape(styles.calendar)}`);
+      const below = card ? card.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom : 0;
+      let next = Math.max(360, Math.floor(bottom - scroller.getBoundingClientRect().top - below - 24));
+      // What still runs past the area's bottom (the page's and the area's
+      // padding) comes off too, so the page itself doesn't scroll.
+      if (area) {
+        scroller.style.height = `${next}px`;
+        const over = area.scrollHeight - area.clientHeight;
+        if (over > 0) next = Math.max(360, next - over);
+      }
+      setHeight(next);
+    };
+    measure();
+    window.addEventListener('resize', measure);
+    return () => window.removeEventListener('resize', measure);
+  }, [scrollerRef, layoutKey]);
+  return height;
+}
+
 // Each currency figure is coloured by its own sign. Colouring the whole
 // summary by its first currency told the opposite of the truth for the rest —
 // a losing EUR day showed green because the USD on it was up.
@@ -87,9 +120,8 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
   const [focusMonth, setFocusMonth] = useState(startMonth);
   const focusRef = useRef(startMonth);
   const scrollerRef = useRef(null);
-  const headRef = useRef(null);
+  const height = useFillHeight(scrollerRef);
   const frameRef = useRef(0);
-  const [height, setHeight] = useState(null);
   // The weeks start on the Monday on or before a month's 1st: its Sunday is in that month.
   const firstMonth = weeks.length ? monthKey(weekDays(weeks[0])[6]) : startMonth;
   const lastMonth = weeks.length ? weekMonth(weeks[weeks.length - 1]) : startMonth;
@@ -99,8 +131,7 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
     if (!scroller) return;
     const row = scroller.querySelector(`[data-week="${mondayOf(`${month}-01`)}"]`);
     if (!row) return;
-    const top = row.offsetTop - (headRef.current?.offsetHeight || 0);
-    scroller.scrollTo({ top, behavior: smooth ? 'smooth' : 'auto' });
+    scroller.scrollTo({ top: row.offsetTop, behavior: smooth ? 'smooth' : 'auto' });
   }, []);
 
   // The month of the week in the middle of the view.
@@ -128,24 +159,7 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
     if (!frameRef.current) frameRef.current = requestAnimationFrame(updateFocus);
   };
 
-  // Fill the page's scroll area down to its bottom (above the bottom bar on
-  // a phone), then open on the month Stats last showed.
-  useLayoutEffect(() => {
-    const measure = () => {
-      const scroller = scrollerRef.current;
-      if (!scroller) return;
-      let area = scroller.parentElement;
-      while (area && !/(auto|scroll)/.test(getComputedStyle(area).overflowY)) area = area.parentElement;
-      const bottom = area ? area.getBoundingClientRect().bottom : window.innerHeight;
-      const card = scroller.closest(`.${styles.calendar}`);
-      const below = card ? card.getBoundingClientRect().bottom - scroller.getBoundingClientRect().bottom : 0;
-      setHeight(Math.max(360, Math.floor(bottom - scroller.getBoundingClientRect().top - below - 24)));
-    };
-    measure();
-    window.addEventListener('resize', measure);
-    return () => window.removeEventListener('resize', measure);
-  }, []);
-
+  // Fill the page's scroll area, then open on the month Stats last showed.
   const openedRef = useRef(false);
   useLayoutEffect(() => {
     if (openedRef.current || height == null || !weeks.length) return;
@@ -211,16 +225,16 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
           </button>
         </div>
       </div>
+      <div className={`${styles.week} ${styles.dayNames}`}>
+        {DAY_NAMES.map(name => <div key={name} className={styles.dayName}>{name}</div>)}
+        <div className={`${styles.dayName} ${styles.weekName}`}>Week</div>
+      </div>
       <div
         ref={scrollerRef}
         className={styles.scroller}
         style={height ? { height } : undefined}
         onScroll={handleScroll}
       >
-        <div ref={headRef} className={`${styles.week} ${styles.dayNames}`}>
-          {DAY_NAMES.map(name => <div key={name} className={styles.dayName}>{name}</div>)}
-          <div className={`${styles.dayName} ${styles.weekName}`}>Week</div>
-        </div>
         {weeks.map(monday => {
           const summary = summaries[monday];
           const hasWeek = summary.count > 0;

@@ -580,10 +580,6 @@
 }
 
 /* The calendar (TodoCalendar.jsx), on the trade calendar's styles. */
-.todoScroller {
-  height: calc(100vh - 260px);
-}
-
 /* Seven days, no week-total column (two classes: beats the trade
    calendar's own .week). */
 .todoCalendar .todoWeek {
@@ -869,10 +865,6 @@ select.input {
 
   .formGrid {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  .todoScroller {
-    height: calc(100vh - 300px);
   }
 
   .todoDay {
