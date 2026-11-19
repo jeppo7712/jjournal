@@ -2,7 +2,7 @@ import React, { useContext, useEffect, useMemo, useState } from 'react';
 import { TradeContext } from '../../context/TradeContext';
 import { useTodos, CLOSED_DAYS } from '../../context/TodosContext';
 import { notify } from '../common/Dialogs';
-import { groupTodos, dayHeading } from '../../utils/todos';
+import { groupTodos } from '../../utils/todos';
 import { useTodoRows } from './TodoRow';
 import TodoCalendar from './TodoCalendar';
 import styles from './Todo.module.css';
@@ -38,6 +38,7 @@ export default function Todo({ onViewTrade }) {
   const { accounts, currentAccountId } = useContext(TradeContext);
   const { scoped, loaded, zone, now, markSeen, loadOlderClosed } = useTodos();
   const [showClosed, setShowClosed] = useState(false);
+  const [showInfo, setShowInfo] = useState(false);
   const [older, setOlder] = useState(null);
   // List or calendar, remembered in this browser.
   const [view, setView] = useState(() => {
@@ -78,7 +79,19 @@ export default function Todo({ onViewTrade }) {
   return (
     <div className={styles.page}>
       <div className={styles.header}>
-        <h2 className={styles.title}>Todo — {currentAccount?.name}</h2>
+        <div className={styles.titleLine}>
+          <h2 className={styles.title}>Todo — {currentAccount?.name}</h2>
+          <button
+            type="button"
+            className={`${styles.infoBtn} ${showInfo ? styles.infoBtnOn : ''}`}
+            onClick={() => setShowInfo(v => !v)}
+            aria-expanded={showInfo}
+            aria-label="What is this page?"
+            title="What is this page?"
+          >
+            i
+          </button>
+        </div>
         <div className={styles.headerActions}>
           <div className={styles.viewToggle} role="group" aria-label="View">
             {[['list', 'List'], ['calendar', 'Calendar']].map(([value, label]) => (
@@ -88,10 +101,10 @@ export default function Todo({ onViewTrade }) {
           <button type="button" className={styles.addBtn} onClick={() => openForm(null, { kind: 'todo' })}>+ Add</button>
         </div>
       </div>
-      <p className={styles.subNote}>
+      {(showInfo || (loaded && openCount === 0)) && <p className={styles.subNote}>
         Things to do, price alerts and pending orders for this account{hasSubAccounts ? ' and its sub-accounts' : ''}, and the ones for all accounts.
         {' '}The journal only keeps the list: watching prices and sending alerts is the job of an external agent, which reads and updates it through the external API.
-      </p>
+      </p>}
 
       {view === 'calendar' && (
         <TodoCalendar items={scoped} zone={zone} now={now} list={list} openForm={openForm} />
@@ -116,14 +129,7 @@ export default function Todo({ onViewTrade }) {
         <Section title="Today" count={groups.today.length}>{list(groups.today)}</Section>
       )}
       {groups.upcoming.length > 0 && (
-        <Section title="Upcoming" count={upcomingCount}>
-          {groups.upcoming.map(day => (
-            <div key={day.day} className={styles.group}>
-              <h4 className={styles.groupTitle}>{dayHeading(day.day, now, zone)}</h4>
-              {list(day.items)}
-            </div>
-          ))}
-        </Section>
+        <Section title="Upcoming" count={upcomingCount}>{list(groups.upcoming.flatMap(day => day.items))}</Section>
       )}
       {groups.alerts.length > 0 && (
         <Section title="Price alerts" count={groups.alerts.length}>{list(groups.alerts)}</Section>
@@ -132,7 +138,7 @@ export default function Todo({ onViewTrade }) {
         <Section title="Pending orders" count={ordersCount}>
           {groups.orders.map(group => (
             <div key={String(group.accountId)} className={styles.group}>
-              <h4 className={styles.groupTitle}>{group.accountName}</h4>
+              {groups.orders.length > 1 && <h4 className={styles.groupTitle}>{group.accountName}</h4>}
               {list(group.items)}
             </div>
           ))}

@@ -109,6 +109,12 @@ test('form times round-trip through the zone; snooze choices', async () => {
   assert.equal(t.snoozeTimes(item({}), NOW, ZONE).tomorrow, '2026-03-06T14:00:00.000Z');
   assert.equal(t.whenText('2026-03-05T19:00:00Z', NOW, ZONE), '14:00');
   assert.equal(t.dayHeading('2026-03-06', NOW, ZONE), 'Tomorrow');
+  assert.equal(t.dayText('2026-03-05T23:00:00Z', NOW, ZONE), 'today');
+  assert.equal(t.dayText('2026-03-06T05:00:00Z', NOW, ZONE), 'tomorrow', 'its day in the zone');
+  assert.equal(t.dayText('2026-12-31T10:00:00Z', NOW, ZONE), 'Thu 31 Dec');
+  assert.equal(t.dayText('2027-01-31T10:00:00Z', NOW, ZONE), 'Sun 31 Jan 2027');
+  assert.equal(t.orderPrices({ order_type: 'MOC' }), '');
+  assert.equal(t.orderPrices({ order_type: 'STP LMT', stop_price: 4990, limit_price: 4985 }), '4990.00 / 4985.00');
 });
 
 test('calendar: the day each item sits on, and the weeks shown', async () => {

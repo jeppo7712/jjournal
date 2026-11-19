@@ -49,6 +49,32 @@
   filter: brightness(1.1);
 }
 
+.titleLine {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+}
+
+.infoBtn {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  border: 1px solid var(--ui-border);
+  background: none;
+  color: var(--ui-text-3);
+  font: italic 600 0.8rem/1 Georgia, serif;
+  cursor: pointer;
+  padding: 0;
+}
+
+.infoBtn:hover,
+.infoBtnOn {
+  color: var(--ui-strong);
+  border-color: var(--ui-text-3);
+}
+
 .subNote {
   opacity: 0.7;
   font-size: 0.85rem;
@@ -129,9 +155,17 @@
 .row {
   display: flex;
   align-items: flex-start;
-  gap: 12px;
-  padding: 10px 0;
+  gap: 14px;
+  padding: 12px 8px;
+  margin: 0 -8px;
   border-top: 1px solid var(--ui-row-line);
+  border-radius: 10px;
+}
+
+@media (hover: hover) {
+  .row:hover {
+    background: var(--ui-raised);
+  }
 }
 
 .list > .row:first-child {
@@ -142,14 +176,102 @@
   opacity: 0.55;
 }
 
-.rowFired {
-  box-shadow: inset 3px 0 0 var(--ui-amber);
-  padding-left: 12px;
+.rowFired,
+.rowFired:hover {
+  background: rgba(var(--ui-amber-rgb), 0.08);
 }
 
-.rowOverdue {
-  box-shadow: inset 3px 0 0 var(--ui-red);
-  padding-left: 12px;
+.rowFired .tile {
+  border-color: rgba(var(--ui-amber-rgb), 0.55);
+}
+
+.rowOverdue,
+.rowOverdue:hover {
+  background: rgba(var(--ui-red-rgb), 0.07);
+}
+
+/* A tinted row needs no line above or below it. */
+.rowFired,
+.rowOverdue,
+.rowFired + .row,
+.rowOverdue + .row {
+  border-top-color: transparent;
+}
+
+/* The tile on the left (TodoRow.jsx, Tile). */
+.tile {
+  flex-shrink: 0;
+  width: 104px;
+  box-sizing: border-box;
+  min-height: 58px;
+  padding: 6px 6px;
+  border-radius: 10px;
+  background: var(--ui-input);
+  border: 1px solid var(--ui-border-2);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 1px;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.25;
+}
+
+.tileTop {
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.3px;
+  color: var(--ui-text-2);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.tileMain {
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--ui-strong);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.tileArrow {
+  font-size: 0.65em;
+  margin-right: 3px;
+  vertical-align: 0.1em;
+}
+
+/* A price never breaks; the arrow may go above it. */
+.nowrap {
+  white-space: nowrap;
+}
+
+.tileSub {
+  font-size: 0.68rem;
+  color: var(--ui-faint);
+  max-width: 100%;
+  overflow-wrap: anywhere;
+}
+
+.tileUp {
+  color: var(--ui-green-text);
+}
+
+.tileDown {
+  color: var(--ui-red-text);
+}
+
+.tileLate {
+  border-color: rgba(var(--ui-red-rgb), 0.5);
+}
+
+.tileLate .tileMain {
+  color: var(--ui-red-text);
+}
+
+.tileQuiet {
+  background: none;
+  border-style: dashed;
 }
 
 .rowMain {
@@ -184,10 +306,12 @@
   text-decoration: underline;
 }
 
-.rowDetail {
-  font-size: 0.85rem;
+.rowThen {
+  font-size: 0.875rem;
   color: var(--ui-text-2);
-  font-variant-numeric: tabular-nums;
+  white-space: pre-wrap;
+  overflow-wrap: anywhere;
+  line-height: 1.45;
 }
 
 .rowSub {
@@ -203,7 +327,7 @@
   text-transform: uppercase;
   letter-spacing: 0.4px;
   color: var(--ui-faint);
-  margin-right: 2px;
+  margin-right: 6px;
 }
 
 .firedLine {
@@ -216,6 +340,7 @@
   flex-wrap: wrap;
   align-items: center;
   gap: 4px 10px;
+  margin-top: 3px;
   font-size: 0.75rem;
   color: var(--ui-faint);
 }
@@ -228,7 +353,6 @@
   color: var(--ui-text-3);
 }
 
-.kindChip,
 .statusChip,
 .newChip,
 .byChip {
@@ -239,21 +363,6 @@
   font-weight: 600;
   line-height: 1.5;
   white-space: nowrap;
-}
-
-.kindChip {
-  background: var(--ui-raised);
-  color: var(--ui-text-2);
-}
-
-.kind_trigger {
-  background: rgba(var(--ui-violet-rgb), 0.16);
-  color: var(--ui-violet-text);
-}
-
-.kind_order {
-  background: rgba(var(--ui-sky-rgb), 0.16);
-  color: var(--ui-accent-text-2);
 }
 
 .statusChip {
@@ -289,11 +398,9 @@
 
 .rowActions {
   display: flex;
-  flex-wrap: wrap;
-  justify-content: flex-end;
-  gap: 6px;
+  align-items: center;
+  gap: 4px;
   flex-shrink: 0;
-  max-width: 50%;
 }
 
 .actBtn {
@@ -319,6 +426,17 @@
 
 .actPrimary:hover {
   background: rgba(var(--ui-accent-rgb), 0.3);
+}
+
+.moreBtn {
+  padding: 5px 9px;
+  font-size: 0.95rem;
+  line-height: 1;
+  letter-spacing: 1px;
+}
+
+.phoneOnly {
+  display: none;
 }
 
 .linkBtn {
@@ -717,19 +835,30 @@ select.input {
     padding: 14px;
   }
 
+  /* Tile, text and only "⋯" (its menu has the row's button). */
   .row {
-    flex-direction: column;
-    gap: 8px;
+    gap: 10px;
   }
 
-  .rowActions {
-    justify-content: flex-start;
-    max-width: none;
+  .tile {
+    width: 84px;
+    padding: 5px 3px;
+  }
+
+  .tileMain {
+    font-size: 0.8rem;
+  }
+
+  .rowActions .actPrimary {
+    display: none;
+  }
+
+  .snoozeMenu > .phoneOnly {
+    display: flex;
   }
 
   .snoozeMenu {
-    left: 0;
-    right: auto;
+    max-width: calc(100vw - 40px);
   }
 
   .formGrid {

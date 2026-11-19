@@ -153,14 +153,20 @@ export function describeTrigger(trigger, fmt = price) {
     + (voids.length ? ` (${voids.join(', ')})` : '');
 }
 
+// An order's price(s): "95.50", "4990.00 / 4985.00" (stop / limit), or ''
+// (MOC).
+export function orderPrices(order, fmt = price) {
+  if (!order) return '';
+  return order.order_type === 'STP LMT'
+    ? `${fmt(order.stop_price)} / ${fmt(order.limit_price)}`
+    : fmt(order.limit_price ?? order.stop_price);
+}
+
 // "BUY 10 ETFA.DE LMT 95.50", "SELL 2 MES 202606 STP LMT 4990.00 / 4985.00"
 export function describeOrder(order, fmt = price) {
   if (!order) return '';
-  const prices = order.order_type === 'STP LMT'
-    ? `${fmt(order.stop_price)} / ${fmt(order.limit_price)}`
-    : fmt(order.limit_price ?? order.stop_price);
   const quantity = fmt === price ? formatNumber(Number(order.quantity), 8, true) : String(Number(order.quantity));
-  return [order.side, quantity, instrument(order), order.order_type, prices]
+  return [order.side, quantity, instrument(order), order.order_type, orderPrices(order, fmt)]
     .filter(Boolean).join(' ') + (order.currency ? ` ${order.currency}` : '');
 }
 
@@ -197,6 +203,17 @@ export function whenText(iso, now, zone) {
   if (t.hasSame(nowZ, 'day')) return t.toFormat('HH:mm');
   if (Math.abs(t.diff(nowZ, 'days').days) < 6) return t.toFormat('ccc HH:mm');
   return t.toFormat(t.hasSame(nowZ, 'year') ? 'ccc d LLL HH:mm' : 'ccc d LLL yyyy HH:mm');
+}
+
+// The day alone: "today", "tomorrow", "Thu 5 Mar" (+ year when not this
+// year's). For an expiry, where the hour is only noise.
+export function dayText(iso, now, zone) {
+  if (!iso) return '';
+  const t = at(iso, zone);
+  const nowZ = DateTime.fromJSDate(now, { zone });
+  if (t.hasSame(nowZ, 'day')) return 'today';
+  if (t.hasSame(nowZ.plus({ days: 1 }), 'day')) return 'tomorrow';
+  return t.toFormat(t.hasSame(nowZ, 'year') ? 'ccc d LLL' : 'ccc d LLL yyyy');
 }
 
 // "Today", "Tomorrow", "Thu 5 Mar" (+ year when not this year's) for a day key.
