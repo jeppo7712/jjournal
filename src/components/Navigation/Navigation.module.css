@@ -631,8 +631,8 @@
   display: block;
   visibility: visible;
   opacity: 1;
-  background: var(--ui-popover);
-  border: 1px solid var(--ui-border);
+  background: var(--ui-popover-lift);
+  border: 1px solid var(--ui-border-strong);
   box-shadow: 0 18px 48px rgba(var(--ui-shadow-rgb), calc(0.5 * var(--ui-shadow-k)));
   animation: fadeIn 0.22s ease-out;
 }
@@ -1134,4 +1134,11 @@
   z-index: 999;
   background: transparent;
   -webkit-tap-highlight-color: transparent;
+}
+
+/* Behind the account card: the page dims, so the card stands out from the
+   trade cards it covers (same colour as the card in both themes). */
+.tapGuardDim {
+  background: var(--ui-backdrop);
+  animation: aboutFade 0.18s ease-out;
 }

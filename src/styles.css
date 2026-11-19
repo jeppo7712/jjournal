@@ -52,6 +52,7 @@
   --ui-text-3: #A5ADBA;
   --ui-dim: #5F6778;             /* section labels */
   --ui-popover: #1B1F2C;         /* menus, pop-ups, the account card */
+  --ui-popover-lift: #252B3B;    /* the phone/tablet account card, over a dimmed page */
   --ui-sidebar-top: #171A24;
   --ui-sidebar-bottom: #141720;
   --ui-sidebar-ring: #151821;    /* a badge's ring, the sidebar's colour */
@@ -227,6 +228,7 @@
   --ui-text-3: #475569;
   --ui-dim: #94A3B8;
   --ui-popover: #FFFFFF;
+  --ui-popover-lift: #FFFFFF;
   --ui-sidebar-top: #FFFFFF;
   --ui-sidebar-bottom: #FFFFFF;
   --ui-sidebar-ring: #FFFFFF;

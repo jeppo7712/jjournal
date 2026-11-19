@@ -657,7 +657,7 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
       {showTapGuard && createPortal(
         <div
           ref={tapGuardRef}
-          className={styles.tapGuard}
+          className={`${styles.tapGuard} ${showLogoPopup ? styles.tapGuardDim : ''}`}
           onClick={() => { setShowLogoPopup(false); setShowActionPopup(false); setShowStatusPopup(false); }}
           aria-hidden="true"
         />,
