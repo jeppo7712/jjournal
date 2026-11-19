@@ -107,6 +107,20 @@
   background: var(--ui-card);
 }
 
+/* Safari can leave the header a pixel or two below the scroller's edge
+   while scrolling (sticky rounding), showing a sliver of the weeks above
+   it. This strip above the header covers that gap; with no gap it is
+   outside the scroller and clipped away. */
+.dayNames::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 100%;
+  height: 8px;
+  background: var(--ui-card);
+}
+
 .dayName {
   text-align: center;
   padding: 6px 0;
