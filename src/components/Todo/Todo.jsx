@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useMemo, useState } from 'react';
+import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { TradeContext } from '../../context/TradeContext';
 import { useTodos, CLOSED_DAYS } from '../../context/TodosContext';
 import { notify } from '../common/Dialogs';
@@ -51,10 +51,13 @@ export default function Todo({ onViewTrade }) {
 
   // Fired items not seen yet: "new" for as long as the page is open, then
   // marked seen (the menu badge drops them).
+  // Each once: if marking fails, the reload must not send it again and again.
   const [newIds, setNewIds] = useState(() => new Set());
+  const sentSeen = useRef(new Set());
   useEffect(() => {
-    const unseen = scoped.filter(t => t.status === 'fired' && !t.seen_at).map(t => t.id);
+    const unseen = scoped.filter(t => t.status === 'fired' && !t.seen_at && !sentSeen.current.has(t.id)).map(t => t.id);
     if (unseen.length === 0) return;
+    unseen.forEach(id => sentSeen.current.add(id));
     setNewIds(ids => new Set([...ids, ...unseen]));
     markSeen(unseen);
   }, [scoped, markSeen]);
@@ -68,13 +71,17 @@ export default function Todo({ onViewTrade }) {
   const upcomingCount = groups.upcoming.reduce((n, d) => n + d.items.length, 0);
   const ordersCount = groups.orders.reduce((n, g) => n + g.items.length, 0);
 
-  const showOlder = async () => {
-    try {
-      setOlder(await loadOlderClosed());
-    } catch (err) {
-      notify(err.message, 'error');
-    }
-  };
+  // "Show older" loads the closed items before those; while shown they
+  // follow the list (a reopened one leaves, another account shows its own).
+  const [olderOpen, setOlderOpen] = useState(false);
+  useEffect(() => {
+    if (!olderOpen) return undefined;
+    let current = true;
+    loadOlderClosed()
+      .then(list => { if (current) setOlder(list); })
+      .catch(err => { if (current) notify(err.message, 'error'); });
+    return () => { current = false; };
+  }, [olderOpen, scoped, loadOlderClosed]);
 
   return (
     <div className={styles.page}>
@@ -139,7 +146,7 @@ export default function Todo({ onViewTrade }) {
           {groups.orders.map(group => (
             <div key={String(group.accountId)} className={styles.group}>
               {groups.orders.length > 1 && <h4 className={styles.groupTitle}>{group.accountName}</h4>}
-              {list(group.items)}
+              {list(group.items, groups.orders.length > 1 ? { showAccount: false } : undefined)}
             </div>
           ))}
         </Section>
@@ -157,9 +164,9 @@ export default function Todo({ onViewTrade }) {
           onToggle={() => setShowClosed(o => !o)}
         >
           {groups.closed.length > 0 ? list(groups.closed) : <p className={styles.emptyLine}>Nothing closed in the last {CLOSED_DAYS} days.</p>}
-          {older === null ? (
-            <button type="button" className={styles.linkBtn} onClick={showOlder}>Show older</button>
-          ) : older.length > 0 ? list(older) : <p className={styles.emptyLine}>Nothing older.</p>}
+          {!olderOpen ? (
+            <button type="button" className={styles.linkBtn} onClick={() => setOlderOpen(true)}>Show older</button>
+          ) : older === null ? null : older.length > 0 ? list(older) : <p className={styles.emptyLine}>Nothing older.</p>}
         </Section>
       )}
       </>)}

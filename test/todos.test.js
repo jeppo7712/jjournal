@@ -141,6 +141,31 @@ test('orders: the prices, TIF and bracket the type needs', async () => {
     assert.strictEqual(saved.account_name, 'Broker Main');
 });
 
+test('an archived account is only refused when set; an order whose account was deleted can be closed', async () => {
+    let now = new Date('2026-03-02T09:00:00Z');
+    const store = memoryStore(() => now);
+    const service = createTodoService(store, { now: () => now });
+    const paper = ACCOUNTS.find(a => a.id === 4);
+    const order = await service.create(orderBody({ account_id: 4 }), 'app');
+    const todo = await service.create({ kind: 'todo', title: 'call', account_id: 4 }, 'app');
+    paper.archived = true;
+    try {
+        // The app's form sends the account it has along with every save.
+        const edited = await service.update(todo.id, { kind: 'todo', title: 'call back', account_id: 4 }, 'app');
+        assert.strictEqual(edited.title, 'call back');
+        await rejects400(service.update(todo.id, { account_id: 5 }, 'app'), /archived/);
+    } finally {
+        paper.archived = false;
+    }
+
+    // ON DELETE SET NULL after the account is deleted.
+    await store.update(order.id, { ...(await store.get(order.id)), account_id: null });
+    const filled = await service.update(order.id, { status: 'done', closed_note: 'filled' }, 'app');
+    assert.strictEqual(filled.status, 'done');
+    await rejects400(service.update(order.id, { account_id: null }, 'app'), /account_id is required for kind order/);
+    await rejects400(service.update(todo.id, { kind: 'order', order: orderBody().order, account_id: null }, 'app'), /account_id is required/);
+});
+
 test('parseInput keeps only the fields sent, and ignores read-only ones', () => {
     const patch = parseInput({ status: 'fired', id: 7, created_at: 'x', account_name: 'y', created_by: 'user' });
     assert.deepStrictEqual(patch, { status: 'fired' });
@@ -349,6 +374,12 @@ test('list filters and sort order', async () => {
     assert.deepStrictEqual(ids(await service.list({ to: '2026-03-10T12:00:00Z' })), [soon.id]);
     assert.deepStrictEqual(ids(await service.list({ updated_since: '2026-03-02T09:04:00Z' })), [alert.id, closed.id]);
     assert.deepStrictEqual(ids(await service.list({ closed_since: '2026-03-02T09:06:00Z' })), [alert.id, soon.id, order.id, late.id, someday.id]);
+
+    advance(1);
+    const later = await service.create({ kind: 'todo', title: 'closed later', status: 'dismissed' }, 'app');
+    assert.deepStrictEqual(ids(await service.list({ closed_before: '2026-03-02T09:07:00Z' })), [later.id, closed.id], 'only closed ones, newest first');
+    assert.deepStrictEqual(ids(await service.list({ closed_before: '2026-03-02T09:06:00Z' })), [closed.id]);
+    await service.remove(later.id, 'app');
 
     const page = await service.list({ limit: '2', offset: '1' });
     assert.strictEqual(page.total, 6);

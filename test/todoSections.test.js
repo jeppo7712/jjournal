@@ -114,6 +114,13 @@ test('form times round-trip through the zone; snooze choices', async () => {
   assert.equal(t.dayText('2026-12-31T10:00:00Z', NOW, ZONE), 'Thu 31 Dec');
   assert.equal(t.dayText('2027-01-31T10:00:00Z', NOW, ZONE), 'Sun 31 Jan 2027');
   assert.equal(t.orderPrices({ order_type: 'MOC' }), '');
+  assert.equal(t.plainPrice('1,234.50'), '1,234.50', 'not a number: as typed');
+  assert.equal(t.price('abc'), 'abc');
+  assert.deepEqual(t.tileDay('2026-03-06T05:00:00Z', NOW, ZONE), { top: 'Tomorrow', date: '6 Mar', time: '00:00' });
+  assert.deepEqual(t.tileDay('2026-03-10T19:30:00Z', NOW, ZONE), { top: 'Tue', date: '10 Mar', time: '15:30' });
+  assert.deepEqual(t.tileDay('2027-01-04T15:00:00Z', NOW, ZONE), { top: 'Mon', date: '4 Jan 27', time: '10:00' });
+  assert.equal(t.triggerVoids({ void_above: 44, void_below: 40 }), 'void above 44.00 · void below 40.00');
+  assert.equal(t.describeTrigger({ symbol: 'ABC', condition: 'touch', direction: 'above', level: 42, void_below: 40 }), 'ABC: trades above 42.00 (void below 40.00)');
   assert.equal(t.orderPrices({ order_type: 'STP LMT', stop_price: 4990, limit_price: 4985 }), '4990.00 / 4985.00');
 });
 

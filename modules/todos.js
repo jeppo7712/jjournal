@@ -292,7 +292,13 @@ function applyWrite(existing, patch, { origin, now = new Date() }) {
     if (item.kind !== 'trigger' && item.trigger) throw bad(`trigger only goes with kind trigger, not ${item.kind}`);
     if (item.kind === 'order' && !item.order) throw bad('order is required for kind order');
     if (item.kind !== 'order' && item.order) throw bad(`order only goes with kind order, not ${item.kind}`);
-    if (item.kind === 'order' && !item.account_id) throw bad('account_id is required for kind order');
+    // An order needs an account when it's made one or its account is set;
+    // one whose account was deleted since (account_id went null) can still
+    // be closed and edited.
+    if (item.kind === 'order' && !item.account_id
+        && (!before || before.kind !== 'order' || Object.prototype.hasOwnProperty.call(patch, 'account_id'))) {
+        throw bad('account_id is required for kind order');
+    }
 
     item.created_by = before ? before.created_by : (origin === 'app' ? 'user' : 'agent');
     if (!before && !item.source && origin === 'app') item.source = 'app';
@@ -370,6 +376,7 @@ function parseListQuery(query = {}) {
     q.to = bound(query.to, 'to', true);
     q.updated_since = bound(query.updated_since, 'updated_since', false);
     q.closed_since = bound(query.closed_since, 'closed_since', false);
+    q.closed_before = bound(query.closed_before, 'closed_before', false);
     q.limit = Math.min(Math.max(parseInt(query.limit, 10) || 200, 1), 1000);
     q.offset = Math.max(parseInt(query.offset, 10) || 0, 0);
     return q;
@@ -407,8 +414,13 @@ function filterItems(items, q) {
         // Closed items only from this time on; open and fired ones always.
         if (q.closed_since !== null && q.closed_since !== undefined && CLOSED_STATUSES.includes(item.status)
             && !(ms(item.closed_at) >= q.closed_since)) return false;
+        // Only items closed before this time (the older history), newest first.
+        if (q.closed_before !== null && q.closed_before !== undefined
+            && !(CLOSED_STATUSES.includes(item.status) && ms(item.closed_at) < q.closed_before)) return false;
         return true;
-    }).sort(compareItems);
+    }).sort(q.closed_before !== null && q.closed_before !== undefined
+        ? (a, b) => (ms(b.closed_at) - ms(a.closed_at)) || (b.id - a.id)
+        : compareItems);
     const offset = q.offset || 0;
     const limit = q.limit || 200;
     return { total: matched.length, limit, offset, items: matched.slice(offset, offset + limit) };
@@ -558,15 +570,17 @@ function createTodoStore(getPool) {
 function createTodoService(store, { onChange = () => {}, now = () => new Date() } = {}) {
     // The links an item points at: they must exist, and an account must not
     // be archived (paper ones are fine: orders on a paper account are
-    // pending orders too). Only checked for a value the request sets, so an
-    // item whose account was archived later can still be edited and closed.
-    async function checkLinks(tx, patch, item) {
-        if (patch.account_id) {
+    // pending orders too). Only checked for a value the request changes, so
+    // an item whose account was archived later can still be edited and
+    // closed (the app's form sends the account it has along every time).
+    async function checkLinks(tx, patch, before) {
+        const changes = (field) => patch[field] && (!before || Number(before[field]) !== Number(patch[field]));
+        if (changes('account_id')) {
             const account = await tx.account(patch.account_id);
             if (!account) throw bad(`account_id ${patch.account_id} doesn't exist`);
             if (account.archived) throw bad(`account_id ${patch.account_id} is archived`);
         }
-        if (patch.trade_id) {
+        if (changes('trade_id')) {
             const trade = await tx.trade(patch.trade_id);
             if (!trade) throw bad(`trade_id ${patch.trade_id} doesn't exist`);
         }
@@ -579,7 +593,7 @@ function createTodoService(store, { onChange = () => {}, now = () => new Date() 
         const item = applyWrite(null, patch, { origin, now: now() });
         try {
             const saved = await store.transaction(async (tx) => {
-                await checkLinks(tx, patch, item);
+                await checkLinks(tx, patch, null);
                 return tx.insert(item);
             });
             onChange({ id: saved.id, key: saved.key, change: 'created', origin });
@@ -602,7 +616,7 @@ function createTodoService(store, { onChange = () => {}, now = () => new Date() 
             const existing = await tx.lockByKey(key);
             if (!existing) {
                 const item = applyWrite(null, patch, { origin, now: now() });
-                await checkLinks(tx, patch, item);
+                await checkLinks(tx, patch, null);
                 return { saved: await tx.insert(item), created: true };
             }
             if (USER_CLOSED_STATUSES.includes(existing.status)) {
@@ -610,7 +624,7 @@ function createTodoService(store, { onChange = () => {}, now = () => new Date() 
                 if (!Object.prototype.hasOwnProperty.call(patch, 'status')) patch.status = 'open';
             }
             const item = applyWrite(existing, patch, { origin, now: now() });
-            await checkLinks(tx, patch, item);
+            await checkLinks(tx, patch, existing);
             return { saved: await tx.update(existing.id, item), created: false };
         });
         let result;
@@ -632,7 +646,7 @@ function createTodoService(store, { onChange = () => {}, now = () => new Date() 
                 const existing = await tx.lock(todoId);
                 if (!existing) throw new TodoError(404, 'Todo not found');
                 const item = applyWrite(existing, patch, { origin, now: now() });
-                await checkLinks(tx, patch, item);
+                await checkLinks(tx, patch, existing);
                 return tx.update(todoId, item);
             });
             onChange({ id: saved.id, key: saved.key, change: 'updated', origin });

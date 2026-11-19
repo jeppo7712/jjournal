@@ -24,7 +24,21 @@ const needsLimit = type => ['LMT', 'STP LMT', 'LOC'].includes(type);
 const needsStop = type => ['STP', 'STP LMT'].includes(type);
 
 const str = value => (value === null || value === undefined ? '' : String(value));
-const num = value => (String(value).trim() === '' ? null : Number(String(value).replace(',', '.')));
+// A decimal comma or point ("42,5", "42.5"). Anything else is sent as typed,
+// so the server names the field instead of it being saved wrong or dropped.
+const num = (value) => {
+  const text = String(value).trim();
+  if (text === '') return null;
+  const n = Number(text.replace(',', '.'));
+  return Number.isFinite(n) ? n : text;
+};
+
+// A title the form made from the alert or order itself (it had none of its
+// own): edited as empty, so it's made again from what the item says then.
+const generatedTitle = (item) => !!item && (
+  (item.kind === 'trigger' && item.trigger && item.title === describeTrigger(item.trigger, plainPrice))
+  || (item.kind === 'order' && item.order && item.title === describeOrder(item.order, plainPrice))
+);
 
 // preset (a new item only), what to start from: { trade_id, dueDate }, and
 // from a trade its symbol, type, contract_month and account_id.
@@ -39,12 +53,13 @@ function initialForm(item, kind, defaultOrderAccount, zone, preset) {
   const presetAccount = !item && preset?.account_id ? str(preset.account_id) : null;
   return {
     kind: item?.kind || kind || 'todo',
-    title: str(item?.title),
+    title: generatedTitle(item) ? '' : str(item?.title),
     notes: str(item?.notes),
     then: str(item?.then),
     dueDate: item ? due.date : (preset?.dueDate || ''),
     dueTime: item ? due.time : (preset?.dueDate ? '09:00' : ''),
-    alert: item ? !!item.alert : true,
+    // On by default once a date is set (as the server does).
+    alert: item?.due_at ? !!item.alert : true,
     tradeId: str(item ? item.trade_id : preset?.trade_id),
     accountId: item ? str(item.account_id) : (presetAccount || ''),
     orderAccountId: item?.kind === 'order' ? str(item.account_id) : (presetAccount || str(defaultOrderAccount)),
@@ -390,7 +405,7 @@ export default function TodoForm({ item, kind, preset, onClose }) {
         )}
 
         <Field label="Title" wide hint={form.kind !== 'todo' ? 'Optional: without one it is named after the alert or order.' : undefined}>
-          <input className={styles.input} value={form.title} onChange={set('title')} maxLength={300} placeholder={form.kind === 'todo' ? 'Call the broker' : ''} autoFocus={!item && form.kind === 'todo'} />
+          <input className={styles.input} value={form.title} onChange={set('title')} maxLength={300} placeholder={form.kind === 'todo' ? 'Call the broker' : bodyOf({ ...form, title: '' }, zone).title || 'Made from the alert or order'} autoFocus={!item && form.kind === 'todo'} />
         </Field>
         <Field label="Notes" wide>
           <textarea className={`${styles.input} ${styles.textarea}`} value={form.notes} onChange={set('notes')} rows={3} />

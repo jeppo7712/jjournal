@@ -612,6 +612,7 @@ Times are sent and answered as ISO 8601 with a zone (`2026-03-20T16:00:00Z` or `
 | `from`, `to` | Filter `due_at` (items without one are left out). A date is a UTC day (`to` includes the whole day); give a time with a zone for another boundary. |
 | `updated_since` | Items changed at or after this time (e.g. to catch up after missed events). |
 | `closed_since` | Closed items only from this time on; open and fired items always. |
+| `closed_before` | Only items closed before this time (the older history), sorted newest closed first. |
 | `limit`, `offset` | Default 200, at most 1000. |
 
 Sorted fired first, then by `due_at` (items without one last), then by `created_at`.

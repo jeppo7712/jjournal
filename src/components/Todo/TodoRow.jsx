@@ -1,13 +1,12 @@
-import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { TradeContext } from '../../context/TradeContext';
 import { useTodos } from '../../context/TodosContext';
 import { notify } from '../common/Dialogs';
 import { getAgentName, subscribeAgentName } from '../../utils/agentName';
-import { DateTime } from 'luxon';
 import { formatNumber } from '../../utils/numberFormat';
 import {
-  isLapsing, describeTrigger, describeOrder, describeOrderTerms, orderPrices, statusLabel, price,
-  whenText, dayText, snoozeTimes, toUtcIso, fromUtcIso,
+  isLapsing, describeTrigger, describeOrder, describeOrderTerms, orderPrices, instrument, triggerVoids,
+  statusLabel, price, whenText, dayText, tileDay, snoozeTimes, toUtcIso, fromUtcIso,
 } from '../../utils/todos';
 import TodoForm from './TodoForm';
 import styles from './Todo.module.css';
@@ -52,14 +51,37 @@ function SnoozePicker({ item, now, zone, onSnooze }) {
   );
 }
 
+// The nearest scrolling box around `el` (a window's body), or null.
+function scrollParent(el) {
+  for (let p = el.parentElement; p; p = p.parentElement) {
+    if (/(auto|scroll)/.test(getComputedStyle(p).overflowY)) return p;
+  }
+  return null;
+}
+
 // The "⋯" menu: the row's other actions, and the snooze times behind
 // "Snooze…". `primary` (the row's own button) is in it on a phone only,
-// where the row shows just "⋯".
+// where the row shows just "⋯". It opens upwards when there's no room
+// below in the window or the box it scrolls in (a calendar day window).
 function RowMenu({ primary, actions, snooze, snoozeLabel, boundary, onClose }) {
   const [snoozing, setSnoozing] = useState(false);
+  const [up, setUp] = useState(false);
+  const ref = useRef(null);
   useDismiss(boundary, onClose);
+  useLayoutEffect(() => {
+    const menu = ref.current;
+    const button = boundary.current;
+    if (!menu || !button) return;
+    const box = scrollParent(button);
+    const boxRect = box ? box.getBoundingClientRect() : { top: 0, bottom: window.innerHeight };
+    const bottom = Math.min(window.innerHeight, boxRect.bottom);
+    const top = Math.max(0, boxRect.top);
+    const buttonRect = button.getBoundingClientRect();
+    const height = menu.offsetHeight + 4;
+    setUp(buttonRect.bottom + height > bottom && buttonRect.top - height >= top);
+  }, [boundary, snoozing]);
   return (
-    <div className={styles.snoozeMenu} role="menu">
+    <div className={`${styles.snoozeMenu} ${up ? styles.menuUp : ''}`} role="menu" ref={ref}>
       {snoozing ? snooze : (<>
         <button type="button" role="menuitem" className={styles.phoneOnly} onClick={() => { onClose(); primary.onClick(); }}>{primary.label}</button>
         {actions.map(a => (
@@ -81,7 +103,7 @@ function Tile({ item, now, zone, overdue }) {
     const up = t.direction === 'above';
     return (
       <div className={styles.tile} title={`${KIND_LABEL.trigger}: ${describeTrigger(t)}`}>
-        <span className={styles.tileTop}>{t.symbol}{t.contract_month ? ` ${t.contract_month}` : ''}</span>
+        <span className={styles.tileTop}>{instrument(t)}</span>
         <span className={`${styles.tileMain} ${up ? styles.tileUp : styles.tileDown}`}>
           <span className={styles.tileArrow} aria-hidden="true">{up ? '▲' : '▼'}</span><span className={styles.nowrap}>{price(t.level)}</span>
         </span>
@@ -94,7 +116,7 @@ function Tile({ item, now, zone, overdue }) {
     return (
       <div className={styles.tile} title={`${KIND_LABEL.order}: ${describeOrder(o)}`}>
         <span className={`${styles.tileTop} ${o.side === 'BUY' ? styles.tileUp : styles.tileDown}`}>{o.side} {formatNumber(Number(o.quantity), 8, true)}</span>
-        <span className={styles.tileMain}>{o.symbol}{o.contract_month ? ` ${o.contract_month}` : ''}</span>
+        <span className={styles.tileMain}>{instrument(o)}</span>
         <span className={styles.tileSub}>{[o.order_type, orderPrices(o)].filter(Boolean).join(' ')}</span>
       </div>
     );
@@ -102,14 +124,12 @@ function Tile({ item, now, zone, overdue }) {
   if (!item.due_at) {
     return <div className={`${styles.tile} ${styles.tileQuiet}`}><span className={styles.tileSub}>someday</span></div>;
   }
-  const due = DateTime.fromISO(item.due_at, { zone });
-  const nowZ = DateTime.fromJSDate(now, { zone });
-  const top = due.hasSame(nowZ, 'day') ? 'Today' : due.hasSame(nowZ.plus({ days: 1 }), 'day') ? 'Tomorrow' : due.toFormat('ccc');
+  const day = tileDay(item.due_at, now, zone);
   return (
     <div className={`${styles.tile} ${overdue ? styles.tileLate : ''}`} title={`Due ${whenText(item.due_at, now, zone)}`}>
-      <span className={styles.tileTop}>{top}</span>
-      <span className={styles.tileMain}>{due.toFormat(due.hasSame(nowZ, 'year') ? 'd LLL' : 'd LLL yy')}</span>
-      <span className={styles.tileSub}>{due.toFormat('HH:mm')}</span>
+      <span className={styles.tileTop}>{day.top}</span>
+      <span className={styles.tileMain}>{day.date}</span>
+      <span className={styles.tileSub}>{day.time}</span>
     </div>
   );
 }
@@ -121,10 +141,7 @@ export function TodoRow({ item, isNew, agentName, now, zone, onEdit, onPatch, on
   const closed = ['done', 'dismissed', 'expired'].includes(item.status);
   const lapsing = isLapsing(item, now);
   const overdue = item.status === 'open' && item.due_at && Date.parse(item.due_at) <= now.getTime();
-  const voids = item.kind === 'trigger' && item.trigger ? [
-    item.trigger.void_above && `void above ${price(item.trigger.void_above)}`,
-    item.trigger.void_below && `void below ${price(item.trigger.void_below)}`,
-  ].filter(Boolean).join(' · ') : '';
+  const voids = item.kind === 'trigger' ? triggerVoids(item.trigger) : '';
   const terms = item.kind === 'order' ? [item.order?.currency, describeOrderTerms(item.order)].filter(Boolean).join(' · ') : '';
   const byAgent = item.created_by === 'agent';
 
@@ -227,7 +244,8 @@ export function TodoRow({ item, isNew, agentName, now, zone, onEdit, onPatch, on
   );
 }
 
-// rowProps(item) for a TodoRow; list(items) renders them; openForm(item)
+// rowProps(item) for a TodoRow; list(items, extra) renders them (extra:
+// TodoRow props for all of them); openForm(item)
 // edits an item, openForm(null, { kind, trade_id, dueDate }) adds one;
 // `form` is the open form (render it).
 //   onViewTrade(trade)  opens a linked trade (not given: no trade link)
@@ -269,7 +287,7 @@ export function useTodoRows({ onViewTrade, newIds, rowOptions } = {}) {
     showAccount: item.account_id != null && String(item.account_id) !== String(currentAccountId),
     ...(rowOptions || {}),
   });
-  const list = (items) => <ul className={styles.list}>{items.map(item => <TodoRow key={item.id} {...rowProps(item)} />)}</ul>;
+  const list = (items, extra) => <ul className={styles.list}>{items.map(item => <TodoRow key={item.id} {...rowProps(item)} {...extra} />)}</ul>;
   const openForm = (item, preset) => setEditing({ item, preset });
   const form = editing && (
     <TodoForm

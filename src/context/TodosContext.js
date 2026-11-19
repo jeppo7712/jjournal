@@ -120,13 +120,11 @@ export function TodosProvider({ children }) {
     refresh();
   }, [refresh]);
 
-  // Closed items older than the ones loaded, in scope, newest first.
+  // Closed items older than the ones loaded, in scope, newest first (the
+  // newest 1000 of every account).
   const loadOlderClosed = useCallback(async () => {
-    const data = await request(`${API}?status=done,dismissed,expired`);
-    const since = Date.parse(closedSince());
-    return (data.todos || [])
-      .filter(t => Date.parse(t.closed_at) < since && inScope(t, scopeIds))
-      .sort((a, b) => Date.parse(b.closed_at) - Date.parse(a.closed_at));
+    const data = await request(`${API}?closed_before=${encodeURIComponent(closedSince())}`);
+    return (data.todos || []).filter(t => inScope(t, scopeIds));
   }, [scopeIds]);
 
   const value = useMemo(

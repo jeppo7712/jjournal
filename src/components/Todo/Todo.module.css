@@ -435,7 +435,8 @@
   letter-spacing: 1px;
 }
 
-.phoneOnly {
+/* Two classes: beats .snoozeMenu > button. */
+.snoozeMenu > .phoneOnly {
   display: none;
 }
 
@@ -470,6 +471,11 @@
   display: flex;
   flex-direction: column;
   gap: 2px;
+}
+
+.menuUp {
+  top: auto;
+  bottom: calc(100% + 4px);
 }
 
 .snoozeMenu > button {

@@ -124,6 +124,7 @@ export const CONDITION_LABELS = [
 export function price(value) {
   if (value === null || value === undefined || value === '') return '';
   const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
   const text = formatNumber(n, 8, true);
   const decimals = (String(n).split('.')[1] || '').length;
   return decimals >= 2 ? text : formatNumber(n, 2);
@@ -135,22 +136,30 @@ export function price(value) {
 export function plainPrice(value) {
   if (value === null || value === undefined || value === '') return '';
   const n = Number(value);
+  if (!Number.isFinite(n)) return String(value);
   const decimals = (String(n).split('.')[1] || '').length;
   return decimals >= 2 ? String(n) : n.toFixed(2);
 }
 
-const instrument = (spec) => `${spec.symbol}${spec.contract_month ? ` ${spec.contract_month}` : ''}`;
+// "ABC", "MES 202606".
+export const instrument = (spec) => `${spec.symbol}${spec.contract_month ? ` ${spec.contract_month}` : ''}`;
+
+// "void above 44.00 · void below 40.00", or '' (fmt as below).
+export function triggerVoids(trigger, fmt = price, sep = ' · ') {
+  if (!trigger) return '';
+  return [
+    trigger.void_above && `void above ${fmt(trigger.void_above)}`,
+    trigger.void_below && `void below ${fmt(trigger.void_below)}`,
+  ].filter(Boolean).join(sep);
+}
 
 // "ABC: weekly close below 42.50", "MES 202606: trades above 5000.00".
 // fmt: price (the display format) or plainPrice (for saved text).
 export function describeTrigger(trigger, fmt = price) {
   if (!trigger) return '';
-  const voids = [
-    trigger.void_above && `void above ${fmt(trigger.void_above)}`,
-    trigger.void_below && `void below ${fmt(trigger.void_below)}`,
-  ].filter(Boolean);
+  const voids = triggerVoids(trigger, fmt, ', ');
   return `${instrument(trigger)}: ${CONDITION_WORDS[trigger.condition] || trigger.condition} ${trigger.direction} ${fmt(trigger.level)}`
-    + (voids.length ? ` (${voids.join(', ')})` : '');
+    + (voids ? ` (${voids})` : '');
 }
 
 // An order's price(s): "95.50", "4990.00 / 4985.00" (stop / limit), or ''
@@ -214,6 +223,18 @@ export function dayText(iso, now, zone) {
   if (t.hasSame(nowZ, 'day')) return 'today';
   if (t.hasSame(nowZ.plus({ days: 1 }), 'day')) return 'tomorrow';
   return t.toFormat(t.hasSame(nowZ, 'year') ? 'ccc d LLL' : 'ccc d LLL yyyy');
+}
+
+// A todo's due time for its tile: { top: 'Today' | 'Tomorrow' | 'Thu',
+// date: '5 Mar' ('5 Mar 27' in another year), time: '14:00' }.
+export function tileDay(iso, now, zone) {
+  const t = at(iso, zone);
+  const day = dayText(iso, now, zone);
+  return {
+    top: day === 'today' || day === 'tomorrow' ? day[0].toUpperCase() + day.slice(1) : t.toFormat('ccc'),
+    date: t.toFormat(t.hasSame(DateTime.fromJSDate(now, { zone }), 'year') ? 'd LLL' : 'd LLL yy'),
+    time: t.toFormat('HH:mm'),
+  };
 }
 
 // "Today", "Tomorrow", "Thu 5 Mar" (+ year when not this year's) for a day key.
