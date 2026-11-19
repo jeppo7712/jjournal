@@ -105,11 +105,15 @@ function id(value, field) {
     return n;
 }
 
+// '2026-02-30' is not a day (Date.parse would roll it on to 2 March).
+const realDay = (day) => new Date(`${day}T00:00:00Z`).toISOString().slice(0, 10) === day;
+
 // Stored and answered as an ISO string in UTC.
 function time(value, field) {
     if (value === null || value === undefined || value === '') return null;
     if (value instanceof Date) return value.toISOString();
-    if (typeof value !== 'string' || !ZONED_TIME_RE.test(value.trim()) || Number.isNaN(Date.parse(value))) {
+    if (typeof value !== 'string' || !ZONED_TIME_RE.test(value.trim()) || Number.isNaN(Date.parse(value))
+        || !realDay(value.trim().slice(0, 10))) {
         throw bad(`${field} must be a time with its zone, e.g. 2026-03-20T16:00:00Z`);
     }
     return new Date(value.trim()).toISOString();
@@ -308,8 +312,11 @@ function applyWrite(existing, patch, { origin, now = new Date() }) {
     if (!item.due_at) item.alert = false;
     else if (!Object.prototype.hasOwnProperty.call(patch, 'alert') && (!before || !before.due_at)) item.alert = true;
 
+    // A price alert is redefined by its level and the like, not by its
+    // reminder: snoozing a fired alert's reminder keeps it fired (and when
+    // and why it fired). A todo or order is redefined by a new due_at.
     const redefined = before
-        ? triggerDefinition(before.trigger) !== triggerDefinition(item.trigger) || dueChanged
+        ? triggerDefinition(before.trigger) !== triggerDefinition(item.trigger) || (item.kind !== 'trigger' && dueChanged)
         : true;
     // An alert or reminder that fired or lapsed and is then moved (a new
     // level, a new time) watches again, unless the request says otherwise.

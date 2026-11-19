@@ -90,7 +90,10 @@ function initialForm(item, kind, defaultOrderAccount, zone, preset) {
 }
 
 // The request body for the form as it stands (the fields of its kind).
-function bodyOf(f, zone) {
+//   fromKind  the item's kind before (editing): an alert's "then" and expiry
+//             go when it becomes a todo or order (the form has no fields
+//             for them there)
+function bodyOf(f, zone, fromKind) {
   const dueAt = toUtcIso(f.dueDate, f.dueTime, zone);
   const body = {
     kind: f.kind,
@@ -101,6 +104,10 @@ function bodyOf(f, zone) {
     trigger: null,
     order: null,
   };
+  if (fromKind === 'trigger' && f.kind !== 'trigger') {
+    body.then = null;
+    body.expires_at = null;
+  }
   if (f.kind === 'todo') {
     body.account_id = f.accountId ? Number(f.accountId) : null;
   } else if (f.kind === 'trigger') {
@@ -205,12 +212,12 @@ export default function TodoForm({ item, kind, preset, onClose }) {
   const submit = async () => {
     setBusy(true);
     setError('');
-    const body = bodyOf(form, zone);
+    const body = bodyOf(form, zone, item?.kind);
     // Times not touched keep their exact value (the agent's can have
     // seconds the inputs don't show): a changed due_at would re-arm it.
     const initial = initialForm(item, kind, defaultOrderAccount, zone);
     if (item && form.dueDate === initial.dueDate && form.dueTime === initial.dueTime) body.due_at = item.due_at;
-    if (item && 'expires_at' in body && form.expiresDate === initial.expiresDate && form.expiresTime === initial.expiresTime) {
+    if (item && form.kind === 'trigger' && form.expiresDate === initial.expiresDate && form.expiresTime === initial.expiresTime) {
       body.expires_at = item.expires_at;
     }
     try {
@@ -235,7 +242,8 @@ export default function TodoForm({ item, kind, preset, onClose }) {
     }
   };
 
-  const dateTime = (dateField, timeField, label, hint) => (
+  // defaultTime: filled in when a date is picked without a time.
+  const dateTime = (dateField, timeField, label, hint, defaultTime = '09:00') => (
     <Field label={label} hint={hint}>
       <div className={styles.dateTime}>
         <input type="date" className={styles.input} value={form[dateField]} onChange={e => {
@@ -243,8 +251,8 @@ export default function TodoForm({ item, kind, preset, onClose }) {
           setForm(f => ({
             ...f,
             [dateField]: value,
-            // A date picked for the reminder: 09:00 unless a time is set.
-            [timeField]: value && !f[timeField] ? '09:00' : f[timeField],
+            // A date picked without a time: the default time.
+            [timeField]: value && !f[timeField] ? defaultTime : f[timeField],
           }));
         }} aria-label={`${label}: date`} />
         <input type="time" className={styles.input} value={form[timeField]} onChange={set(timeField)} disabled={!form[dateField]} aria-label={`${label}: time`} />
@@ -345,7 +353,7 @@ export default function TodoForm({ item, kind, preset, onClose }) {
             <Field label="Then" wide>
               <input className={styles.input} value={form.then} onChange={set('then')} placeholder="What to do when it happens" maxLength={300} />
             </Field>
-            {dateTime('expiresDate', 'expiresTime', 'Expires', 'Optional. After this it no longer matters.')}
+            {dateTime('expiresDate', 'expiresTime', 'Expires', 'Optional. After this it no longer matters.', '23:59')}
           </>
         )}
 

@@ -5,7 +5,7 @@ import { notify } from '../common/Dialogs';
 import { getAgentName, subscribeAgentName } from '../../utils/agentName';
 import { formatNumber } from '../../utils/numberFormat';
 import {
-  isLapsing, describeTrigger, describeOrder, describeOrderTerms, orderPrices, instrument, triggerVoids,
+  CLOSED_STATUSES, isLapsing, describeTrigger, describeOrder, describeOrderTerms, orderPrices, instrument, triggerVoids,
   statusLabel, price, whenText, dayText, tileDay, snoozeTimes, toUtcIso, fromUtcIso,
 } from '../../utils/todos';
 import TodoForm from './TodoForm';
@@ -138,7 +138,7 @@ export function TodoRow({ item, isNew, agentName, now, zone, onEdit, onPatch, on
   const [menuOpen, setMenuOpen] = useState(false);
   const menuRef = useRef(null);
   const closeMenu = useCallback(() => setMenuOpen(false), []);
-  const closed = ['done', 'dismissed', 'expired'].includes(item.status);
+  const closed = CLOSED_STATUSES.includes(item.status);
   const lapsing = isLapsing(item, now);
   const overdue = item.status === 'open' && item.due_at && Date.parse(item.due_at) <= now.getTime();
   const voids = item.kind === 'trigger' ? triggerVoids(item.trigger) : '';

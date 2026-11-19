@@ -302,16 +302,19 @@ export function itemsByDay(items, zone) {
 // The weeks the Todo calendar runs through (Mondays, 'yyyy-MM-dd'): from the
 // month before today's (or the earliest item's month) to the end of the
 // month after today's (or the latest item's month), so a far-off order's
-// good-till date can be scrolled to.
+// good-till date can be scrolled to; at most two years either way (a typo
+// like 9026 would otherwise make hundreds of thousands of weeks).
 export function todoCalendarWeeks(dayKeys, todayKey) {
   const monthStart = key => DateTime.fromISO(`${key.slice(0, 7)}-01`);
   const today = monthStart(todayKey);
   let first = today.minus({ months: 1 });
   let last = today.plus({ months: 1 });
+  const earliest = today.minus({ years: 2 });
+  const latest = today.plus({ years: 2 });
   for (const key of dayKeys) {
     const m = monthStart(key);
-    if (m < first) first = m;
-    if (m > last) last = m;
+    if (m < first) first = m < earliest ? earliest : m;
+    if (m > last) last = m > latest ? latest : m;
   }
   const end = last.endOf('month').toISODate();
   const weeks = [];

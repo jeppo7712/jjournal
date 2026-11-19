@@ -287,6 +287,10 @@ const todoService = createTodoService(createTodoStore(() => db.getPool()), {
   }),
 });
 // Mounted before externalRouter (below): its last handler answers 404.
+// Without the database: 503, as the app's /api/todos answers.
+app.use('/api/external/v1/todos', (req, res, next) => (
+  db.getIsConnected() ? next() : res.status(503).json({ error: 'Database not configured or not connected' })
+));
 app.use('/api/external/v1', todoRoutes.externalRouter(todoService));
 
 // External API (routes/external.js) — mounted directly on `app`, and

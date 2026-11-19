@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useTodos } from '../../context/TodosContext';
+import { CLOSED_STATUSES } from '../../utils/todos';
 import { useTodoRows } from './TodoRow';
 import styles from './Todo.module.css';
 
@@ -13,7 +14,7 @@ export default function TradeTodos({ trade, cardClass, headerClass }) {
   const { todos } = useTodos();
   const { list, openForm, form } = useTodoRows({ rowOptions: { showTrade: false } });
   const linked = useMemo(() => {
-    const closed = s => ['done', 'dismissed', 'expired'].includes(s);
+    const closed = s => CLOSED_STATUSES.includes(s);
     return todos
       .filter(t => String(t.trade_id) === String(trade.id))
       .sort((a, b) => closed(a.status) - closed(b.status) || Date.parse(a.created_at) - Date.parse(b.created_at));

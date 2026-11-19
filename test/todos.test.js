@@ -166,6 +166,33 @@ test('an archived account is only refused when set; an order whose account was d
     await rejects400(service.update(todo.id, { kind: 'order', order: orderBody().order, account_id: null }, 'app'), /account_id is required/);
 });
 
+test('a price alert\'s reminder is not its definition; a todo\'s due_at is', async () => {
+    const { service, advance } = setup();
+    const alert = await service.create(alertBody({ due_at: '2026-03-03T09:00:00Z' }), 'agent');
+    advance(10);
+    const fired = await service.update(alert.id, { status: 'fired', fired_note: 'closed at 41' }, 'agent');
+    advance(10);
+    const snoozed = await service.update(alert.id, { due_at: '2026-03-04T09:00:00Z' }, 'app');
+    assert.strictEqual(snoozed.status, 'fired', 'a snoozed reminder keeps the alert fired');
+    assert.strictEqual(snoozed.fired_at, fired.fired_at);
+    assert.strictEqual(snoozed.fired_note, 'closed at 41');
+    assert.strictEqual(snoozed.armed_at, alert.armed_at, 'still watching since it was armed');
+    assert.strictEqual(snoozed.reminded_at, null, 'the moved reminder is due again');
+
+    const todo = await service.create({ kind: 'todo', title: 'call', due_at: '2026-03-03T09:00:00Z', status: 'expired' }, 'agent');
+    advance(10);
+    const moved = await service.update(todo.id, { due_at: '2026-03-05T09:00:00Z' }, 'app');
+    assert.strictEqual(moved.status, 'open', 'a lapsed todo moved to a new time is open again');
+});
+
+test('impossible days are a 400, not rolled on to the next month', async () => {
+    const { service } = setup();
+    await rejects400(service.create({ kind: 'todo', title: 'x', due_at: '2026-02-30T10:00:00Z' }, 'app'), /due_at must be a time/);
+    await rejects400(service.create(alertBody({ expires_at: '2026-04-31T00:00:00+02:00' }), 'agent'), /expires_at must be a time/);
+    const leap = await service.create({ kind: 'todo', title: 'x', due_at: '2028-02-29T10:00:00Z' }, 'app');
+    assert.strictEqual(leap.due_at, '2028-02-29T10:00:00.000Z');
+});
+
 test('parseInput keeps only the fields sent, and ignores read-only ones', () => {
     const patch = parseInput({ status: 'fired', id: 7, created_at: 'x', account_name: 'y', created_by: 'user' });
     assert.deepStrictEqual(patch, { status: 'fired' });

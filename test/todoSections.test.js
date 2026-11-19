@@ -141,6 +141,9 @@ test('calendar: the day each item sits on, and the weeks shown', async () => {
   const far = t.todoCalendarWeeks(['2027-01-15', '2025-12-31'], '2026-03-05');
   assert.equal(far[0], '2025-12-01');
   assert.ok(far.at(-1) >= '2027-01-25' && far.at(-1) <= '2027-01-31');
+  const typo = t.todoCalendarWeeks(['9026-03-20', '1926-03-20'], '2026-03-05');
+  assert.equal(typo[0], '2024-02-26', 'two years back at most');
+  assert.ok(typo.at(-1) >= '2028-03-27' && typo.at(-1) <= '2028-03-31', 'two years ahead at most');
 });
 
 test('todaySummary: what the dashboard card counts', async () => {
