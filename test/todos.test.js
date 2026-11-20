@@ -370,6 +370,13 @@ test('markSeen marks fired items once', async () => {
     assert.strictEqual(await service.markSeen('app', [a.id]), 1, 'a fired again above');
     assert.strictEqual((await service.get(b.id)).seen_at, null, 'b was not on screen');
     assert.strictEqual(await service.markSeen('app', [b.id]), 1);
+    // Fired again without going through open (a new fired_at): unseen again;
+    // the same fired_at sent back, or an edit, leaves it seen.
+    const sameAgain = await service.update(b.id, { status: 'fired', fired_at: (await service.get(b.id)).fired_at }, 'agent');
+    assert.ok(sameAgain.seen_at);
+    assert.ok((await service.update(b.id, { title: 'Renamed' }, 'app')).seen_at);
+    const firedAgain = await service.update(b.id, { status: 'fired', fired_at: '2030-01-02T15:00:00Z' }, 'agent');
+    assert.strictEqual(firedAgain.seen_at, null);
     await rejects400(service.markSeen('app', ['x']), /ids must be a list/);
 });
 

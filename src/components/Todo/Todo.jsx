@@ -51,13 +51,16 @@ export default function Todo({ onViewTrade }) {
 
   // Fired items not seen yet: "new" for as long as the page is open, then
   // marked seen (the menu badge drops them).
-  // Each once: if marking fails, the reload must not send it again and again.
+  // Each firing once: if marking fails, the reload must not send it again
+  // and again; one that fires again while the page is open is sent again.
   const [newIds, setNewIds] = useState(() => new Set());
   const sentSeen = useRef(new Set());
   useEffect(() => {
-    const unseen = scoped.filter(t => t.status === 'fired' && !t.seen_at && !sentSeen.current.has(t.id)).map(t => t.id);
-    if (unseen.length === 0) return;
-    unseen.forEach(id => sentSeen.current.add(id));
+    const firing = t => `${t.id}|${t.fired_at}`;
+    const fresh = scoped.filter(t => t.status === 'fired' && !t.seen_at && !sentSeen.current.has(firing(t)));
+    if (fresh.length === 0) return;
+    fresh.forEach(t => sentSeen.current.add(firing(t)));
+    const unseen = fresh.map(t => t.id);
     setNewIds(ids => new Set([...ids, ...unseen]));
     markSeen(unseen);
   }, [scoped, markSeen]);

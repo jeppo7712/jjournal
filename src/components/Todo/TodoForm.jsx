@@ -188,8 +188,10 @@ export default function TodoForm({ item, kind, preset, onClose }) {
   // An order goes on the account that's picked, unless it's archived.
   const usableIds = usableAccounts.flatMap(g => g.options.map(o => String(o.account.id)));
   const defaultOrderAccount = usableIds.includes(String(currentAccountId)) ? currentAccountId : usableIds[0];
+  // A trade's account only when an item can go on it (not archived).
+  const start = preset?.account_id && !usableIds.includes(String(preset.account_id)) ? { ...preset, account_id: null } : preset;
 
-  const [form, setForm] = useState(() => initialForm(item, kind, defaultOrderAccount, zone, preset));
+  const [form, setForm] = useState(() => initialForm(item, kind, defaultOrderAccount, zone, start));
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState('');
   const set = (field) => (e) => {
@@ -263,18 +265,28 @@ export default function TodoForm({ item, kind, preset, onClose }) {
     </Field>
   );
 
-  const accountSelect = (field, { required } = {}) => (
-    <select className={styles.input} value={form[field]} onChange={set(field)}>
-      {!required && <option value="">All accounts</option>}
-      {usableAccounts.map(g => (
-        <optgroup key={g.key} label={g.label}>
-          {g.options.map(({ account, depth }) => (
-            <option key={account.id} value={account.id}>{`${'  '.repeat(depth)}${account.name}`}</option>
-          ))}
-        </optgroup>
-      ))}
-    </select>
-  );
+  // The item's own account stays shown when it can't be picked any more
+  // (archived) or is gone (an order whose account was deleted): the select
+  // shows what is saved, not its first option.
+  const accountSelect = (field, { required } = {}) => {
+    const value = form[field];
+    const unusable = value && !usableIds.includes(value);
+    const account = unusable && (accounts || []).find(a => String(a.id) === value);
+    return (
+      <select className={styles.input} value={value} onChange={set(field)}>
+        {!required && <option value="">All accounts</option>}
+        {required && !value && <option value="" disabled>Pick an account</option>}
+        {unusable && <option value={value}>{account ? `${account.name} (archived)` : `Account ${value}`}</option>}
+        {usableAccounts.map(g => (
+          <optgroup key={g.key} label={g.label}>
+            {g.options.map(({ account: a, depth }) => (
+              <option key={a.id} value={a.id}>{`${'  '.repeat(depth)}${a.name}`}</option>
+            ))}
+          </optgroup>
+        ))}
+      </select>
+    );
+  };
 
   const reminder = (
     <>

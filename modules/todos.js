@@ -339,7 +339,8 @@ function applyWrite(existing, patch, { origin, now = new Date() }) {
     } else if (item.status === 'fired') {
         if (statusChanged && !Object.prototype.hasOwnProperty.call(patch, 'fired_at')) item.fired_at = nowIso;
         if (!item.fired_at) item.fired_at = nowIso;
-        if (statusChanged) item.seen_at = null;
+        // Fired again (a new fired_at on a fired item): new to the user again.
+        if (statusChanged || !sameTime(before.fired_at, item.fired_at)) item.seen_at = null;
         item.closed_at = null;
         item.closed_note = null;
     } else {
