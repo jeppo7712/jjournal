@@ -117,12 +117,16 @@ function App() {
   };
 
   // Keyboard shortcuts: N new trade, J new day note, 1-5 switch pages. Only
-  // when no trade/note window is open and nothing is being typed into.
+  // when no window or dialog is open (a trade or note, a page's own form
+  // such as the Todo form, a confirm) and nothing is being typed into: a
+  // key pressed with focus on a form's button would switch the page away
+  // and lose the form.
   const anyWindowOpen = showTradeModal || showTradeView || showDayNote;
   useEffect(() => {
     const VIEWS = { '1': 'dashboard', '2': 'stats', '3': 'capital', '4': 'todo', '5': 'settings' };
     const onKeyDown = (e) => {
       if (anyWindowOpen || e.metaKey || e.ctrlKey || e.altKey || e.repeat) return;
+      if (document.querySelector('[aria-modal="true"]')) return;
       const el = e.target;
       const tag = el && el.tagName;
       if (tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT' || (el && el.isContentEditable)) return;

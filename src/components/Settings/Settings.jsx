@@ -18,7 +18,7 @@ import { notify, confirmDialog } from '../common/Dialogs';
 import { timeframeLabel } from '../../utils/timeframeLabel';
 import { appBadgeState, requestAppBadgePermission } from '../../utils/appBadge';
 import { THEME_CHOICES, getThemeChoice, setThemeChoice } from '../../utils/theme';
-import { getAgentName, setAgentName, DEFAULT_AGENT_NAME } from '../../utils/agentName';
+import { getAgentName, setAgentName, subscribeAgentName, DEFAULT_AGENT_NAME } from '../../utils/agentName';
 
 // The sections of the Settings page, in menu order, in two groups: what
 // applies to the account open in the menu bar only, and what the whole
@@ -571,6 +571,9 @@ export default function Settings() {
 
   // What the Todo page calls the external agent; saved on leaving the field.
   const [agentNameInput, setAgentNameInput] = useState(getAgentName);
+  // A name changed on another device (it arrives with the config status):
+  // shown here, so leaving the field doesn't save the old one back.
+  useEffect(() => subscribeAgentName(setAgentNameInput), []);
   const saveAgentName = async () => {
     const value = agentNameInput.trim() || DEFAULT_AGENT_NAME;
     setAgentNameInput(value);
