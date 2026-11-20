@@ -597,7 +597,7 @@ Times are sent and answered as ISO 8601 with a zone (`2026-03-20T16:00:00Z` or `
 - Fields not sent stay as they are; `null` clears one. Read-only fields sent back (`id`, `account_name`, `created_at`, ...) are ignored. Changing `kind` drops the old kind's `trigger` / `order`.
 - `closed_at` is set when the status becomes `done`, `dismissed` or `expired`. `fired_at` is set when it becomes `fired` (to the request's `fired_at` if it sent one, else now). Back to `open` clears both (and their notes) and `reminded_at`. A new `fired_at` on an item that is already `fired` (it fired again) shows it to the user as new again (`seen_at` cleared).
 - `armed_at` is set on create, whenever the trigger's `symbol`, `type`, `contract_month`, `condition`, `direction` or `level` changes, when a todo's or order's `due_at` changes, and when the status goes back to `open`. A price alert's `due_at` is only its reminder: moving it doesn't re-arm the alert.
-- An item that `fired` or `expired` and is then re-armed that way (a new level; a todo or order with a new `due_at`) goes back to `open`, unless the same request sends a `status`. A `done` or `dismissed` item keeps its status.
+- An item that `fired` or `expired` and is then re-armed that way (a new level; a todo or order with a new `due_at`) goes back to `open`, unless the same request sends a `status`. So does an `expired` item whose `expires_at` is moved to a later time than now or cleared. A `done` or `dismissed` item keeps its status.
 - An item the user marked `done` or `dismissed` is their decision: `PUT /todos/key/:key` doesn't change it (see there).
 - Items are not deleted automatically.
 

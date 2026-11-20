@@ -321,8 +321,12 @@ function applyWrite(existing, patch, { origin, now = new Date() }) {
     // An alert or reminder that fired or lapsed and is then moved (a new
     // level, a new time) watches again, unless the request says otherwise.
     // Done and dismissed stay: they're the user's decision.
-    if (before && redefined && !Object.prototype.hasOwnProperty.call(patch, 'status')
-        && (before.status === 'fired' || before.status === 'expired')) {
+    // An expired item whose expiry is moved later than now (or taken away)
+    // matters again too.
+    const extended = before && before.status === 'expired' && !sameTime(before.expires_at, item.expires_at)
+        && (!item.expires_at || new Date(item.expires_at).getTime() > now.getTime());
+    if (before && !Object.prototype.hasOwnProperty.call(patch, 'status')
+        && ((redefined && (before.status === 'fired' || before.status === 'expired')) || extended)) {
         item.status = 'open';
     }
 

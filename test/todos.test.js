@@ -185,6 +185,24 @@ test('a price alert\'s reminder is not its definition; a todo\'s due_at is', asy
     assert.strictEqual(moved.status, 'open', 'a lapsed todo moved to a new time is open again');
 });
 
+test('an expired item whose expiry moves later than now is open again', async () => {
+    const { service } = setup(); // now: 2026-03-02T09:00Z
+    const alert = await service.create(alertBody({ expires_at: '2026-03-01T00:00:00Z', status: 'expired' }), 'agent');
+    const stillPast = await service.update(alert.id, { expires_at: '2026-03-02T08:00:00Z' }, 'app');
+    assert.strictEqual(stillPast.status, 'expired', 'an expiry still in the past changes nothing');
+    const sameAgain = await service.update(alert.id, { title: 'Renamed', expires_at: stillPast.expires_at }, 'app');
+    assert.strictEqual(sameAgain.status, 'expired', 'the same expiry sent back changes nothing');
+    const later = await service.update(alert.id, { expires_at: '2026-04-30T21:59:00Z' }, 'app');
+    assert.strictEqual(later.status, 'open');
+    assert.strictEqual(later.closed_at, null);
+    await service.update(alert.id, { status: 'expired' }, 'agent');
+    const cleared = await service.update(alert.id, { expires_at: null }, 'app');
+    assert.strictEqual(cleared.status, 'open', 'no expiry at all: it matters again');
+    await service.update(alert.id, { status: 'dismissed' }, 'app');
+    assert.strictEqual((await service.update(alert.id, { expires_at: '2026-05-30T00:00:00Z' }, 'app')).status, 'dismissed',
+        'the user\'s own decision stays');
+});
+
 test('impossible days are a 400, not rolled on to the next month', async () => {
     const { service } = setup();
     await rejects400(service.create({ kind: 'todo', title: 'x', due_at: '2026-02-30T10:00:00Z' }, 'app'), /due_at must be a time/);

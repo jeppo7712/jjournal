@@ -1,4 +1,4 @@
-import React, { useContext, useMemo, useState } from 'react';
+import React, { useContext, useMemo, useRef, useState } from 'react';
 import AppWindow, { WindowButton } from '../common/AppWindow';
 import { confirmDialog, notify } from '../common/Dialogs';
 import { TradeContext } from '../../context/TradeContext';
@@ -147,7 +147,10 @@ function bodyOf(f, zone, fromKind) {
   if (title) body.title = title;
   else if (f.kind === 'trigger' && body.trigger.symbol && body.trigger.level) body.title = describeTrigger(body.trigger, plainPrice);
   else if (f.kind === 'order' && body.order.symbol) body.title = describeOrder(body.order, plainPrice);
-  else body.title = '';
+  // A todo needs its own. An alert or order that can't be named yet sends
+  // none, so the server names what's missing (its level, its symbol), not
+  // the optional title.
+  else if (f.kind === 'todo') body.title = '';
   return body;
 }
 
@@ -211,7 +214,12 @@ export default function TodoForm({ item, kind, preset, onClose }) {
     return list;
   }, [scopedTrades, item, preset]);
 
+  // Enter in a field and the Save button both submit: a second one while
+  // the first is on its way would create the item twice.
+  const saving = useRef(false);
   const submit = async () => {
+    if (saving.current) return;
+    saving.current = true;
     setBusy(true);
     setError('');
     const body = bodyOf(form, zone, item?.kind);
@@ -228,6 +236,7 @@ export default function TodoForm({ item, kind, preset, onClose }) {
     } catch (err) {
       setError(err.message);
     } finally {
+      saving.current = false;
       setBusy(false);
     }
   };
