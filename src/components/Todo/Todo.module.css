@@ -110,6 +110,11 @@
   color: var(--ui-text-3);
 }
 
+/* Collapsed: only the title, no gap under it. */
+.sectionTitle:last-child {
+  margin-bottom: 0;
+}
+
 .sectionHint {
   font-size: 0.75rem;
   font-weight: 400;

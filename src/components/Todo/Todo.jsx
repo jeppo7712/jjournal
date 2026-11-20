@@ -1,4 +1,4 @@
-import React, { useContext, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useContext, useEffect, useMemo, useRef, useState } from 'react';
 import { TradeContext } from '../../context/TradeContext';
 import { useTodos, CLOSED_DAYS } from '../../context/TodosContext';
 import { notify } from '../common/Dialogs';
@@ -15,21 +15,23 @@ import styles from './Todo.module.css';
 // the same items by day.
 
 const VIEW_KEY = 'jjournal_todo_view';
+// Every section can be collapsed; which ones are is remembered in this
+// browser. Closed starts collapsed, the others open.
+const COLLAPSED_KEY = 'jjournal_todo_collapsed';
+const DEFAULT_COLLAPSED = { closed: true };
 
-function Section({ title, count, hint, children, collapsible, open, onToggle }) {
+function Section({ title, count, hint, children, open, onToggle }) {
   return (
     <section className={styles.section}>
       <h3 className={styles.sectionTitle}>
-        {collapsible ? (
-          <button type="button" className={styles.sectionToggle} onClick={onToggle} aria-expanded={open}>
-            <span className={`${styles.chevron} ${open ? styles.chevronOpen : ''}`} aria-hidden="true">›</span>
-            {title}
-          </button>
-        ) : title}
+        <button type="button" className={styles.sectionToggle} onClick={onToggle} aria-expanded={open}>
+          <span className={`${styles.chevron} ${open ? styles.chevronOpen : ''}`} aria-hidden="true">›</span>
+          {title}
+        </button>
         <span className={styles.count}>{count}</span>
         {hint && <span className={styles.sectionHint}>{hint}</span>}
       </h3>
-      {(!collapsible || open) && children}
+      {open && children}
     </section>
   );
 }
@@ -37,7 +39,19 @@ function Section({ title, count, hint, children, collapsible, open, onToggle }) 
 export default function Todo({ onViewTrade }) {
   const { accounts, currentAccountId } = useContext(TradeContext);
   const { scoped, loaded, loadFailed, refresh, zone, now, markSeen, loadOlderClosed } = useTodos();
-  const [showClosed, setShowClosed] = useState(false);
+  const [collapsed, setCollapsed] = useState(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(COLLAPSED_KEY));
+      return saved && typeof saved === 'object' ? { ...DEFAULT_COLLAPSED, ...saved } : DEFAULT_COLLAPSED;
+    } catch { return DEFAULT_COLLAPSED; }
+  });
+  const setSectionOpen = useCallback((key, open) => setCollapsed(prev => {
+    if (!prev[key] === open) return prev;
+    const next = { ...prev, [key]: !open };
+    try { localStorage.setItem(COLLAPSED_KEY, JSON.stringify(next)); } catch { /* not remembered */ }
+    return next;
+  }), []);
+  const sectionProps = key => ({ open: !collapsed[key], onToggle: () => setSectionOpen(key, !!collapsed[key]) });
   const [showInfo, setShowInfo] = useState(false);
   const [older, setOlder] = useState(null);
   // List or calendar, remembered in this browser.
@@ -63,7 +77,9 @@ export default function Todo({ onViewTrade }) {
     const unseen = fresh.map(t => t.id);
     setNewIds(ids => new Set([...ids, ...unseen]));
     markSeen(unseen);
-  }, [scoped, markSeen]);
+    // A new firing is never hidden in a collapsed "Needs you".
+    setSectionOpen('needs', true);
+  }, [scoped, markSeen, setSectionOpen]);
 
   const { list, openForm, form } = useTodoRows({ onViewTrade, newIds });
   const groups = useMemo(() => groupTodos(scoped, now, zone), [scoped, now, zone]);
@@ -143,19 +159,19 @@ export default function Todo({ onViewTrade }) {
 
       {view === 'list' && (<>
       {groups.needs.length > 0 && (
-        <Section title="Needs you" count={groups.needs.length}>{list(groups.needs)}</Section>
+        <Section title="Needs you" count={groups.needs.length} {...sectionProps('needs')}>{list(groups.needs)}</Section>
       )}
       {groups.today.length > 0 && (
-        <Section title="Today" count={groups.today.length}>{list(groups.today)}</Section>
+        <Section title="Today" count={groups.today.length} {...sectionProps('today')}>{list(groups.today)}</Section>
       )}
       {groups.upcoming.length > 0 && (
-        <Section title="Upcoming" count={upcomingCount}>{list(groups.upcoming.flatMap(day => day.items))}</Section>
+        <Section title="Upcoming" count={upcomingCount} {...sectionProps('upcoming')}>{list(groups.upcoming.flatMap(day => day.items))}</Section>
       )}
       {groups.alerts.length > 0 && (
-        <Section title="Price alerts" count={groups.alerts.length}>{list(groups.alerts)}</Section>
+        <Section title="Price alerts" count={groups.alerts.length} {...sectionProps('alerts')}>{list(groups.alerts)}</Section>
       )}
       {groups.orders.length > 0 && (
-        <Section title="Pending orders" count={ordersCount}>
+        <Section title="Pending orders" count={ordersCount} {...sectionProps('orders')}>
           {groups.orders.map(group => (
             <div key={String(group.accountId)} className={styles.group}>
               {groups.orders.length > 1 && <h4 className={styles.groupTitle}>{group.accountName}</h4>}
@@ -165,16 +181,14 @@ export default function Todo({ onViewTrade }) {
         </Section>
       )}
       {groups.someday.length > 0 && (
-        <Section title="Someday" count={groups.someday.length}>{list(groups.someday)}</Section>
+        <Section title="Someday" count={groups.someday.length} {...sectionProps('someday')}>{list(groups.someday)}</Section>
       )}
       {(groups.closed.length > 0 || loaded) && (
         <Section
           title="Closed"
           count={groups.closed.length}
           hint={`last ${CLOSED_DAYS} days`}
-          collapsible
-          open={showClosed}
-          onToggle={() => setShowClosed(o => !o)}
+          {...sectionProps('closed')}
         >
           {groups.closed.length > 0 ? list(groups.closed) : <p className={styles.emptyLine}>Nothing closed in the last {CLOSED_DAYS} days.</p>}
           {!olderOpen ? (
