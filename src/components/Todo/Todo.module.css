@@ -75,6 +75,12 @@
   border-color: var(--ui-text-3);
 }
 
+.loadError {
+  margin: 0 0 12px;
+  font-size: 0.85rem;
+  color: var(--ui-red-text);
+}
+
 .subNote {
   opacity: 0.7;
   font-size: 0.85rem;
@@ -333,6 +339,7 @@
 .firedLine {
   font-size: 0.85rem;
   color: var(--ui-amber-text-2);
+  overflow-wrap: anywhere;
 }
 
 .meta {

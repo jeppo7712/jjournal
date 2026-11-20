@@ -24,7 +24,7 @@ export const CLOSED_DAYS = 30;
 const REFRESH_MS = 5 * 60 * 1000;
 
 const TodosContext = createContext({
-  todos: [], scoped: [], loaded: false, badge: 0, zone: 'local', now: new Date(),
+  todos: [], scoped: [], loaded: false, loadFailed: false, badge: 0, zone: 'local', now: new Date(),
   refresh: () => {}, save: async () => {}, remove: async () => {}, markSeen: async () => {}, loadOlderClosed: async () => [],
 });
 
@@ -45,6 +45,8 @@ export function TodosProvider({ children }) {
   const { total: brokerTotal } = useBrokerAlerts();
   const [todos, setTodos] = useState([]);
   const [loaded, setLoaded] = useState(false);
+  // The last load failed.
+  const [loadFailed, setLoadFailed] = useState(false);
   // Moves on every minute, so an item becomes overdue without a reload.
   const [now, setNow] = useState(() => new Date());
   const zone = todoZone(loadStoredDisplayTimezone());
@@ -58,8 +60,9 @@ export function TodosProvider({ children }) {
         if (call !== latest.current) return;
         setTodos(data.todos || []);
         setLoaded(true);
+        setLoadFailed(false);
       })
-      .catch(() => {});
+      .catch(() => { if (call === latest.current) setLoadFailed(true); });
   }, []);
 
   useEffect(() => {
@@ -128,8 +131,8 @@ export function TodosProvider({ children }) {
   }, [scopeIds]);
 
   const value = useMemo(
-    () => ({ todos, scoped, loaded, badge, zone, now, refresh, save, remove, markSeen, loadOlderClosed }),
-    [todos, scoped, loaded, badge, zone, now, refresh, save, remove, markSeen, loadOlderClosed]
+    () => ({ todos, scoped, loaded, loadFailed, badge, zone, now, refresh, save, remove, markSeen, loadOlderClosed }),
+    [todos, scoped, loaded, loadFailed, badge, zone, now, refresh, save, remove, markSeen, loadOlderClosed]
   );
   return <TodosContext.Provider value={value}>{children}</TodosContext.Provider>;
 }

@@ -36,7 +36,7 @@ function Section({ title, count, hint, children, collapsible, open, onToggle }) 
 
 export default function Todo({ onViewTrade }) {
   const { accounts, currentAccountId } = useContext(TradeContext);
-  const { scoped, loaded, zone, now, markSeen, loadOlderClosed } = useTodos();
+  const { scoped, loaded, loadFailed, refresh, zone, now, markSeen, loadOlderClosed } = useTodos();
   const [showClosed, setShowClosed] = useState(false);
   const [showInfo, setShowInfo] = useState(false);
   const [older, setOlder] = useState(null);
@@ -116,6 +116,15 @@ export default function Todo({ onViewTrade }) {
         Things to do, price alerts and pending orders for this account{hasSubAccounts ? ' and its sub-accounts' : ''}, and the ones for all accounts.
         {' '}The journal only keeps the list: watching prices and sending alerts is the job of an external agent, which reads and updates it through the external API.
       </p>}
+
+      {/* Only before anything loaded: a later failed refresh (a phone waking
+          up) keeps the last list, which is what it shows. */}
+      {loadFailed && !loaded && (
+        <p className={styles.loadError} role="alert">
+          The list could not be loaded.
+          {' '}<button type="button" className={styles.linkBtn} onClick={refresh}>Try again</button>
+        </p>
+      )}
 
       {view === 'calendar' && (
         <TodoCalendar items={scoped} zone={zone} now={now} list={list} openForm={openForm} layoutKey={noteShown} />

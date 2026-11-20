@@ -256,6 +256,16 @@ export function toUtcIso(dateValue, timeValue, zone) {
   return t.isValid ? t.toUTC().toISO() : null;
 }
 
+// The time a date picked without one starts at: 09:00, or on today once
+// that has passed the next whole hour (23:59 late in the evening), so a
+// todo added for today isn't overdue the moment it's saved.
+export function defaultTime(dateValue, now, zone) {
+  const nowZ = DateTime.fromJSDate(now, { zone });
+  if (dateValue !== nowZ.toISODate() || nowZ.hour < 9) return '09:00';
+  const next = nowZ.plus({ hours: 1 }).startOf('hour');
+  return next.hasSame(nowZ, 'day') ? next.toFormat('HH:mm') : '23:59';
+}
+
 // An ISO time → { date, time } in `zone`, for the form's inputs.
 export function fromUtcIso(iso, zone) {
   if (!iso) return { date: '', time: '' };

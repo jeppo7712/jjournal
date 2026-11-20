@@ -541,3 +541,12 @@ test('routes: errors, 404s and the list shape', async () => {
         assert.strictEqual((await call('GET', '/api/external/v1/todos?status=nope')).status, 400);
     });
 });
+
+test('a void on the wrong side of the level is a 400', async () => {
+    const { service } = setup();
+    const trigger = (extra) => ({ ...alertBody().trigger, level: 50, ...extra });
+    await rejects400(service.create(alertBody({ trigger: trigger({ direction: 'above', void_above: 45 }) }), 'agent'), /void_above must be above trigger.level/);
+    await rejects400(service.create(alertBody({ trigger: trigger({ direction: 'below', void_below: 50 }) }), 'agent'), /void_below must be below trigger.level/);
+    const ok = await service.create(alertBody({ trigger: trigger({ direction: 'below', void_above: 55, void_below: 45 }) }), 'agent');
+    assert.strictEqual(ok.trigger.void_above, 55);
+});

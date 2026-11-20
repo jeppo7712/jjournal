@@ -153,15 +153,22 @@ function parseTrigger(value) {
         if (type !== 'FUT') throw bad('trigger.contract_month is for futures only (trigger.type FUT)');
         if (!CONTRACT_MONTH_RE.test(contractMonth)) throw bad('trigger.contract_month must look like 202606');
     }
+    const level = positive(t.level, 'trigger.level', { required: true });
+    // A void on the wrong side of the level is passed before the level can
+    // be reached (or already is): the alert could never fire.
+    const voidAbove = positive(t.void_above, 'trigger.void_above');
+    const voidBelow = positive(t.void_below, 'trigger.void_below');
+    if (voidAbove !== null && voidAbove <= level) throw bad('trigger.void_above must be above trigger.level');
+    if (voidBelow !== null && voidBelow >= level) throw bad('trigger.void_below must be below trigger.level');
     return {
         symbol: symbol(t.symbol, 'trigger.symbol'),
         type,
         contract_month: contractMonth,
         condition,
         direction: oneOf(t.direction, 'trigger.direction', DIRECTIONS),
-        level: positive(t.level, 'trigger.level', { required: true }),
-        void_above: positive(t.void_above, 'trigger.void_above'),
-        void_below: positive(t.void_below, 'trigger.void_below'),
+        level,
+        void_above: voidAbove,
+        void_below: voidBelow,
     };
 }
 

@@ -573,7 +573,7 @@ Times are sent and answered as ISO 8601 with a zone (`2026-03-20T16:00:00Z` or `
 | `condition` | `touch` (any trade through the level), `close_1m` (a 1-minute close; futures only), `close_1d` (a daily close), `close_1w` (a weekly close). |
 | `direction` | `above` or `below`. |
 | `level` | Positive number, in the symbol's own units. |
-| `void_above`, `void_below` | Optional positive numbers: if price trades there first, the alert no longer applies (a stop or target already hit). |
+| `void_above`, `void_below` | Optional positive numbers: if price trades there first, the alert no longer applies (a stop or target already hit). `void_above` must be above `level` and `void_below` below it (on the other side the alert could never fire). |
 
 `order`:
 

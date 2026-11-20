@@ -5,7 +5,7 @@ import { TradeContext } from '../../context/TradeContext';
 import { useTodos } from '../../context/TodosContext';
 import { accountOptionGroups } from '../../utils/accountTree';
 import {
-  CONDITION_LABELS, describeTrigger, describeOrder, plainPrice, toUtcIso, fromUtcIso,
+  CONDITION_LABELS, describeTrigger, describeOrder, plainPrice, toUtcIso, fromUtcIso, defaultTime,
 } from '../../utils/todos';
 import styles from './Todo.module.css';
 
@@ -42,7 +42,7 @@ const generatedTitle = (item) => !!item && (
 
 // preset (a new item only), what to start from: { trade_id, dueDate }, and
 // from a trade its symbol, type, contract_month and account_id.
-function initialForm(item, kind, defaultOrderAccount, zone, preset) {
+function initialForm(item, kind, defaultOrderAccount, zone, preset, now = new Date()) {
   const due = fromUtcIso(item?.due_at, zone);
   const expires = fromUtcIso(item?.expires_at, zone);
   const fromTrade = !item && preset?.symbol
@@ -57,7 +57,7 @@ function initialForm(item, kind, defaultOrderAccount, zone, preset) {
     notes: str(item?.notes),
     then: str(item?.then),
     dueDate: item ? due.date : (preset?.dueDate || ''),
-    dueTime: item ? due.time : (preset?.dueDate ? '09:00' : ''),
+    dueTime: item ? due.time : (preset?.dueDate ? defaultTime(preset.dueDate, now, zone) : ''),
     // On by default once a date is set (as the server does).
     alert: item?.due_at ? !!item.alert : true,
     tradeId: str(item ? item.trade_id : preset?.trade_id),
@@ -253,8 +253,9 @@ export default function TodoForm({ item, kind, preset, onClose }) {
     }
   };
 
-  // defaultTime: filled in when a date is picked without a time.
-  const dateTime = (dateField, timeField, label, hint, defaultTime = '09:00') => (
+  // fixedTime: filled in when a date is picked without a time (else
+  // defaultTime: 09:00, later on today).
+  const dateTime = (dateField, timeField, label, hint, fixedTime) => (
     <Field label={label} hint={hint}>
       <div className={styles.dateTime}>
         <input type="date" className={styles.input} value={form[dateField]} onChange={e => {
@@ -263,7 +264,7 @@ export default function TodoForm({ item, kind, preset, onClose }) {
             ...f,
             [dateField]: value,
             // A date picked without a time: the default time.
-            [timeField]: value && !f[timeField] ? defaultTime : f[timeField],
+            [timeField]: value && !f[timeField] ? (fixedTime || defaultTime(value, new Date(), zone)) : f[timeField],
           }));
         }} aria-label={`${label}: date`} />
         <input type="time" className={styles.input} value={form[timeField]} onChange={set(timeField)} disabled={!form[dateField]} aria-label={`${label}: time`} />

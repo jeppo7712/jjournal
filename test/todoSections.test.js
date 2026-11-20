@@ -161,3 +161,13 @@ test('todaySummary: what the dashboard card counts', async () => {
   assert.deepEqual({ ...s, top: s.top.length }, { overdue: 1, dueToday: 1, fired: 1, orders: 2, alerts: 1, top: 3 });
   assert.equal(s.top[0].status, 'fired');
 });
+
+test('defaultTime: 09:00, or the next whole hour on today once 09:00 has passed', async () => {
+  const t = await load();
+  const zone = 'Europe/Berlin';
+  const at = iso => new Date(iso);
+  assert.equal(t.defaultTime('2026-03-05', at('2026-03-05T07:30:00Z'), zone), '09:00'); // 08:30 there
+  assert.equal(t.defaultTime('2026-03-05', at('2026-03-05T13:20:00Z'), zone), '15:00'); // 14:20 there
+  assert.equal(t.defaultTime('2026-03-06', at('2026-03-05T13:20:00Z'), zone), '09:00'); // another day
+  assert.equal(t.defaultTime('2026-03-05', at('2026-03-05T22:10:00Z'), zone), '23:59'); // 23:10 there
+});
