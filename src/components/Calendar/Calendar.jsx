@@ -41,17 +41,20 @@ export function useFillHeight(scrollerRef, layoutKey) {
 
 // Each currency figure is coloured by its own sign. Colouring the whole
 // summary by its first currency told the opposite of the truth for the rest —
-// a losing EUR day showed green because the USD on it was up.
-function renderSignedTotals(totals, format = formatMoney) {
+// a losing EUR day showed green because the USD on it was up. Each figure
+// is its own unbreakable piece, so a second currency that doesn't fit next
+// to the first goes onto the next line instead of being cut off.
+function renderSignedTotals(totals, format = formatMoney, signed = true) {
   const list = toTotalsList(totals);
   if (list.length === 0) return formatTotals(totals);
-  return list.map(({ currency, amount }, i) => (
-    <React.Fragment key={currency}>
-      {i > 0 ? ' · ' : ''}
-      <span style={{ color: amount >= 0 ? 'var(--ui-green-2)' : 'var(--accent-red)' }}>
-        {format(amount, currency)}
-      </span>
-    </React.Fragment>
+  return list.map(({ currency, amount }) => (
+    <span
+      key={currency}
+      className={styles.amount}
+      style={signed ? { color: amount >= 0 ? 'var(--ui-green-2)' : 'var(--accent-red)' } : undefined}
+    >
+      {format(amount, currency)}
+    </span>
   ));
 }
 
@@ -259,8 +262,8 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
                     </span>
                     {day && (
                       <div className={styles.daySummary}>
-                        <span className={styles.fullAmount}>{renderSignedTotals(day.totalByCurrency)}</span>
-                        <span className={styles.compactAmount}>{renderSignedTotals(day.totalByCurrency, compactMoney)}</span>
+                        <span className={`${styles.amounts} ${styles.fullAmount}`}>{renderSignedTotals(day.totalByCurrency)}</span>
+                        <span className={`${styles.amounts} ${styles.compactAmount}`}>{renderSignedTotals(day.totalByCurrency, compactMoney)}</span>
                         <span className={styles.tradeCount}>{day.count} Trade{day.count !== 1 ? 's' : ''}</span>
                       </div>
                     )}
@@ -275,7 +278,7 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
                   <div className={styles.weekSummary}>
                     <div className={styles.weekSummaryContent}>
                       <span>P&L: </span>
-                      <span>{renderSignedTotals(summary.totalByCurrency)}</span>
+                      <span className={styles.amounts}>{renderSignedTotals(summary.totalByCurrency)}</span>
                     </div>
                     <div className={styles.weekSummaryContent}>
                       <span>Wins: </span>
@@ -287,7 +290,7 @@ const Calendar = ({ onDayClick, onWeekClick, currentMonth = new Date(), setCurre
                     </div>
                     <div className={styles.weekSummaryContent}>
                       <span>Fees: </span>
-                      <span style={{ color: 'var(--text-primary)' }}>{formatTotals(summary.feesByCurrency)}</span>
+                      <span className={styles.amounts} style={{ color: 'var(--text-primary)' }}>{renderSignedTotals(summary.feesByCurrency, formatMoney, false)}</span>
                     </div>
                   </div>
                 )}

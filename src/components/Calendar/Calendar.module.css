@@ -212,6 +212,22 @@
   text-overflow: ellipsis;
 }
 
+/* One piece per currency (see renderSignedTotals): side by side while
+   they fit, the next currency on its own line when they don't. */
+.amounts {
+  display: flex;
+  flex-wrap: wrap;
+  column-gap: 0.6em;
+  row-gap: 1px;
+  min-width: 0;
+}
+
+.amount {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
 .compactAmount {
   display: none;
 }
@@ -267,11 +283,11 @@
   font-variant-numeric: tabular-nums;
 }
 
-.weekSummaryContent span:first-child {
+.weekSummaryContent > span:first-child {
   color: var(--text-secondary);
 }
 
-.weekSummaryContent span:last-child {
+.weekSummaryContent > span:last-child {
   font-weight: 500;
 }
 
@@ -360,7 +376,8 @@
     display: none;
   }
   .compactAmount {
-    display: block;
+    display: flex;
+    justify-content: center;
   }
   .weekSummaryCell:empty {
     display: none;
