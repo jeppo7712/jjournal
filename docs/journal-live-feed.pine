@@ -37,7 +37,7 @@ if barstate.isconfirmed
           '","timeframe":"' + journalTimeframe + '","time":"' + isoTime +
           '","open":' + str.tostring(open) + ',"high":' + str.tostring(high) +
           ',"low":' + str.tostring(low) + ',"close":' + str.tostring(close) +
-          ',"volume":' + str.tostring(volume) + '}'
+          ',"volume":' + str.tostring(nz(volume)) + '}'
     alert(msg, alert.freq_once_per_bar_close)
 
 // Purely cosmetic — a small dot under each bar that actually fired, so you

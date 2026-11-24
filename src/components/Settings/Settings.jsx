@@ -832,10 +832,6 @@ export default function Settings() {
       const entry = timeframeSettings?.[tf] || DEFAULT_TIMEFRAME_SETTINGS[tf];
       normalizedTimeframeSettings[tf] = { enabled: !!entry.enabled };
     }
-    if (!Object.values(normalizedTimeframeSettings).some(t => t.enabled)) {
-      notify('At least one timeframe must be enabled.');
-      return;
-    }
     try {
       const method = editingSetting ? 'PUT' : 'POST';
       const url = `${apiBaseUrl}/api/futures-settings`;
@@ -2708,6 +2704,7 @@ export default function Settings() {
             <p className={styles.windowHint}>
               Choose which timeframes to fetch and keep updated for this symbol. Each enabled timeframe is always
               fetched as far back as the data provider allows — no need to specify how much history to keep.
+              Leave all of them off for a symbol whose bars only come from the TradingView live feed.
             </p>
             <table className={styles.miniTable}>
               <thead>

@@ -59,6 +59,8 @@ Use `docs/journal-live-feed.pine` — a small indicator that fires once per bar 
 
 One alert per symbol+timeframe you want live-fed.
 
+A symbol the journal can't download itself (an index, say) can still be fed this way: add it in Settings → Symbols with every timeframe left off, so the background job never tries IBKR or Yahoo for it. If the instrument has no volume, the indicator sends `0` (TradingView's own `{{volume}}` placeholder would send `NaN`, which isn't valid JSON, and the journal would reject the bar).
+
 <details>
 <summary>Doing it by hand instead (no indicator, plain alert condition + message template)</summary>
 
