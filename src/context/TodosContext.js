@@ -4,7 +4,7 @@ import { useBrokerAlerts } from './BrokerAlertsContext';
 import { setAppBadge, APP_BADGE_PERMISSION_EVENT } from '../utils/appBadge';
 import { descendantAccountIds } from '../utils/accountTree';
 import { loadStoredDisplayTimezone } from '../utils/timezonePreference';
-import { todoZone, inScope, badgeCount } from '../utils/todos';
+import { todoZone, inScope, badgeCount, badgeCountsByAccount } from '../utils/todos';
 
 // The Todo list (routes/todos.js): every item, loaded once for the whole
 // app, so the menu badge and the Todo page agree. Open and fired items are
@@ -16,15 +16,16 @@ import { todoZone, inScope, badgeCount } from '../utils/todos';
 //
 // The page follows the account picker: `scoped` holds the current account's
 // items, its sub-accounts' and the ones with no account (utils/todos.js,
-// inScope). `badge` counts those; the app's icon counts every account's,
-// on top of the IBKR items (BrokerAlertsContext).
+// inScope). `badge` counts those; `allBadge` counts every account's (the
+// app's icon, on top of the IBKR items from BrokerAlertsContext, and the
+// badge next to the account picker), `badgeByAccount` splits it per account.
 
 const API = `${process.env.REACT_APP_API_URL}/api/todos`;
 export const CLOSED_DAYS = 30;
 const REFRESH_MS = 5 * 60 * 1000;
 
 const TodosContext = createContext({
-  todos: [], scoped: [], loaded: false, loadFailed: false, badge: 0, zone: 'local', now: new Date(),
+  todos: [], scoped: [], loaded: false, loadFailed: false, badge: 0, allBadge: 0, badgeByAccount: {}, zone: 'local', now: new Date(),
   refresh: () => {}, save: async () => {}, remove: async () => {}, markSeen: async () => {}, loadOlderClosed: async () => [],
 });
 
@@ -89,6 +90,7 @@ export function TodosProvider({ children }) {
   const scoped = useMemo(() => todos.filter(item => inScope(item, scopeIds)), [todos, scopeIds]);
   const badge = useMemo(() => badgeCount(scoped, now, zone), [scoped, now, zone]);
   const allBadge = useMemo(() => badgeCount(todos, now, zone), [todos, now, zone]);
+  const badgeByAccount = useMemo(() => badgeCountsByAccount(todos, now, zone), [todos, now, zone]);
 
   // The app icon: everything the menu's badges count, over all accounts.
   useEffect(() => {
@@ -131,8 +133,8 @@ export function TodosProvider({ children }) {
   }, [scopeIds]);
 
   const value = useMemo(
-    () => ({ todos, scoped, loaded, loadFailed, badge, zone, now, refresh, save, remove, markSeen, loadOlderClosed }),
-    [todos, scoped, loaded, loadFailed, badge, zone, now, refresh, save, remove, markSeen, loadOlderClosed]
+    () => ({ todos, scoped, loaded, loadFailed, badge, allBadge, badgeByAccount, zone, now, refresh, save, remove, markSeen, loadOlderClosed }),
+    [todos, scoped, loaded, loadFailed, badge, allBadge, badgeByAccount, zone, now, refresh, save, remove, markSeen, loadOlderClosed]
   );
   return <TodosContext.Provider value={value}>{children}</TodosContext.Provider>;
 }

@@ -40,6 +40,19 @@
   box-shadow: 0 6px 18px rgba(var(--ui-accent-rgb), 0.25);
 }
 
+.logoMark {
+  position: relative;
+  display: inline-flex;
+  flex-shrink: 0;
+}
+
+.logoBadge {
+  position: absolute;
+  top: -5px;
+  right: -7px;
+  box-shadow: 0 0 0 2px var(--ui-bar, #000);
+}
+
 .logoText {
   font-size: 1.08rem;
   color: var(--ui-strong);

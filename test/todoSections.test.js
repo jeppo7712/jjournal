@@ -80,6 +80,18 @@ test('badgeCount: unseen fired items plus open items due today or overdue', asyn
   assert.equal(t.badgeCount(items, NOW, ZONE), 3);
 });
 
+test('badgeCountsByAccount: the badge count split per account, no account under "none"', async () => {
+  const t = await load();
+  const items = [
+    item({ account_id: 7, kind: 'trigger', status: 'fired', seen_at: null }),
+    item({ account_id: 7, due_at: '2026-03-04T12:00:00Z' }),
+    item({ account_id: 7, due_at: '2026-03-09T12:00:00Z' }),
+    item({ account_id: 8, kind: 'trigger', status: 'fired', seen_at: '2026-03-05T14:00:00Z' }),
+    item({ due_at: '2026-03-05T20:00:00Z' }),
+  ];
+  assert.deepEqual(t.badgeCountsByAccount(items, NOW, ZONE), { 7: 2, none: 1 });
+});
+
 test('words for alerts and orders', async () => {
   const t = await load();
   assert.equal(t.describeTrigger({ symbol: 'ABC', condition: 'close_1w', direction: 'below', level: 42.5 }), 'ABC: weekly close below 42.50');

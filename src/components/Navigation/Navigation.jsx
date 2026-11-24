@@ -133,11 +133,13 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   const [ibkrDataStatus, setIbkrDataStatus] = useState(null);
   // What IBKR has waiting (BrokerAlertsContext). For the open account: a
   // badge next to Capital (cash items, cash that differs from IBKR's) and
-  // next to Dashboard (fills not in the journal). Per account: a mark on each
-  // in the account list; the badge next to its label is the total over all
-  // accounts (same number as the app icon's).
+  // next to Dashboard (fills not in the journal). The Todo badge counts the
+  // open account's todos (TodosContext). Per account, IBKR items and todos
+  // together: a mark on each in the account list; the badge next to its
+  // label is the total over all accounts (same number as the app icon's), so
+  // a todo for an account that isn't open still shows.
   const { capital: brokerPending, rootOf, countsByAccount, total: alertsTotal } = useBrokerAlerts();
-  const { badge: todoBadge } = useTodos();
+  const { badge: todoBadge, allBadge: todoTotal, badgeByAccount: todoByAccount } = useTodos();
 
   useEffect(() => {
     // WebSocket connection is handled by StatusProvider.
@@ -351,7 +353,16 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   const currentRoot = rootOf(currentAccountId);
   const currentAlerts = countsByAccount[currentRoot] || { capital: 0, fills: 0 };
   const currentCapital = (brokerPending.accounts || []).find(a => String(a.id) === currentRoot);
-  const alertAccounts = safeAccounts.filter(a => countsByAccount[String(a.id)]);
+  // IBKR items + todos waiting for one account (its own, not its sub-accounts').
+  const waitingFor = (a) => {
+    const c = countsByAccount[String(a.id)];
+    return (c ? c.capital + c.fills : 0) + (todoByAccount[String(a.id)] || 0);
+  };
+  const waitingTotal = alertsTotal + todoTotal;
+  const waitingTitle = [
+    ...safeAccounts.filter(a => waitingFor(a) > 0).map(a => `${a.name} ${waitingFor(a)}`),
+    todoByAccount.none > 0 && `todos for every account ${todoByAccount.none}`,
+  ].filter(Boolean).join(', ');
 
   const currentAccountCashBalances = (safeAccounts.find(a => String(a.id) === String(currentAccountId))?.cash_balances) || [];
   const cashByCurrency = sumByCurrency(currentAccountCashBalances, b => b.balance, b => b.currency);
@@ -421,13 +432,13 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
     <div className={styles.accountInfo}>
       <span className={styles.accountLabel}>
         Account
-        {alertsTotal > 0 && (
+        {waitingTotal > 0 && (
           <span
             className={styles.accountBadge}
-            title={`Waiting: ${alertAccounts.map(a => `${a.name} ${countsByAccount[String(a.id)].capital + countsByAccount[String(a.id)].fills}`).join(', ')}`}
-            aria-label={`${alertsTotal} thing${alertsTotal > 1 ? 's' : ''} waiting over all accounts`}
+            title={`Waiting: ${waitingTitle}`}
+            aria-label={`${waitingTotal} thing${waitingTotal > 1 ? 's' : ''} waiting over all accounts`}
           >
-            {alertsTotal > 99 ? '99+' : alertsTotal}
+            {waitingTotal > 99 ? '99+' : waitingTotal}
           </span>
         )}
       </span>
@@ -447,8 +458,8 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
             <AccountOptions
               accounts={safeAccounts}
               label={a => {
-                const c = countsByAccount[String(a.id)];
-                return c ? `${a.name}  ● ${c.capital + c.fills}` : a.name;
+                const n = waitingFor(a);
+                return n > 0 ? `${a.name}  ● ${n}` : a.name;
               }}
             />
             {safeAccounts.length === 0 && (
@@ -527,12 +538,25 @@ const Navigation = ({ onNewTrade, onNewNote, setCurrentView, currentView }) => {
   return (
     <nav className={`${styles.navigation} ${navMode === 'medium' && isLowHeight ? styles.mediumLowHeight : ''}`}> {/* */}
       <div className={styles.logo} ref={logoRef} onClick={handleLogoClick}> {/* */}
-        <img
-          key={logoSpins}
-          src="/logo192.png"
-          alt="Logo"
-          className={`${styles.logoImg} ${logoSpins > 0 ? styles.logoSpin : ''}`}
-        />
+        <span className={styles.logoMark}>
+          <img
+            key={logoSpins}
+            src="/logo192.png"
+            alt="Logo"
+            className={`${styles.logoImg} ${logoSpins > 0 ? styles.logoSpin : ''}`}
+          />
+          {/* Narrower layouts keep the account card behind the logo, so its
+              badge shows here too. */}
+          {navMode !== 'wide' && waitingTotal > 0 && (
+            <span
+              className={`${styles.accountBadge} ${styles.logoBadge}`}
+              title={`Waiting: ${waitingTitle}`}
+              aria-label={`${waitingTotal} thing${waitingTotal > 1 ? 's' : ''} waiting over all accounts`}
+            >
+              {waitingTotal > 99 ? '99+' : waitingTotal}
+            </span>
+          )}
+        </span>
         <h1 className={styles.logoText}>Jay's Journal</h1> {/* */}
         {showLogoPopup && navMode !== 'wide' && (
           <div

@@ -102,6 +102,19 @@ export function badgeCount(items, now, zone) {
   }, 0);
 }
 
+// badgeCount per account, for the account picker: { [account_id]: n }.
+// Items with no account count under 'none' (they show under every account).
+export function badgeCountsByAccount(items, now, zone) {
+  const out = {};
+  for (const item of items) {
+    const n = badgeCount([item], now, zone);
+    if (n === 0) continue;
+    const key = item.account_id === null || item.account_id === undefined ? 'none' : String(item.account_id);
+    out[key] = (out[key] || 0) + n;
+  }
+  return out;
+}
+
 // Open but past its expiry: the agent will lapse it; shown greyed till then.
 export const isLapsing = (item, now) => item.status === 'open' && !!item.expires_at && ms(item.expires_at) <= now.getTime();
 
