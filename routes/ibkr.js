@@ -3,7 +3,7 @@ const router = express.Router();
 const { EventName } = require('@stoqey/ib');
 const { DateTime } = require('luxon');
 const { timeout, generateIbReqId } = require('../modules/utils.js');
-const { FLIP_SUFFIX } = require('../modules/brokerFills.js');
+const { groupByPosition } = require('../modules/positionGroups.js');
 const { logger } = require('../modules/logger.js');
 const { fetchFlexExecutions, isPaperIbkrAccountId } = require('./ibkrFlex.js');
 const { loadConfig } = require('../modules/config.js');
@@ -272,87 +272,6 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
       // This ensures bracket children from the TWS GUI have their parentId correctly set
       ibkr.getIbApi().reqAllOpenOrders();
     });
-  }
-
-  // A fill that flips the position (long 1, then sell 2) is split in two:
-  // the part that closes the position and the part that opens the other
-  // way, the fee shared by quantity, so each lands in a trade of its own.
-  // The opening part gets an execution ID of its own (FLIP_SUFFIX, see
-  // modules/brokerFills.js): a fill
-  // is in one trade only. Both name the fill they came from (splitOf).
-  function splitFlips(sorted) {
-    const out = [];
-    let net = 0;
-    for (const exec of sorted) {
-      const quantity = Number(exec.quantity);
-      const change = exec.side === 'BOT' ? quantity : -quantity;
-      const after = net + change;
-      if (net !== 0 && after !== 0 && Math.sign(after) !== Math.sign(net)) {
-        const closing = Math.abs(net);
-        const opening = Math.abs(after);
-        const fee = Number(exec.commission) || 0;
-        const closingFee = Math.round(fee * (closing / quantity) * 1e6) / 1e6;
-        out.push({ ...exec, quantity: closing, commission: closingFee, splitOf: exec.execId });
-        out.push({ ...exec, execId: `${exec.execId}${FLIP_SUFFIX}`, quantity: opening, commission: Math.round((fee - closingFee) * 1e6) / 1e6, splitOf: exec.execId });
-      } else {
-        out.push(exec);
-      }
-      net = after;
-    }
-    return out;
-  }
-
-  // ─── POSITION-BASED FALLBACK GROUPING ────────────────────────────────────────
-  // When bracket order linkage fails (parentId=0 on children, or completedOrders empty),
-  // group executions by tracking cumulative position. When position returns to 0 = one trade.
-  function groupByPosition(execs) {
-    if (execs.length === 0) return [];
-    const sorted = splitFlips([...execs].sort((a, b) => a.time.localeCompare(b.time)));
-    const groups = [];
-    let current = null;
-    let netQty = 0;
-
-    for (const exec of sorted) {
-      const isBuy = exec.side === 'BOT';
-      const change = isBuy ? Number(exec.quantity) : -Number(exec.quantity);
-
-      if (netQty === 0) {
-        current = {
-          type: 'position-based',
-          parentOrderId: `pos_${exec.execId}`,
-          direction: isBuy ? 'LONG' : 'SHORT',
-          result: 'OPEN',
-          entryOrder: null,
-          entryExecutions: [],
-          tpOrder: null,
-          tpExecutions: [],
-          slOrder: null,
-          slExecutions: [],
-          otherChildren: [],
-        };
-        groups.push(current);
-      }
-
-      netQty += change;
-
-      // Entry = adding to position; exit = reducing/closing
-      const isEntry = (current.direction === 'LONG' && isBuy) ||
-                      (current.direction === 'SHORT' && !isBuy);
-
-      if (isEntry) {
-        current.entryExecutions.push(exec);
-      } else {
-        // Exit — we can't tell TP vs SL without order data, use tpExecutions slot
-        current.tpExecutions.push(exec);
-      }
-
-      if (netQty === 0) {
-        current.result = 'CLOSED';
-        current = null;
-      }
-    }
-    // If we still have an open position (current != null), it stays as result: 'OPEN'
-    return groups;
   }
 
   // ─── MAIN GROUPING LOGIC ─────────────────────────────────────────────────────
