@@ -23,6 +23,7 @@ import { currencyMark } from '../../utils/formatMoney';
 import { notify, confirmDialog, choiceDialog } from '../common/Dialogs';
 import { replayLots } from '../../utils/lots';
 import { themeHex } from '../../utils/theme';
+import { handEnteredActions, isHandEntered } from '../../utils/importedFills';
 
 // Prices, sizes and fees from IBKR as they came, in the number format
 // setting: their own decimals (trailing zeros dropped), '—' when missing.
@@ -750,9 +751,20 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
         trades.flatMap(t => (t.actions || []).map(a => a.execId).filter(Boolean))
       );
 
+      // Handled without their execution ID in the journal, as in the fills
+      // badge: entered by hand, or dismissed from the badge (a part split at
+      // a flip by its fill's ID).
+      const handEntered = handEnteredActions(trades, form.symbol);
+      const dismissed = new Set(data.dismissedExecIds || []);
+
       // Process each bracket group — attach processed executions, each
-      // flagged if it's already in the journal (inJournal).
-      const withJournalFlag = (e) => ({ ...processRawExec(e, historical), inJournal: existingExecIds.has(e.execId) });
+      // flagged if it's already in the journal (inJournal) or was dismissed.
+      const withJournalFlag = (e) => {
+        const exec = processRawExec(e, historical);
+        const inJournal = existingExecIds.has(e.execId)
+          || isHandEntered(handEntered, { ...exec, time: exec.dateTime.toMillis() });
+        return { ...exec, inJournal, dismissed: !inJournal && dismissed.has(e.splitOf || e.execId) };
+      };
       const groups = (data.bracketGroups || []).map(group => {
         const entryExecutions = group.entryExecutions.map(withJournalFlag);
         const tpExecutions = group.tpExecutions.map(withJournalFlag);
@@ -764,7 +776,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
         // The other children's fills belong to the position too (a second
         // take-profit, a trailing limit): counted and applied with the rest.
         const allExecs = [...entryExecutions, ...tpExecutions, ...slExecutions, ...otherChildren.flatMap(c => c.executions)];
-        const newExecCount = allExecs.filter(e => !e.inJournal).length;
+        const newExecCount = allExecs.filter(e => !e.inJournal && !e.dismissed).length;
         return {
           ...group,
           entryExecutions,
@@ -776,9 +788,9 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
           // position that was imported before and has since been added to
           // or partly sold. Only its new fills get added (handleApplyTrade).
           partlyLogged: newExecCount > 0 && newExecCount < allExecs.length,
-          // Every fill — entries AND exits — is already in the journal. Used
-          // to be entries only, which hid a position whose new fill was a
-          // (partial) exit.
+          // Every fill — entries AND exits — is already in the journal (or
+          // was dismissed). Used to be entries only, which hid a position
+          // whose new fill was a (partial) exit.
           alreadyLogged: allExecs.length > 0 && newExecCount === 0,
         };
       });
@@ -862,7 +874,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
     // that aren't, after the trade's existing actions. Replacing them all
     // would also throw away any edits made to the imported ones.
     if (group.partlyLogged) {
-      allExecs.filter(e => !e.inJournal && !addedIbkrItemIds.has(e.execId)).forEach(handleAddAsAction);
+      allExecs.filter(e => !e.inJournal && !e.dismissed && !addedIbkrItemIds.has(e.execId)).forEach(handleAddAsAction);
       return;
     }
 
@@ -1614,7 +1626,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
               {!ibkrLoading && (
                 <span style={{ color: 'var(--ui-faint)', fontSize: '0.8rem' }}>
                   {ibkrGroups.filter(g => !g.alreadyLogged).length} new group{ibkrGroups.filter(g => !g.alreadyLogged).length !== 1 ? 's' : ''}
-                  {ibkrGroups.some(g => g.alreadyLogged) ? ` (+${ibkrGroups.filter(g => g.alreadyLogged).length} already imported)` : ''}
+                  {ibkrGroups.some(g => g.alreadyLogged) ? ` (+${ibkrGroups.filter(g => g.alreadyLogged).length} already imported or dismissed)` : ''}
                   {ibkrOrphans.length > 0 ? ` + ${ibkrOrphans.length} ungrouped exec${ibkrOrphans.length !== 1 ? 's' : ''}` : ''}
                 </span>
               )}
@@ -1686,8 +1698,8 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                     style={{ background: 'none', border: 'none', color: '#6366F1', cursor: 'pointer', fontSize: '0.8rem', padding: 0 }}
                   >
                     {showAlreadyImported
-                      ? 'Hide already-imported trades'
-                      : `Show ${ibkrGroups.filter(g => g.alreadyLogged).length} already-imported trade${ibkrGroups.filter(g => g.alreadyLogged).length !== 1 ? 's' : ''}`}
+                      ? 'Hide imported and dismissed trades'
+                      : `Show ${ibkrGroups.filter(g => g.alreadyLogged).length} imported or dismissed trade${ibkrGroups.filter(g => g.alreadyLogged).length !== 1 ? 's' : ''}`}
                   </button>
                 </div>
               )}
@@ -1790,7 +1802,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                             {group.entryExecutions.map(e => (
                               <div key={e.execId} style={{ display: 'flex', justifyContent: 'space-between', color: e.inJournal ? 'var(--ui-faint)' : 'var(--ui-text)', padding: '3px 0' }}>
                                 <span>{e.action} {showNum(e.quantity)} @ <b>{showNum(e.price)}</b> — {e.dateTime.toFormat('LLL d, HH:mm:ss')}</span>
-                                <span style={{ color: 'var(--text-secondary)' }}>{e.inJournal ? '✓ in journal · ' : ''}fee: {feeText(e.fee, e.feeCurrency, String)}</span>
+                                <span style={{ color: 'var(--text-secondary)' }}>{e.inJournal ? '✓ in journal · ' : e.dismissed ? 'dismissed · ' : ''}fee: {feeText(e.fee, e.feeCurrency, String)}</span>
                               </div>
                             ))}
                           </div>
@@ -1804,7 +1816,7 @@ export default function TradeModal({ trade, onClose, importFills = null }) {
                             {group.tpExecutions.map(e => (
                               <div key={e.execId} style={{ display: 'flex', justifyContent: 'space-between', color: e.inJournal ? 'var(--ui-faint)' : 'var(--ui-text)', padding: '3px 0' }}>
                                 <span>{e.action} {showNum(e.quantity)} @ <b>{showNum(e.price)}</b> — {e.dateTime.toFormat('LLL d, HH:mm:ss')}</span>
-                                <span style={{ color: 'var(--text-secondary)' }}>{e.inJournal ? '✓ in journal · ' : ''}fee: {feeText(e.fee, e.feeCurrency, String)}</span>
+                                <span style={{ color: 'var(--text-secondary)' }}>{e.inJournal ? '✓ in journal · ' : e.dismissed ? 'dismissed · ' : ''}fee: {feeText(e.fee, e.feeCurrency, String)}</span>
                               </div>
                             ))}
                           </div>

@@ -265,4 +265,17 @@ async function pendingFills(db) {
   return rows;
 }
 
-module.exports = { parseFills, flexTime, scanBrokerFills, correctFees, pendingFills, FLIP_SUFFIX };
+/**
+ * Which of these execution IDs the user dismissed from the fills badge, for
+ * the import window to count as handled (src/utils/importedFills.js).
+ */
+async function dismissedExecIds(db, execIds) {
+  const ids = [...new Set(execIds.filter(Boolean))];
+  if (ids.length === 0) return [];
+  const { rows } = await db.query(
+    `SELECT exec_id FROM broker_fills WHERE status = 'DISMISSED' AND exec_id = ANY($1)`, [ids]
+  );
+  return rows.map(r => r.exec_id);
+}
+
+module.exports = { parseFills, flexTime, scanBrokerFills, correctFees, pendingFills, dismissedExecIds, FLIP_SUFFIX };

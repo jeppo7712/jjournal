@@ -4,6 +4,7 @@ const { EventName } = require('@stoqey/ib');
 const { DateTime } = require('luxon');
 const { timeout, generateIbReqId } = require('../modules/utils.js');
 const { groupByPosition } = require('../modules/positionGroups.js');
+const { dismissedExecIds } = require('../modules/brokerFills.js');
 const { logger } = require('../modules/logger.js');
 const { fetchFlexExecutions, isPaperIbkrAccountId } = require('./ibkrFlex.js');
 const { loadConfig } = require('../modules/config.js');
@@ -402,6 +403,18 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
     };
   }
 
+  // The fills among these the user dismissed from the fills badge: the
+  // import window counts them as handled. Without the list it shows them
+  // as new, as before.
+  async function dismissedOf(executions) {
+    try {
+      return await dismissedExecIds(pool, executions.map(e => e.execId));
+    } catch (err) {
+      logger.warn(`[trade-groups] dismissed fills lookup failed: ${err.message}`);
+      return [];
+    }
+  }
+
   // ─── ROUTES ──────────────────────────────────────────────────────────────────
 
   router.get('/trade-groups', async (req, res) => {
@@ -457,6 +470,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
         orphanExecutions,
         rawExecutions: executions,
         rawOrders: [...completedOrders, ...openOrders],
+        dismissedExecIds: await dismissedOf(executions),
       });
     } catch (err) {
       logger.error(`[/trade-groups] ${err.message}`);
@@ -543,6 +557,7 @@ module.exports = (ibkr, broadcastStatus, uuidv4, pool) => {
         orphanExecutions,
         rawExecutions: executions,
         rawOrders: [],
+        dismissedExecIds: await dismissedOf(executions),
         fetchedAt,
         fromCache,
         stale,
